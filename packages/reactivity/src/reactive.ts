@@ -65,4 +65,9 @@ export function reactive(target: object) {
   )
 }
 
-function createReactiveObject() {}
+function createReactiveObject(
+  target: Target,
+  isReadonly: boolean,
+  baseHandlers: ProxyHandler<any>,
+  collectionHandlers: ProxyHandler<any>
+) {}
