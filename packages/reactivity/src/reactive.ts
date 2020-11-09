@@ -70,4 +70,43 @@ function createReactiveObject(
   isReadonly: boolean,
   baseHandlers: ProxyHandler<any>,
   collectionHandlers: ProxyHandler<any>
-) {}
+) {
+  if (!isObject(target)) {
+    if (__DEV__) {
+      console.warn(`value cannot be made reactive: ${String(target)}`)
+    }
+
+    return target
+  }
+
+  // target 已经是 Proxy，不用重复代理
+  // 异常情况：在一个 reactive object 上调用 readonly()
+  if (
+    target[ReactiveFlags.RAW] &&
+    !(isReadonly && target[ReactiveFlags.IS_REACTIVE])
+  ) {
+    return target
+  }
+
+  // 代理缓存中有，直接取已缓存的
+  const proxyMap = isReadonly ? readonlyMap : reactiveMap
+  const existingProxy = proxyMap.get(target)
+  if (existingProxy) {
+    return existingProxy
+  }
+
+  // 只有合法的类型(Object|Array|[Weak]Map|[Weak]Set)才能被代理
+  const targetType = getTargetType(target)
+  if (targetType === TargetType.INVALID) {
+    return target
+  }
+
+  const proxy = new Proxy(
+    target,
+    targetType === TargetType.COLLECTION ? collectionHandlers : baseHandlers
+  )
+
+  // 缓存代理映射关系
+  proxyMap.set(target, proxy)
+  return proxy
+}
