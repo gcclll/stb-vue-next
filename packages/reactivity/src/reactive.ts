@@ -110,3 +110,33 @@ function createReactiveObject(
   proxyMap.set(target, proxy)
   return proxy
 }
+
+export function isReactive(value: unknown): boolean {
+  if (isReadonly(value)) {
+    // 如果是只读的，判断 value 的原始对象
+    return isReactive((value as Target)[ReactiveFlags.RAW])
+  }
+
+  return !!(value && (value as Target)[ReactiveFlags.IS_REACTIVE])
+}
+
+export function isReadonly(value: unknown): boolean {
+  return !!(value && (value as Target)[ReactiveFlags.IS_READONLY])
+}
+
+export function isProxy(value: unknown): boolean {
+  return isReactive(value) || isReadonly(value)
+}
+
+export function toRaw<T>(observed: T): T {
+  // 从 proxy 对象中取其原来的初始对象
+  return (
+    (observed && toRaw((observed as Target)[ReactiveFlags.RAW])) || observed
+  )
+}
+
+// 标记为 raw 对象，即不可被代理的对象，设置了 __v_skip 属性
+export function markRaw<T extends object>(value: T): T {
+  def(value, ReactiveFlags.SKIP, true)
+  return value
+}
