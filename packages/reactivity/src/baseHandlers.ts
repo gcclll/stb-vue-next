@@ -1,4 +1,4 @@
-import { isSymbol, hasOwn, isObject, isArray, isIntegerKey } from '@vue/shared'
+// import { hasOwn, isObject, isArray, isIntegerKey } from '@vue/shared'
 import { Target } from './reactive'
 
 const get = /*#__PURE__*/ createGetter()
@@ -32,6 +32,7 @@ function createGetter(isReadonly = false, shallow = false) {
 
     // TODO 7. res is object -> reactive recursivly
 
+    console.log({ res }, 'get')
     return res
   }
 }
