@@ -1,4 +1,6 @@
 // import { hasOwn, isObject, isArray, isIntegerKey } from '@vue/shared'
+import { track } from './effect'
+import { TrackOpTypes } from './operations'
 import { Target } from './reactive'
 
 const get = /*#__PURE__*/ createGetter()
@@ -21,7 +23,10 @@ function createGetter(isReadonly = false, shallow = false) {
 
     // TODO 5. key is symbol, or `__protot__ | __v_isRef`
 
-    // TODO 6. not readonly, need to track and collect deps
+    // DONE 6. not readonly, need to track and collect deps
+    if (!isReadonly) {
+      track(target, TrackOpTypes.GET, key)
+    }
 
     // 是否只需要 reactive 一级属性(不递归 reactive)
     if (shallow) {
