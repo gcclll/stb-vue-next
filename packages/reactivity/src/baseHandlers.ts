@@ -1,13 +1,11 @@
 // import { hasOwn, isObject, isArray, isIntegerKey } from '@vue/shared'
-import { hasOwn, isIntegerKey } from '@vue/shared/src'
-import { isArray } from 'util'
-import { track, trigger } from './effect'
-import { TrackOpTypes, TriggerOpTypes } from './operations'
-import { Target, toRaw } from './reactive'
-import { isRef } from './ref'
+// import { hasOwn, isIntegerKey, isArray } from '@vue/shared'
+import { track /*trigger*/ } from './effect'
+import { TrackOpTypes /*TriggerOpTypes*/ } from './operations'
+import { Target /*toRaw*/ } from './reactive'
 
 const get = /*#__PURE__*/ createGetter()
-const set = /*#__PURE__*/ createSetter()
+// const set = /*#__PURE__*/ createSetter()
 
 /**
  * 创建取值函数@param {boolean} isReadonly 是不是只读，将决定是否代理 set 等改变
@@ -46,41 +44,8 @@ function createGetter(isReadonly = false, shallow = false) {
 }
 
 function createSetter(shallow = false) {
-  return function set(
-    target: object,
-    key: string | symbol,
-    value: unknown,
-    receiver: object
-  ): boolean {
-    const oldValue = (target as any)[key]
-    // TODO 1. Ref 类型处理
-
-    // 2. 检测 key 有没在 target 存在
-    // 数组类型直接检测 数字是不是比数组长小
-    const hadKey =
-      isArray(target) && isIntegerKey(key)
-        ? Number(key) < target.length
-        : hasOwn(target, key)
-
-    // 3. 先将值设置下去
-    const result = Reflect.set(target, key, value, receiver)
-
-    // 4. 触发 effects
-    // 对于原型链上发生的操作不应该触发 effects，即只响应对象自身属性的操作变更
-    if (target === toRaw(receiver)) {
-      if (!hadKey) {
-        // ADD 操作
-        trigger(target, TriggerOpTypes.ADD, key, value)
-      } else {
-        // SET 操作
-        trigger(target, TriggerOpTypes.SET, key, value, oldValue)
-      }
-    }
-
-    return result
-  }
+  // TODO
 }
 export const mutableHandlers: ProxyHandler<object> = {
-  get,
-  set
+  get
 }

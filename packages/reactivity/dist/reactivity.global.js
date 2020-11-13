@@ -3,6 +3,11 @@ var VueReactivity = (function(exports) {
 
   const EMPTY_OBJ = Object.freeze({})
   const EMPTY_ARR = Object.freeze([])
+  const hasOwnProperty = Object.prototype.hasOwnProperty
+  const hasOwn = (val, key) => hasOwnProperty.call(val, key)
+  const isArray = Array.isArray
+  const isMap = val => toTypeString(val) === '[object Map]'
+  const isString = val => typeof val === 'string'
   const isObject = val => val !== null && typeof val === 'object'
   const objectToString = Object.prototype.toString
   const toTypeString = value => objectToString.call(value)
@@ -10,6 +15,11 @@ var VueReactivity = (function(exports) {
     // extract "RawType" from strings like "[object RawType]"
     return toTypeString(value).slice(8, -1)
   }
+  const isIntegerKey = key =>
+    isString(key) &&
+    key !== 'NaN' &&
+    key[0] !== '-' &&
+    '' + parseInt(key, 10) === key
   const def = (obj, key, value) => {
     Object.defineProperty(obj, key, {
       configurable: true,
@@ -22,6 +32,8 @@ var VueReactivity = (function(exports) {
   // effect 任务队列
   const effectStack = []
   let activeEffect
+  const ITERATE_KEY = Symbol('iterate')
+  const MAP_KEY_ITERATE_KEY = Symbol('Map key iterate')
   // fn 是不是经过封装之后的 ReactiveEffect
   function isEffect(fn) {
     return fn && fn._isEffect === true
@@ -140,11 +152,91 @@ var VueReactivity = (function(exports) {
     }
   }
   function trigger(target, type, key, newValue, oldValue, oldTarget) {
-    // TODO
+    // 1. 检查依赖
+    const depsMap = targetMap.get(target)
+    if (!depsMap) return
+    // 2. 定义 add dep 函数，将符合要求的 effect 添加到将执行队列
+    const effects = new Set()
+    const add = effectsToAdd => {
+      if (effectsToAdd) {
+        effectsToAdd.forEach(effect => {
+          // 哪些满足执行条件
+          if (effect !== activeEffect || effect.allowRecurse) {
+            effects.add(effect)
+          }
+        })
+      }
+    }
+    // 3. 检测触发 trigger 的原始操作类型
+    if (type === 'clear' /* CLEAR */) {
+      // 集合类型的清空操作，执行所有依赖
+      depsMap.forEach(add)
+    } else if (key === 'length' && isArray(target)) {
+      // 如果是数组，且长度发生变化，表示删除或添加元素操作
+      depsMap.forEach((dep, key) => {
+        // dep: Set[], key -> 'length'
+        if (key === 'length' || key >= newValue) {
+          // key >= newValue 可能是 arr[n] = xxx 设值操作
+          // key === 'length' 导致数组变化，可能是 push/pop... 等操作引起
+          add(dep)
+        }
+      })
+    } else {
+      if (key !== void 0) {
+        add(depsMap.get(key))
+      }
+      const addForNonArray = () => {
+        add(depsMap.get(ITERATE_KEY))
+        if (isMap(target)) {
+          add(depsMap.get(MAP_KEY_ITERATE_KEY))
+        }
+      }
+      switch (type) {
+        case 'add' /* ADD */: // 增
+          if (!isArray(target)) {
+            addForNonArray()
+          } else if (isIntegerKey(key)) {
+            add(depsMap.get('length'))
+          }
+          break
+        case 'delete' /* DELETE */: // 删
+          if (!isArray(target)) {
+            addForNonArray()
+          }
+          break
+        case 'set' /* SET */: // 改
+          if (isMap(target)) {
+            add(depsMap.get(ITERATE_KEY))
+          }
+          break
+      }
+    }
+    // 4. 定义 run 函数，如何执行这些 deps
+    const run = effect => {
+      if (effect.options.onTrigger) {
+        effect.options.onTrigger({
+          effect,
+          target,
+          key,
+          type,
+          newValue,
+          oldValue,
+          oldTarget
+        })
+      }
+      if (effect.options.scheduler) {
+        effect.options.scheduler(effect)
+      } else {
+        effect()
+      }
+    }
+    // 5. 开始执行
+    effects.forEach(run)
   }
 
   // import { hasOwn, isObject, isArray, isIntegerKey } from '@vue/shared'
   const get = /*#__PURE__*/ createGetter()
+  const set = /*#__PURE__*/ createSetter()
   /**
    * 创建取值函数@param {boolean} isReadonly 是不是只读，将决定是否代理 set 等改变
    * 对象操作@param {boolean} shallow 指定是否对对象进行浅 reactive(类似浅复制)，
@@ -172,8 +264,35 @@ var VueReactivity = (function(exports) {
       return res
     }
   }
+  function createSetter(shallow = false) {
+    return function set(target, key, value, receiver) {
+      const oldValue = target[key]
+      // TODO 1. Ref 类型处理
+      // 2. 检测 key 有没在 target 存在
+      // 数组类型直接检测 数字是不是比数组长小
+      const hadKey =
+        isArray(target) && isIntegerKey(key)
+          ? Number(key) < target.length
+          : hasOwn(target, key)
+      // 3. 先将值设置下去
+      const result = Reflect.set(target, key, value, receiver)
+      // 4. 触发 effects
+      // 对于原型链上发生的操作不应该触发 effects，即只响应对象自身属性的操作变更
+      if (target === toRaw(receiver)) {
+        if (!hadKey) {
+          // ADD 操作
+          trigger(target, 'add' /* ADD */, key, value)
+        } else {
+          // SET 操作
+          trigger(target, 'set' /* SET */, key, value, oldValue)
+        }
+      }
+      return result
+    }
+  }
   const mutableHandlers = {
-    get
+    get,
+    set
   }
 
   const reactiveMap = new WeakMap()

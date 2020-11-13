@@ -1,5 +1,4 @@
-import { EMPTY_OBJ, isIntegerKey, isMap } from '@vue/shared/src'
-import { isArray } from 'util'
+import { EMPTY_OBJ /*isIntegerKey, isMap, isArray*/ } from '@vue/shared'
 import { TrackOpTypes, TriggerOpTypes } from './operations'
 
 type Dep = Set<ReactiveEffect>
@@ -194,86 +193,6 @@ export function trigger(
   oldTarget?: Map<unknown, unknown> | Set<unknown>
 ) {
   // 1. 检查依赖
-  const depsMap = targetMap.get(target)
-  if (!depsMap) return
   // 2. 定义 add dep 函数，将符合要求的 effect 添加到将执行队列
-  const effects = new Set<ReactiveEffect>()
-  const add = (effectsToAdd: Set<ReactiveEffect> | undefined) => {
-    if (effectsToAdd) {
-      effectsToAdd.forEach(effect => {
-        // 哪些满足执行条件
-        if (effect !== activeEffect || effect.allowRecurse) {
-          effects.add(effect)
-        }
-      })
-    }
-  }
   // 3. 检测触发 trigger 的原始操作类型
-  if (type === TriggerOpTypes.CLEAR) {
-    // 集合类型的清空操作，执行所有依赖
-    depsMap.forEach(add)
-  } else if (key === 'length' && isArray(target)) {
-    // 如果是数组，且长度发生变化，表示删除或添加元素操作
-    depsMap.forEach((dep, key) => {
-      // dep: Set[], key -> 'length'
-      if (key === 'length' || key >= (newValue as number)) {
-        // key >= newValue 可能是 arr[n] = xxx 设值操作
-        // key === 'length' 导致数组变化，可能是 push/pop... 等操作引起
-        add(dep)
-      }
-    })
-  } else {
-    if (key !== void 0) {
-      add(depsMap.get(key))
-    }
-
-    const addForNonArray = () => {
-      add(depsMap.get(ITERATE_KEY))
-      if (isMap(target)) {
-        add(depsMap.get(MAP_KEY_ITERATE_KEY))
-      }
-    }
-
-    switch (type) {
-      case TriggerOpTypes.ADD: // 增
-        if (!isArray(target)) {
-          addForNonArray()
-        } else if (isIntegerKey(key)) {
-          add(depsMap.get('length'))
-        }
-        break
-      case TriggerOpTypes.DELETE: // 删
-        if (!isArray(target)) {
-          addForNonArray()
-        }
-        break
-      case TriggerOpTypes.SET: // 改
-        if (isMap(target)) {
-          add(depsMap.get(ITERATE_KEY))
-        }
-        break
-    }
-  }
-  // 4. 定义 run 函数，如何执行这些 deps
-  const run = (effect: ReactiveEffect) => {
-    if (__DEV__ && effect.options.onTrigger) {
-      effect.options.onTrigger({
-        effect,
-        target,
-        key,
-        type,
-        newValue,
-        oldValue,
-        oldTarget
-      })
-    }
-
-    if (effect.options.scheduler) {
-      effect.options.scheduler(effect)
-    } else {
-      effect()
-    }
-  }
-  // 5. 开始执行
-  effects.forEach(run)
 }
