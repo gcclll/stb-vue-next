@@ -3,7 +3,7 @@ import { TrackOpTypes, TriggerOpTypes } from './operations'
 
 type Dep = Set<ReactiveEffect>
 type KeyToDepMap = Map<any, Dep>
-const targetMap = new WeakMap<any, KeyToDepMap>()
+export const targetMap = new WeakMap<any, KeyToDepMap>()
 
 export interface ReactiveEffect<T = any> {
   (): T

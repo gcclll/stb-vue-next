@@ -37,7 +37,6 @@ function createGetter(isReadonly = false, shallow = false) {
 
     // TODO 7. res is object -> reactive recursivly
 
-    console.log({ res }, 'get')
     return res
   }
 }
