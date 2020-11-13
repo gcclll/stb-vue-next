@@ -192,7 +192,5 @@ export function trigger(
   oldValue?: unknown,
   oldTarget?: Map<unknown, unknown> | Set<unknown>
 ) {
-  // 1. 检查依赖
-  // 2. 定义 add dep 函数，将符合要求的 effect 添加到将执行队列
-  // 3. 检测触发 trigger 的原始操作类型
+  // TODO
 }
