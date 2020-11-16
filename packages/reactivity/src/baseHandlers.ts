@@ -4,12 +4,12 @@ import {
   isArray,
   isIntegerKey,
   hasChanged,
-  isObject
+  isObject,
+  isSymbol
 } from '@vue/shared'
 import { track, trigger } from './effect'
 import { TrackOpTypes, TriggerOpTypes } from './operations'
 import {
-  isReactive,
   reactive,
   ReactiveFlags,
   reactiveMap,
@@ -17,6 +17,12 @@ import {
   Target,
   toRaw
 } from './reactive'
+
+const builtInSymbols = new Set(
+  Object.getOwnPropertyNames(Symbol)
+    .map(key => (Symbol as any)[key])
+    .filter(isSymbol)
+)
 
 const get = /*#__PURE__*/ createGetter()
 const set = /*#__PURE__*/ createSetter()
@@ -46,10 +52,16 @@ function createGetter(isReadonly = false, shallow = false) {
 
     const res = Reflect.get(target, key, receiver)
 
-    // TODO 5. key is symbol, or `__protot__ | __v_isRef`
+    if (
+      isSymbol(key)
+        ? builtInSymbols.has(key as symbol)
+        : key === `__proto__` || key === `__v_isRef`
+    ) {
+      return res
+    }
 
-    // DONE 6. not readonly, need to track and collect deps
     if (!isReadonly) {
+      // DONE 6. not readonly, need to track and collect deps
       track(target, TrackOpTypes.GET, key)
     }
 
