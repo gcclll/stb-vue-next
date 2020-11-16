@@ -9,6 +9,7 @@ import {
 import { track, trigger } from './effect'
 import { TrackOpTypes, TriggerOpTypes } from './operations'
 import {
+  isReactive,
   reactive,
   ReactiveFlags,
   reactiveMap,
@@ -29,6 +30,10 @@ function createGetter(isReadonly = false, shallow = false) {
   // target: 被取值的对象，key: 取值的属性，receiver: this 的值
   return function get(target: Target, key: string | symbol, receiver: object) {
     // TODO 1. key is reactive
+    if (key === ReactiveFlags.IS_REACTIVE) {
+      // 读取对象的 __v_isReactive
+      return !isReadonly
+    }
     // TODO 2. key is readonly
     // TODO 3. key is the raw target
     if (
@@ -57,7 +62,7 @@ function createGetter(isReadonly = false, shallow = false) {
 
     // TODO 7. res is object -> reactive recursivly
     if (isObject(res)) {
-      // 递归 reactive 嵌套对象
+      // 递归 reactive 嵌套对象，feat: b2143f9
       return isReadonly ? null /* TODO */ : reactive(res)
     }
 
