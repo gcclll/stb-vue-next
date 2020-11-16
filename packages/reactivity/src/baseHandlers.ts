@@ -1,11 +1,22 @@
-// import { hasOwn, isObject, isArray, isIntegerKey } from '@vue/shared'
-// import { hasOwn, isIntegerKey, isArray } from '@vue/shared'
-import { track /*trigger*/ } from './effect'
-import { TrackOpTypes /*TriggerOpTypes*/ } from './operations'
-import { Target /*toRaw*/ } from './reactive'
+import {
+  hasOwn,
+  // isObject,
+  isArray,
+  isIntegerKey,
+  hasChanged
+} from '@vue/shared'
+import { track, trigger } from './effect'
+import { TrackOpTypes, TriggerOpTypes } from './operations'
+import {
+  ReactiveFlags,
+  reactiveMap,
+  readonlyMap,
+  Target,
+  toRaw
+} from './reactive'
 
 const get = /*#__PURE__*/ createGetter()
-// const set = /*#__PURE__*/ createSetter()
+const set = /*#__PURE__*/ createSetter()
 
 /**
  * 创建取值函数@param {boolean} isReadonly 是不是只读，将决定是否代理 set 等改变
@@ -18,7 +29,12 @@ function createGetter(isReadonly = false, shallow = false) {
     // TODO 1. key is reactive
     // TODO 2. key is readonly
     // TODO 3. key is the raw target
-
+    if (
+      key === ReactiveFlags.RAW &&
+      receiver === (isReadonly ? readonlyMap : reactiveMap).get(target)
+    ) {
+      return target
+    }
     // TODO 4. target is array
 
     const res = Reflect.get(target, key, receiver)
@@ -44,8 +60,35 @@ function createGetter(isReadonly = false, shallow = false) {
 }
 
 function createSetter(shallow = false) {
-  // TODO
+  return function set(
+    target: object,
+    key: string | symbol,
+    value: unknown,
+    receiver: object
+  ): boolean {
+    const oldValue = (target as any)[key]
+    // TODO shallow or not, or ref ?
+    //
+
+    const hadKey =
+      isArray(target) && isIntegerKey(key)
+        ? Number(key) < target.length
+        : hasOwn(target, key)
+
+    const result = Reflect.set(target, key, value, receiver)
+
+    if (target === toRaw(receiver)) {
+      if (!hadKey) {
+        // TODO ADD
+      } else if (hasChanged(value, oldValue)) {
+        trigger(target, TriggerOpTypes.SET, key, value, oldValue)
+      }
+    }
+
+    return result
+  }
 }
 export const mutableHandlers: ProxyHandler<object> = {
-  get
+  get,
+  set
 }

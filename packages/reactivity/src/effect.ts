@@ -1,4 +1,4 @@
-import { EMPTY_OBJ /*isIntegerKey, isMap, isArray*/ } from '@vue/shared'
+import { EMPTY_OBJ, isArray } from '@vue/shared'
 import { TrackOpTypes, TriggerOpTypes } from './operations'
 
 type Dep = Set<ReactiveEffect>
@@ -119,7 +119,7 @@ function createReactiveEffect<T = any>(
   return effect
 }
 
-function cleanup(effect: ReactiveEffect) {
+export function cleanup(effect: ReactiveEffect) {
   // track() 里面执行dep.add 的同时会将当前被依赖对象存储到
   // activeEffect.deps 里面，这里就是讲这些收集的被依赖者列表全清空
   const { deps } = effect
@@ -192,5 +192,54 @@ export function trigger(
   oldValue?: unknown,
   oldTarget?: Map<unknown, unknown> | Set<unknown>
 ) {
-  // TODO
+  const depsMap = targetMap.get(target)
+  if (!depsMap) {
+    return
+  }
+
+  const effects = new Set<ReactiveEffect>()
+  const add = (effectsToAdd: Set<ReactiveEffect> | undefined) => {
+    if (effectsToAdd) {
+      effectsToAdd.forEach(effect => {
+        if (effect !== activeEffect || effect.allowRecurse) {
+          effects.add(effect)
+        }
+      })
+    }
+  }
+
+  if (type === TriggerOpTypes.CLEAR) {
+    // TODO collection clear operation
+  } else if (key === 'length' && isArray(target)) {
+    // TODO array change operation
+  } else {
+    // SET | ADD | DELETE operation
+    if (key !== void 0) {
+      add(depsMap.get(key))
+    }
+
+    // TODO 迭代器 key，for...of, 使用迭代器是对数据的监听变化
+  }
+
+  const run = (effect: ReactiveEffect) => {
+    if (__DEV__ && effect.options.onTrigger) {
+      effect.options.onTrigger({
+        effect,
+        target,
+        key,
+        type,
+        newValue,
+        oldValue,
+        oldTarget
+      })
+    }
+
+    if (effect.options.scheduler) {
+      effect.options.scheduler(effect)
+    } else {
+      effect()
+    }
+  }
+
+  effects.forEach(run)
 }

@@ -12,6 +12,7 @@ export {
   trigger,
   track,
   targetMap,
+  cleanup,
   enableTracking,
   resetTracking,
   ReactiveEffect,
