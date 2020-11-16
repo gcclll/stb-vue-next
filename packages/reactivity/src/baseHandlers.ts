@@ -3,11 +3,13 @@ import {
   // isObject,
   isArray,
   isIntegerKey,
-  hasChanged
+  hasChanged,
+  isObject
 } from '@vue/shared'
 import { track, trigger } from './effect'
 import { TrackOpTypes, TriggerOpTypes } from './operations'
 import {
+  reactive,
   ReactiveFlags,
   reactiveMap,
   readonlyMap,
@@ -54,6 +56,10 @@ function createGetter(isReadonly = false, shallow = false) {
     // TODO 6. res isRef
 
     // TODO 7. res is object -> reactive recursivly
+    if (isObject(res)) {
+      // 递归 reactive 嵌套对象
+      return isReadonly ? null /* TODO */ : reactive(res)
+    }
 
     return res
   }
