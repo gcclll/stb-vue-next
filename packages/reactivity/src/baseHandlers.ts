@@ -111,7 +111,19 @@ function createSetter(shallow = false) {
     return result
   }
 }
+
+function deleteProperty(target: object, key: string | symbol): boolean {
+  const hadKey = hasOwn(target, key)
+  const oldValue = (target as any)[key]
+  const result = Reflect.deleteProperty(target, key)
+  if (result && hadKey) {
+    // 删除成功，触发 DELETE
+    trigger(target, TriggerOpTypes.DELETE, key, undefined, oldValue)
+  }
+  return result
+}
 export const mutableHandlers: ProxyHandler<object> = {
   get,
-  set
+  set,
+  deleteProperty
 }
