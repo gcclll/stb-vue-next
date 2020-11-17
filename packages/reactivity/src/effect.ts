@@ -135,6 +135,11 @@ export function cleanup(effect: ReactiveEffect) {
 let shouldTrack = true
 const trackStack: boolean[] = []
 
+export function pauseTracking() {
+  trackStack.push(shouldTrack)
+  shouldTrack = false
+}
+
 export function enableTracking() {
   trackStack.push(shouldTrack)
   shouldTrack = true

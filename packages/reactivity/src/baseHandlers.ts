@@ -7,7 +7,13 @@ import {
   isObject,
   isSymbol
 } from '@vue/shared'
-import { ITERATE_KEY, track, trigger } from './effect'
+import {
+  ITERATE_KEY,
+  pauseTracking,
+  resetTracking,
+  track,
+  trigger
+} from './effect'
 import { TrackOpTypes, TriggerOpTypes } from './operations'
 import {
   reactive,
@@ -25,7 +31,34 @@ const builtInSymbols = new Set(
 )
 
 const get = /*#__PURE__*/ createGetter()
-const set = /*#__PURE__*/ createSetter()
+
+// 数组内置方法处理
+const arrayInstrumentations: Record<string, Function> = {}
+;(['includes', 'indexOf', 'lastIndexOf'] as const).forEach(key => {
+  const method = Array.prototype[key] as any
+  arrayInstrumentations[key] = function(this: unknown[], ...args: unknown[]) {
+    const arr = toRaw(this)
+    for (let i = 0, l = this.length; i < l; i++) {
+      track(arr, TrackOpTypes.GET, i + '')
+    }
+
+    const res = method.apply(arr, args)
+    if (res === -1 || res === false) {
+      return method.apply(arr, args.map(toRaw))
+    } else {
+      return res
+    }
+  }
+})
+;(['push', 'pop', 'shift', 'unshift', 'splice'] as const).forEach(key => {
+  const method = Array.prototype[key] as any
+  arrayInstrumentations[key] = function(this: unknown[], ...args: unknown[]) {
+    pauseTracking()
+    const res = method.apply(this, args)
+    resetTracking()
+    return res
+  }
+})
 
 /**
  * 创建取值函数@param {boolean} isReadonly 是不是只读，将决定是否代理 set 等改变
@@ -48,7 +81,12 @@ function createGetter(isReadonly = false, shallow = false) {
     ) {
       return target
     }
-    // TODO 4. target is array
+
+    // 4. target is array
+    const targetIsArray = isArray(target)
+    if (targetIsArray && hasOwn(arrayInstrumentations, key)) {
+      return Reflect.get(arrayInstrumentations, key, receiver)
+    }
 
     const res = Reflect.get(target, key, receiver)
 
@@ -82,6 +120,7 @@ function createGetter(isReadonly = false, shallow = false) {
   }
 }
 
+const set = /*#__PURE__*/ createSetter()
 function createSetter(shallow = false) {
   return function set(
     target: object,
