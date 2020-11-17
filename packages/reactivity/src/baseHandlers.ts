@@ -7,7 +7,7 @@ import {
   isObject,
   isSymbol
 } from '@vue/shared'
-import { track, trigger } from './effect'
+import { ITERATE_KEY, track, trigger } from './effect'
 import { TrackOpTypes, TriggerOpTypes } from './operations'
 import {
   reactive,
@@ -122,8 +122,23 @@ function deleteProperty(target: object, key: string | symbol): boolean {
   }
   return result
 }
+
+function has(target: object, key: string | symbol): boolean {
+  const result = Reflect.has(target, key)
+  if (!isSymbol(key) || !builtInSymbols.has(key)) {
+    track(target, TrackOpTypes.HAS, key)
+  }
+  return result
+}
+
+function ownKeys(target: object): (string | num | symbol)[] {
+  track(target, TrackOpTypes.ITERATE, isArray(target) ? 'length' : ITERATE_KEY)
+  return Reflect.ownKeys(target)
+}
 export const mutableHandlers: ProxyHandler<object> = {
   get,
   set,
-  deleteProperty
+  deleteProperty,
+  has,
+  ownKeys
 }
