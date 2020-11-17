@@ -68,17 +68,18 @@ const arrayInstrumentations: Record<string, Function> = {}
 function createGetter(isReadonly = false, shallow = false) {
   // target: 被取值的对象，key: 取值的属性，receiver: this 的值
   return function get(target: Target, key: string | symbol, receiver: object) {
-    // TODO 1. key is reactive
+    // 1. key is reactive
     if (key === ReactiveFlags.IS_REACTIVE) {
       // 读取对象的 __v_isReactive
       return !isReadonly
-    }
-    // TODO 2. key is readonly
-    // TODO 3. key is the raw target
-    if (
+    } else if (key === ReactiveFlags.IS_READONLY) {
+      // 2. key is readonly
+      return isReadonly
+    } else if (
       key === ReactiveFlags.RAW &&
       receiver === (isReadonly ? readonlyMap : reactiveMap).get(target)
     ) {
+      // 3. key is the raw target
       return target
     }
 
