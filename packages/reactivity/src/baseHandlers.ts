@@ -5,7 +5,8 @@ import {
   isIntegerKey,
   hasChanged,
   isObject,
-  isSymbol
+  isSymbol,
+  extend
 } from '@vue/shared'
 import {
   ITERATE_KEY,
@@ -31,6 +32,7 @@ const builtInSymbols = new Set(
 )
 
 const get = /*#__PURE__*/ createGetter()
+const shallowGet = /*#__PURE__*/ createGetter(false, true)
 
 // 数组内置方法处理
 const arrayInstrumentations: Record<string, Function> = {}
@@ -105,6 +107,7 @@ function createGetter(isReadonly = false, shallow = false) {
     }
 
     // 是否只需要 reactive 一级属性(不递归 reactive)
+    // ADD
     if (shallow) {
       return res
     }
@@ -122,6 +125,8 @@ function createGetter(isReadonly = false, shallow = false) {
 }
 
 const set = /*#__PURE__*/ createSetter()
+const shallowSet = /*#__PURE__*/ createSetter(true)
+
 function createSetter(shallow = false) {
   return function set(
     target: object,
@@ -175,6 +180,7 @@ function ownKeys(target: object): (string | number | symbol)[] {
   track(target, TrackOpTypes.ITERATE, isArray(target) ? 'length' : ITERATE_KEY)
   return Reflect.ownKeys(target)
 }
+
 export const mutableHandlers: ProxyHandler<object> = {
   get,
   set,
@@ -182,3 +188,12 @@ export const mutableHandlers: ProxyHandler<object> = {
   has,
   ownKeys
 }
+
+export const shallowReactiveHandlers: ProxyHandler<object> = extend(
+  {},
+  mutableHandlers,
+  {
+    get: shallowGet,
+    set: shallowSet
+  }
+)

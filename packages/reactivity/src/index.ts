@@ -1,5 +1,6 @@
 export {
   reactive,
+  shallowReactive,
   isReactive,
   isReadonly,
   isProxy,

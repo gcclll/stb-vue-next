@@ -1,5 +1,5 @@
 import { isObject, toRawType, def } from '@vue/shared'
-import { mutableHandlers } from './baseHandlers'
+import { mutableHandlers, shallowReactiveHandlers } from './baseHandlers'
 import { UnwrapRef, Ref } from './ref'
 
 export const enum ReactiveFlags {
@@ -56,15 +56,14 @@ export function reactive(target: object) {
     return target
   }
 
-  return createReactiveObject(
-    target,
-    false,
-    mutableHandlers,
-    {}
-    // mutableCollectionHandlers
-  )
+  // TODO mutableCollectionHandlers
+  return createReactiveObject(target, false, mutableHandlers, {})
 }
 
+export function shallowReactive<T extends object>(target: T): T {
+  // TODO shallowCollectionHandlers
+  return createReactiveObject(target, false, shallowReactiveHandlers, {})
+}
 function createReactiveObject(
   target: Target,
   isReadonly: boolean,
