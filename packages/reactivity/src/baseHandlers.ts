@@ -34,7 +34,7 @@ const get = /*#__PURE__*/ createGetter()
 
 // 数组内置方法处理
 const arrayInstrumentations: Record<string, Function> = {}
-;(['includes', 'indexOf', 'lastIndexOf'] as const).forEach(key => {
+;(['includes', 'indexOf', 'lastIndexOf'] as const).forEach((key: any) => {
   const method = Array.prototype[key] as any
   arrayInstrumentations[key] = function(this: unknown[], ...args: unknown[]) {
     const arr = toRaw(this)
@@ -142,7 +142,7 @@ function createSetter(shallow = false) {
 
     if (target === toRaw(receiver)) {
       if (!hadKey) {
-        // TODO ADD
+        trigger(target, TriggerOpTypes.ADD, key, value)
       } else if (hasChanged(value, oldValue)) {
         trigger(target, TriggerOpTypes.SET, key, value, oldValue)
       }

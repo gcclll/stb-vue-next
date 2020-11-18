@@ -1,4 +1,4 @@
-import { EMPTY_OBJ, isArray } from '@vue/shared'
+import { EMPTY_OBJ, isArray, isIntegerKey } from '@vue/shared'
 import { TrackOpTypes, TriggerOpTypes } from './operations'
 
 type Dep = Set<ReactiveEffect>
@@ -217,6 +217,11 @@ export function trigger(
     // TODO collection clear operation
   } else if (key === 'length' && isArray(target)) {
     // TODO array change operation
+    depsMap.forEach((dep, key) => {
+      if (key === 'length' || key >= (newValue as number)) {
+        add(dep)
+      }
+    })
   } else {
     // SET | ADD | DELETE operation
     if (key !== void 0) {
@@ -224,6 +229,15 @@ export function trigger(
     }
 
     // TODO 迭代器 key，for...of, 使用迭代器是对数据的监听变化
+    switch (type) {
+      case TriggerOpTypes.ADD:
+        if (!isArray(target)) {
+          // TODO add object prop
+        } else if (isIntegerKey(key)) {
+          // 如果是数组添加元素，将 length 依赖添加到执行队列
+          add(depsMap.get('length'))
+        }
+    }
   }
 
   const run = (effect: ReactiveEffect) => {
