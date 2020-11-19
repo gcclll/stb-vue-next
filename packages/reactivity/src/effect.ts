@@ -70,6 +70,16 @@ export function effect<T = any>(
   return effect
 }
 
+export function stop(effect: ReactiveEffect) {
+  if (effect.active) {
+    cleanup(effect)
+    if (effect.options.onStop) {
+      effect.options.onStop()
+    }
+    effect.active = false
+  }
+}
+
 let uid = 0
 
 function createReactiveEffect<T = any>(

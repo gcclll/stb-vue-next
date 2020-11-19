@@ -1,13 +1,15 @@
 export {
   reactive,
   readonly,
-  shallowReactive,
   isReactive,
   isReadonly,
   isProxy,
+  shallowReactive,
+  shallowReadonly,
   markRaw,
   toRaw,
-  ReactiveFlags
+  ReactiveFlags,
+  DeepReadonly
 } from './reactive'
 export {
   effect,
