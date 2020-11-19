@@ -35,6 +35,7 @@ const builtInSymbols = new Set(
 const get = /*#__PURE__*/ createGetter()
 const shallowGet = /*#__PURE__*/ createGetter(false, true)
 const readonlyGet = /*#__PURE__*/ createGetter(true)
+const shallowReadonlyGet = /*#__PURE__*/ createGetter(true, true)
 
 // 数组内置方法处理
 const arrayInstrumentations: Record<string, Function> = {}
@@ -219,5 +220,13 @@ export const shallowReactiveHandlers: ProxyHandler<object> = extend(
   {
     get: shallowGet,
     set: shallowSet
+  }
+)
+
+export const shallowReadonlyHandlers: ProxyHandler<object> = extend(
+  {},
+  readonlyHandlers,
+  {
+    get: shallowReadonlyGet
   }
 )

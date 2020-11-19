@@ -1,8 +1,9 @@
 import { isObject, toRawType, def } from '@vue/shared'
 import {
   mutableHandlers,
+  readonlyHandlers,
   shallowReactiveHandlers,
-  readonlyHandlers
+  shallowReadonlyHandlers
 } from './baseHandlers'
 import { UnwrapRef, Ref } from './ref'
 
@@ -95,6 +96,12 @@ export function readonly<T extends object>(
   target: T
 ): DeepReadonly<UnwrapNestedRefs<T>> {
   return createReactiveObject(target, true, readonlyHandlers, {})
+}
+
+export function shallowReadonly<T extends object>(
+  target: T
+): Readonly<{ [K in keyof T]: UnwrapNestedRefs<T[K]> }> {
+  return createReactiveObject(target, true, shallowReadonlyHandlers, {})
 }
 
 function createReactiveObject(
