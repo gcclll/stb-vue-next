@@ -200,8 +200,8 @@ export const readonlyHandlers: ProxyHandler<object> = {
         `Set operation on key "${String(key)}" failed: target is readonly.`,
         target
       )
-      return true
     }
+    return true
   },
   deleteProperty(target, key) {
     if (__DEV__) {
