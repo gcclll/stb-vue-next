@@ -1,5 +1,9 @@
 import { isObject, toRawType, def } from '@vue/shared'
-import { mutableHandlers, shallowReactiveHandlers } from './baseHandlers'
+import {
+  mutableHandlers,
+  shallowReactiveHandlers,
+  readonlyHandlers
+} from './baseHandlers'
 import { UnwrapRef, Ref } from './ref'
 
 export const enum ReactiveFlags {
@@ -64,6 +68,35 @@ export function shallowReactive<T extends object>(target: T): T {
   // TODO shallowCollectionHandlers
   return createReactiveObject(target, false, shallowReactiveHandlers, {})
 }
+
+type Primitive = string | number | boolean | bigint | symbol | undefined | null
+type Builtin = Primitive | Function | Date | Error | RegExp
+export type DeepReadonly<T> = T extends Builtin
+  ? T
+  : T extends Map<infer K, infer V>
+    ? ReadonlyMap<DeepReadonly<K>, DeepReadonly<V>>
+    : T extends ReadonlyMap<infer K, infer V>
+      ? ReadonlyMap<DeepReadonly<K>, DeepReadonly<V>>
+      : T extends WeakMap<infer K, infer V>
+        ? WeakMap<DeepReadonly<K>, DeepReadonly<V>>
+        : T extends Set<infer U>
+          ? ReadonlySet<DeepReadonly<U>>
+          : T extends ReadonlySet<infer U>
+            ? ReadonlySet<DeepReadonly<U>>
+            : T extends WeakSet<infer U>
+              ? WeakSet<DeepReadonly<U>>
+              : T extends Promise<infer U>
+                ? Promise<DeepReadonly<U>>
+                : T extends {}
+                  ? { readonly [K in keyof T]: DeepReadonly<T[K]> }
+                  : Readonly<T>
+
+export function readonly<T extends object>(
+  target: T
+): DeepReadonly<UnwrapNestedRefs<T>> {
+  return createReactiveObject(target, true, readonlyHandlers, {})
+}
+
 function createReactiveObject(
   target: Target,
   isReadonly: boolean,

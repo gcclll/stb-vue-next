@@ -18,6 +18,7 @@ import {
 import { TrackOpTypes, TriggerOpTypes } from './operations'
 import {
   reactive,
+  readonly,
   ReactiveFlags,
   reactiveMap,
   readonlyMap,
@@ -33,6 +34,7 @@ const builtInSymbols = new Set(
 
 const get = /*#__PURE__*/ createGetter()
 const shallowGet = /*#__PURE__*/ createGetter(false, true)
+const readonlyGet = /*#__PURE__*/ createGetter(true)
 
 // 数组内置方法处理
 const arrayInstrumentations: Record<string, Function> = {}
@@ -117,7 +119,7 @@ function createGetter(isReadonly = false, shallow = false) {
     // TODO 7. res is object -> reactive recursivly
     if (isObject(res)) {
       // 递归 reactive 嵌套对象，feat: b2143f9
-      return isReadonly ? null /* TODO */ : reactive(res)
+      return isReadonly ? readonly(res) : reactive(res)
     }
 
     return res
@@ -189,6 +191,28 @@ export const mutableHandlers: ProxyHandler<object> = {
   ownKeys
 }
 
+export const readonlyHandlers: ProxyHandler<object> = {
+  get: readonlyGet,
+
+  set(target, key) {
+    if (__DEV__) {
+      console.warn(
+        `Set operation on key "${String(key)}" failed: target is readonly.`,
+        target
+      )
+      return true
+    }
+  },
+  deleteProperty(target, key) {
+    if (__DEV__) {
+      console.warn(
+        `Delete operation on key "${String(key)}" failed: target is readonly.`,
+        target
+      )
+    }
+    return true
+  }
+}
 export const shallowReactiveHandlers: ProxyHandler<object> = extend(
   {},
   mutableHandlers,
