@@ -1,5 +1,7 @@
 import { hasOwn, isObject } from '@vue/shared'
-import { reactive, ReactiveFlags, readonly } from './reactive'
+import { TrackOpTypes } from './operations'
+import { reactive, ReactiveFlags, readonly, toRaw } from './reactive'
+import { track } from './effect'
 
 export type CollectionTypes = IterableCollections | WeakCollections
 type IterableCollections = Map<any, any> | Set<any>
@@ -18,12 +20,22 @@ const toShallow = <T extends unknown>(value: T): T => value
 const getProto = <T extends CollectionTypes>(v: T): any =>
   Reflect.getPrototypeOf(v)
 
+function get(
+  target: MapTypes,
+  key: unknown,
+  isReadonly = false,
+  isShallow = false
+) {
+  // TODO
+
+  console.log({ target, key })
+  return target.get(key)
+}
+
 const mutableInstrumentations: Record<string, Function> = {
+  // get proxy handler, this -> target
   get(this: MapTypes, key: unknown) {
     return get(this, key)
-  },
-  get size() {
-    return size((this as unknown) as IterableCollections)
   }
 }
 
