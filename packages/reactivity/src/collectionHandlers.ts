@@ -1,5 +1,7 @@
 import { hasOwn } from '@vue/shared'
-import { ReactiveFlags } from './reactive'
+import { track } from './effect'
+import { TrackOpTypes } from './operations'
+import { ReactiveFlags, toRaw } from './reactive'
 
 export type CollectionTypes = IterableCollections | WeakCollections
 type IterableCollections = Map<any, any> | Set<any>
@@ -13,8 +15,20 @@ function get(
   isShallow = false
 ) {
   // TODO
+  target = (target as any)[ReactiveFlags.RAW]
+  const rawTarget = toRaw(target)
 
-  console.log({ target, key })
+  // 下面处理是针对 key 可能是 proxy 类型
+  // 次数，proxy key 和对应的 raw key 都要收集当前依赖
+  const rawKey = toRaw(key) // key 有可能也是 proxy
+  if (key !== rawKey) {
+    // proxy key
+    !isReadonly && track(rawTarget, TrackOpTypes.GET, key)
+  }
+  // raw key
+  !isReadonly && track(rawTarget, TrackOpTypes.GET, rawKey)
+
+  console.log({ key, target, x: 'in global get' })
   // FIX: 死循环
   return 100
   // return target.get(key)
@@ -50,6 +64,7 @@ function createInstrumentationGetter(isReadonly: boolean, shallow: boolean) {
     // 所以 mutableInstrumentations.get 的两个参数分别是：
     // 1. this -> map
     // 2. key -> map.get('foo') 的 'foo'
+    console.log({ key, target, x: 'in ceateInstrumentationGetter' })
     return Reflect.get(
       hasOwn(instrumentations, key) && key in target
         ? instrumentations

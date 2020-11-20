@@ -197,6 +197,8 @@ export function track(target: object, type: TrackOpTypes, key: unknown) {
       })
     }
   }
+
+  console.log({ key, type, dep })
 }
 
 export function trigger(
