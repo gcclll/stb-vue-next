@@ -226,7 +226,6 @@ export function trigger(
   if (type === TriggerOpTypes.CLEAR) {
     // TODO collection clear operation
   } else if (key === 'length' && isArray(target)) {
-    // TODO array change operation
     depsMap.forEach((dep, key) => {
       if (key === 'length' || key >= (newValue as number)) {
         add(dep)

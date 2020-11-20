@@ -17,6 +17,7 @@ export {
   track,
   targetMap,
   cleanup,
+  stop,
   enableTracking,
   resetTracking,
   ReactiveEffect,
