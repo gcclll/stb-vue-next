@@ -15,7 +15,9 @@ function get(
   // TODO
 
   console.log({ target, key })
-  return target.get(key)
+  // FIX: 死循环
+  return 100
+  // return target.get(key)
 }
 
 const mutableInstrumentations: Record<string, Function> = {
