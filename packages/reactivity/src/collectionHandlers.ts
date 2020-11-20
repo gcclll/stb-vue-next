@@ -23,6 +23,7 @@ function get(
 const mutableInstrumentations: Record<string, Function> = {
   // get proxy handler, this -> target
   get(this: MapTypes, key: unknown) {
+    // collection get 执行期间
     return get(this, key)
   }
 }
@@ -43,6 +44,12 @@ function createInstrumentationGetter(isReadonly: boolean, shallow: boolean) {
       return target
     }
 
+    // collection get 取值期间，这里只是负责将 get/set/... 方法取出来
+    // map.get() -> 分给两步: fn = map.get -> fn()
+    // 取 fn 在下面，fn() 执行实际在 mutableInstrumentation 里面
+    // 所以 mutableInstrumentations.get 的两个参数分别是：
+    // 1. this -> map
+    // 2. key -> map.get('foo') 的 'foo'
     return Reflect.get(
       hasOwn(instrumentations, key) && key in target
         ? instrumentations
