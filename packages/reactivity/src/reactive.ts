@@ -5,6 +5,7 @@ import {
   shallowReactiveHandlers,
   shallowReadonlyHandlers
 } from './baseHandlers'
+import { mutableCollectionHandlers } from './collectionHandlers'
 import { UnwrapRef, Ref } from './ref'
 
 export const enum ReactiveFlags {
@@ -61,8 +62,12 @@ export function reactive(target: object) {
     return target
   }
 
-  // TODO mutableCollectionHandlers
-  return createReactiveObject(target, false, mutableHandlers, {})
+  return createReactiveObject(
+    target,
+    false,
+    mutableHandlers,
+    mutableCollectionHandlers
+  )
 }
 
 export function shallowReactive<T extends object>(target: T): T {

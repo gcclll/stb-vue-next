@@ -17,3 +17,10 @@ const toShallow = <T extends unknown>(value: T): T => value
 
 const getProto = <T extends CollectionTypes>(v: T): any =>
   Reflect.getPrototypeOf(v)
+
+function createInstrumentationGetter(isReadonly: boolean, shallow: boolean) {
+  // TODO
+}
+export const mutableCollectionHandlers: ProxyHandler<CollectionTypes> = {
+  // get: createInstrumentationGetter(false, false)
+}
