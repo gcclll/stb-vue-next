@@ -1,7 +1,13 @@
-import { hasOwn, isMap, isObject, toRawType } from '@vue/shared'
-import { ITERATE_KEY, track, trigger } from './effect'
+import { capitalize, hasOwn, isMap, isObject, toRawType } from '@vue/shared'
+import { ITERATE_KEY, MAP_KEY_ITERATE_KEY, track, trigger } from './effect'
 import { TrackOpTypes, TriggerOpTypes } from './operations'
-import { ReactiveFlags, toRaw, reactive, readonly } from './reactive'
+import {
+  ReactiveFlags,
+  toRaw,
+  reactive,
+  readonly,
+  isReactive
+} from './reactive'
 
 export type CollectionTypes = IterableCollections | WeakCollections
 type IterableCollections = Map<any, any> | Set<any>
@@ -148,6 +154,26 @@ function clear(this: IterableCollections) {
   return result
 }
 
+function createForEach(isReadonly: boolean, isShallow: boolean) {
+  return function forEach(
+    this: IterableCollections,
+    callback: Function,
+    thisArg?: unknown
+  ) {
+    const observed = this as any
+    const target = observed[ReactiveFlags.RAW]
+    const rawTarget = toRaw(target)
+    const wrap = isReadonly ? toReadonly : isShallow ? toShallow : toReactive
+    !isReadonly && track(rawTarget, TrackOpTypes.ITERATE, ITERATE_KEY)
+    return target.forEach((value: unknown, key: unknown) => {
+      // 重要：确保回调
+      // 1. 在 reactive map 作用域下被执行(this, 和第三个参数)
+      // 2. 接受的 value 值应该是个 reactive/readonly 类型
+      return callback.call(thisArg, wrap(value), wrap(key), observed)
+    })
+  }
+}
+
 const mutableInstrumentations: Record<string, Function> = {
   // get proxy handler, this -> target
   get(this: MapTypes, key: unknown) {
@@ -161,7 +187,8 @@ const mutableInstrumentations: Record<string, Function> = {
   add,
   set,
   delete: deleteEntry,
-  clear
+  clear,
+  forEach: createForEach(false, false)
 }
 
 function createInstrumentationGetter(isReadonly: boolean, shallow: boolean) {
