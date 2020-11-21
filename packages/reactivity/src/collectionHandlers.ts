@@ -1,12 +1,23 @@
-import { hasOwn } from '@vue/shared'
+import { hasOwn, isObject } from '@vue/shared'
 import { track } from './effect'
 import { TrackOpTypes } from './operations'
-import { ReactiveFlags, toRaw } from './reactive'
+import { ReactiveFlags, toRaw, reactive, readonly } from './reactive'
 
 export type CollectionTypes = IterableCollections | WeakCollections
 type IterableCollections = Map<any, any> | Set<any>
 type WeakCollections = WeakMap<any, any> | WeakSet<any>
 type MapTypes = Map<any, any> | WeakMap<any, any>
+
+const toReactive = <T extends unknown>(value: T): T =>
+  isObject(value) ? reactive(value) : value
+
+const toReadonly = <T extends unknown>(value: T): T =>
+  isObject(value) ? readonly(value as Record<any, any>) : value
+
+const toShallow = <T extends unknown>(value: T): T => value
+
+const getProto = <T extends CollectionTypes>(v: T): any =>
+  Reflect.getPrototypeOf(v)
 
 function get(
   target: MapTypes,
@@ -28,10 +39,15 @@ function get(
   // raw key
   !isReadonly && track(rawTarget, TrackOpTypes.GET, rawKey)
 
-  console.log({ key, target, x: 'in global get' })
-  // FIX: 死循环
-  return 100
-  // return target.get(key)
+  const { has } = getProto(rawTarget)
+  // 递归处理对象类型
+  const wrap = isReadonly ? toReadonly : isShallow ? toShallow : toReactive
+  // 取值考虑到 rawKey 和 key 不同的情况
+  if (has.call(rawTarget, key)) {
+    return wrap(target.get(key))
+  } else if (has.call(rawTarget, rawKey)) {
+    return wrap(target.get(rawKey))
+  }
 }
 
 const mutableInstrumentations: Record<string, Function> = {
