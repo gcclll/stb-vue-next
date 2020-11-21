@@ -1,4 +1,4 @@
-import { hasOwn, isObject, toRawType } from '@vue/shared'
+import { hasOwn, isMap, isObject, toRawType } from '@vue/shared'
 import { ITERATE_KEY, track, trigger } from './effect'
 import { TrackOpTypes, TriggerOpTypes } from './operations'
 import { ReactiveFlags, toRaw, reactive, readonly } from './reactive'
@@ -113,6 +113,41 @@ function set(this: MapTypes, key: unknown, value: unknown) {
   return result
 }
 
+function deleteEntry(this: CollectionTypes, key: unknown) {
+  const target = toRaw(this)
+  const { has, get } = getProto(target)
+  let hadKey = has.call(target, key)
+  if (!hadKey) {
+    key = toRaw(key)
+    hadKey = has.call(target, key)
+  } else if (__DEV__) {
+    checkIdentityKeys(target, has, key)
+  }
+
+  const oldValue = get ? get.call(target, key) : undefined
+  const result = target.delete(key)
+  if (hadKey) {
+    trigger(target, TriggerOpTypes.DELETE, key, undefined, oldValue)
+  }
+  return result
+}
+
+function clear(this: IterableCollections) {
+  const target = toRaw(this)
+  const hadItems = target.size !== 0
+  const oldTarget = __DEV__
+    ? isMap(target)
+      ? new Map(target)
+      : new Set(target)
+    : undefined
+
+  const result = target.clear()
+  if (hadItems) {
+    trigger(target, TriggerOpTypes.CLEAR, undefined, undefined, oldTarget)
+  }
+  return result
+}
+
 const mutableInstrumentations: Record<string, Function> = {
   // get proxy handler, this -> target
   get(this: MapTypes, key: unknown) {
@@ -124,7 +159,9 @@ const mutableInstrumentations: Record<string, Function> = {
   },
   has,
   add,
-  set
+  set,
+  delete: deleteEntry,
+  clear
 }
 
 function createInstrumentationGetter(isReadonly: boolean, shallow: boolean) {
