@@ -1,5 +1,5 @@
 import { hasOwn, isObject, toRawType } from '@vue/shared'
-import { track, trigger } from './effect'
+import { ITERATE_KEY, track, trigger } from './effect'
 import { TrackOpTypes, TriggerOpTypes } from './operations'
 import { ReactiveFlags, toRaw, reactive, readonly } from './reactive'
 
@@ -7,6 +7,7 @@ export type CollectionTypes = IterableCollections | WeakCollections
 type IterableCollections = Map<any, any> | Set<any>
 type WeakCollections = WeakMap<any, any> | WeakSet<any>
 type MapTypes = Map<any, any> | WeakMap<any, any>
+type SetTypes = Set<any> | WeakSeat<any>
 
 const toReactive = <T extends unknown>(value: T): T =>
   isObject(value) ? reactive(value) : value
@@ -49,6 +50,40 @@ function get(
   }
 }
 
+function has(this: CollectionTypes, key: unknown, isReadonly = false): boolean {
+  const target = (this as any)[ReactiveFlags.RAW]
+  const rawTarget = toRaw(target)
+  const rawKey = toRaw(key)
+  if (key !== rawKey) {
+    !isReadonly && track(rawTarget, TrackOpTypes.HAS, key)
+  }
+  !isReadonly && track(rawTarget, TrackOpTypes.HAS, rawKey)
+
+  return key === rawKey
+    ? target.has(key)
+    : target.has(key) || target.has(rawKey)
+}
+
+function size(target: IterableCollections, isReadonly = false) {
+  target = (target as any)[ReactiveFlags.RAW]
+  !isReadonly && track(toRaw(target), TrackOpTypes.ITERATE, ITERATE_KEY)
+  return Reflect.get(target, 'size', target)
+}
+
+function add(this: SetTypes, value: unknown) {
+  value = toRaw(value)
+  const target = toRaw(this)
+  const proto = getProto(target)
+  const hadKey = proto.has.call(target, value)
+  const result = target.add(value)
+  // 因为 set 是不会存在重复元素的，所以只会在没有当前 key 的情况下才会执行
+  // 添加操作
+  if (!hadKey) {
+    trigger(target, TriggerOpTypes.ADD, value, value)
+  }
+  return result
+}
+
 function set(this: MapTypes, key: unknown, value: unknown) {
   value = toRaw(value)
   const target = toRaw(this)
@@ -84,6 +119,11 @@ const mutableInstrumentations: Record<string, Function> = {
     // collection get 执行期间
     return get(this, key)
   },
+  get size() {
+    return size((this as unknown) as IterableCollections)
+  },
+  has,
+  add,
   set
 }
 
@@ -109,7 +149,6 @@ function createInstrumentationGetter(isReadonly: boolean, shallow: boolean) {
     // 所以 mutableInstrumentations.get 的两个参数分别是：
     // 1. this -> map
     // 2. key -> map.get('foo') 的 'foo'
-    console.log({ key, target, x: 'in ceateInstrumentationGetter' })
     return Reflect.get(
       hasOwn(instrumentations, key) && key in target
         ? instrumentations
@@ -119,6 +158,7 @@ function createInstrumentationGetter(isReadonly: boolean, shallow: boolean) {
     )
   }
 }
+
 export const mutableCollectionHandlers: ProxyHandler<CollectionTypes> = {
   get: createInstrumentationGetter(false, false)
 }
