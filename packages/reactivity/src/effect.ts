@@ -1,4 +1,4 @@
-import { EMPTY_OBJ, isArray, isIntegerKey } from '@vue/shared'
+import { EMPTY_OBJ, isArray, isIntegerKey, isMap } from '@vue/shared'
 import { TrackOpTypes, TriggerOpTypes } from './operations'
 
 type Dep = Set<ReactiveEffect>
@@ -224,7 +224,7 @@ export function trigger(
   }
 
   if (type === TriggerOpTypes.CLEAR) {
-    // TODO collection clear operation
+    depsMap.forEach(add)
   } else if (key === 'length' && isArray(target)) {
     depsMap.forEach((dep, key) => {
       if (key === 'length' || key >= (newValue as number)) {
@@ -237,15 +237,29 @@ export function trigger(
       add(depsMap.get(key))
     }
 
-    // TODO 迭代器 key，for...of, 使用迭代器是对数据的监听变化
+    // 迭代器 key，for...of, 使用迭代器是对数据的监听变化
     switch (type) {
       case TriggerOpTypes.ADD:
         if (!isArray(target)) {
-          // TODO add object prop
+          add(depsMap.get(ITERATE_KEY))
         } else if (isIntegerKey(key)) {
           // 如果是数组添加元素，将 length 依赖添加到执行队列
           add(depsMap.get('length'))
         }
+        break
+      case TriggerOpTypes.DELETE:
+        if (!isArray(target)) {
+          add(depsMap.get(ITERATE_KEY))
+          if (isMap(target)) {
+            add(depsMap.get(MAP_KEY_ITERATE_KEY))
+          }
+        }
+        break
+      case TriggerOpTypes.SET:
+        if (isMap(target)) {
+          add(depsMap.get(ITERATE_KEY))
+        }
+        break
     }
   }
 
