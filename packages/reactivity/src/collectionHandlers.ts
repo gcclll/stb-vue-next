@@ -1,6 +1,6 @@
-import { hasOwn, isObject } from '@vue/shared'
-import { track } from './effect'
-import { TrackOpTypes } from './operations'
+import { hasOwn, isObject, toRawType } from '@vue/shared'
+import { track, trigger } from './effect'
+import { TrackOpTypes, TriggerOpTypes } from './operations'
 import { ReactiveFlags, toRaw, reactive, readonly } from './reactive'
 
 export type CollectionTypes = IterableCollections | WeakCollections
@@ -25,7 +25,6 @@ function get(
   isReadonly = false,
   isShallow = false
 ) {
-  // TODO
   target = (target as any)[ReactiveFlags.RAW]
   const rawTarget = toRaw(target)
 
@@ -50,12 +49,42 @@ function get(
   }
 }
 
+function set(this: MapTypes, key: unknown, value: unknown) {
+  value = toRaw(value)
+  const target = toRaw(this)
+  const { has, get } = getProto(target)
+
+  let hadKey = has.call(target, key)
+  // 考虑 key 可能是 proxy
+  if (!hadKey) {
+    // to add
+    key = toRaw(key)
+    hadKey = has.call(target, key)
+  } else if (__DEV__) {
+    checkIdentityKeys(target, has, key)
+  }
+
+  const oldValue = get.call(target, key)
+  // 设值结果
+  const result = target.set(key, value)
+  if (!hadKey) {
+    // 添加操作
+    trigger(target, TriggerOpTypes.ADD, key, value)
+  } else {
+    // 设值操作
+    trigger(target, TriggerOpTypes.SET, key, value, oldValue)
+  }
+
+  return result
+}
+
 const mutableInstrumentations: Record<string, Function> = {
   // get proxy handler, this -> target
   get(this: MapTypes, key: unknown) {
     // collection get 执行期间
     return get(this, key)
-  }
+  },
+  set
 }
 
 function createInstrumentationGetter(isReadonly: boolean, shallow: boolean) {
@@ -92,4 +121,23 @@ function createInstrumentationGetter(isReadonly: boolean, shallow: boolean) {
 }
 export const mutableCollectionHandlers: ProxyHandler<CollectionTypes> = {
   get: createInstrumentationGetter(false, false)
+}
+
+function checkIdentityKeys(
+  target: CollectionTypes,
+  has: (key: unknown) => boolean,
+  key: unknown
+) {
+  // 同时有 key 和 proxy key 存在的情况
+  const rawKey = toRaw(key)
+  if (rawKey !== key && has.call(target, rawKey)) {
+    const type = toRawType(target)
+    console.warn(
+      `Reactive ${type} contains both the raw and reactive ` +
+        `versions of the same object${type === `Map` ? ` as keys` : ``}, ` +
+        `which can lead to inconsistencies. ` +
+        `Avoid differentiating between the raw and reactive versions ` +
+        `of an object and only use the reactive version if possible.`
+    )
+  }
 }
