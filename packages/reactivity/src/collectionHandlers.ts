@@ -1,5 +1,5 @@
 import { hasOwn, isMap, isObject, toRawType } from '@vue/shared'
-import { ITERATE_KEY, track, trigger } from './effect'
+import { ITERATE_KEY, MAP_KEY_ITERATE_KEY, track, trigger } from './effect'
 import { TrackOpTypes, TriggerOpTypes } from './operations'
 import { ReactiveFlags, toRaw, reactive, readonly } from './reactive'
 
@@ -168,6 +168,61 @@ function createForEach(isReadonly: boolean, isShallow: boolean) {
   }
 }
 
+interface Iterable {
+  [Symbol.iterator](): Iterator
+}
+
+interface Iterator {
+  next(value?: any): IterationResult
+}
+
+interface IterationResult {
+  value: any
+  done: boolean
+}
+
+function createIterableMethod(
+  method: string | symbol,
+  isReadonly: boolean,
+  isShallow: boolean
+) {
+  return function(
+    this: IterableCollections,
+    ...args: unknown[]
+  ): Iterable & Iterator {
+    const target = (this as any)[ReactiveFlags.RAW]
+    const rawTarget = toRaw(target)
+    const targetIsMap = isMap(rawTarget)
+    const isPair =
+      method === 'entries' || (method === Symbol.iterator && targetIsMap)
+
+    const isKeyOnly = method === 'keys' && targetIsMap
+    const innerIterator = target[method](...args)
+    const wrap = isReadonly ? toReadonly : isShallow ? toShallow : toReactive
+    !isReadonly &&
+      track(
+        rawTarget,
+        TrackOpTypes.ITERATE,
+        isKeyOnly ? MAP_KEY_ITERATE_KEY : ITERATE_KEY
+      )
+
+    return {
+      next() {
+        const { value, done } = innerIterator.next()
+        return done
+          ? { value, done }
+          : {
+              value: isPair ? [wrap(value(0)), wrap(value[1])] : wrap(value),
+              done
+            }
+      },
+      [Symbol.iterator]() {
+        return this
+      }
+    }
+  }
+}
+
 const mutableInstrumentations: Record<string, Function> = {
   // get proxy handler, this -> target
   get(this: MapTypes, key: unknown) {
@@ -185,6 +240,14 @@ const mutableInstrumentations: Record<string, Function> = {
   forEach: createForEach(false, false)
 }
 
+const iteratorMethods = ['keys', 'values', 'entries', Symbol.iterator]
+iteratorMethods.forEach(method => {
+  mutableInstrumentations[method as string] = createIterableMethod(
+    method,
+    false,
+    false
+  )
+})
 function createInstrumentationGetter(isReadonly: boolean, shallow: boolean) {
   const instrumentations = mutableInstrumentations
 
