@@ -271,7 +271,7 @@ const readonlyInstrumentations: Record<string, Function> = {
   forEach: createForEach(true, false)
 }
 
-const shallowInstrumentations: Recorde<string, Function> = {
+const shallowInstrumentations: Record<string, Function> = {
   get(this: MapTypes, key: unknown) {
     return get(this, key, false, true)
   },
