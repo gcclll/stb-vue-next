@@ -254,7 +254,7 @@ const mutableInstrumentations: Record<string, Function> = {
   forEach: createForEach(false, false)
 }
 
-const readonlyInstrumentations: Recor<string, Function> = {
+const readonlyInstrumentations: Record<string, Function> = {
   get(this: MapTypes, key: unknown) {
     return get(this, key, true)
   },
