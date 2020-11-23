@@ -1,13 +1,7 @@
-import { capitalize, hasOwn, isMap, isObject, toRawType } from '@vue/shared'
-import { ITERATE_KEY, MAP_KEY_ITERATE_KEY, track, trigger } from './effect'
+import { hasOwn, isMap, isObject, toRawType } from '@vue/shared'
+import { ITERATE_KEY, track, trigger } from './effect'
 import { TrackOpTypes, TriggerOpTypes } from './operations'
-import {
-  ReactiveFlags,
-  toRaw,
-  reactive,
-  readonly,
-  isReactive
-} from './reactive'
+import { ReactiveFlags, toRaw, reactive, readonly } from './reactive'
 
 export type CollectionTypes = IterableCollections | WeakCollections
 type IterableCollections = Map<any, any> | Set<any>
