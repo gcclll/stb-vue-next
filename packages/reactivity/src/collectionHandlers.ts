@@ -1,4 +1,4 @@
-import { hasOwn, isMap, isObject, toRawType } from '@vue/shared'
+import { capitalize, hasOwn, isMap, isObject, toRawType } from '@vue/shared'
 import { ITERATE_KEY, MAP_KEY_ITERATE_KEY, track, trigger } from './effect'
 import { TrackOpTypes, TriggerOpTypes } from './operations'
 import { ReactiveFlags, toRaw, reactive, readonly } from './reactive'
@@ -223,6 +223,20 @@ function createIterableMethod(
   }
 }
 
+function createReadonlyMethod(type: TriggerOpTypes): Function {
+  return function(this: CollectionTypes, ...args: unknown[]) {
+    if (__DEV__) {
+      const key = args[0] ? `on key "${args[0]}"` : ``
+      console.warn(
+        `${capitalize(type)} operation ${key} failed: target is readonly.`,
+        toRaw(this)
+      )
+    }
+
+    return type === TriggerOpTypes.DELETE ? false : this
+  }
+}
+
 const mutableInstrumentations: Record<string, Function> = {
   // get proxy handler, this -> target
   get(this: MapTypes, key: unknown) {
@@ -240,6 +254,23 @@ const mutableInstrumentations: Record<string, Function> = {
   forEach: createForEach(false, false)
 }
 
+const readonlyInstrumentations: Recor<string, Function> = {
+  get(this: MapTypes, key: unknown) {
+    return get(this, key, true)
+  },
+  get size() {
+    return size((this as unknown) as IterableCollections, true)
+  },
+  has(this: MapTypes, key: unknown) {
+    return has.call(this, key, true)
+  },
+  add: createReadonlyMethod(TriggerOpTypes.ADD),
+  set: createReadonlyMethod(TriggerOpTypes.SET),
+  delete: createReadonlyMethod(TriggerOpTypes.DELETE),
+  clear: createReadonlyMethod(TriggerOpTypes.CLEAR),
+  forEach: createForEach(true, false)
+}
+
 const iteratorMethods = ['keys', 'values', 'entries', Symbol.iterator]
 iteratorMethods.forEach(method => {
   mutableInstrumentations[method as string] = createIterableMethod(
@@ -248,8 +279,11 @@ iteratorMethods.forEach(method => {
     false
   )
 })
+
 function createInstrumentationGetter(isReadonly: boolean, shallow: boolean) {
-  const instrumentations = mutableInstrumentations
+  const instrumentations = isReadonly
+    ? readonlyInstrumentations
+    : mutableInstrumentations
 
   return (
     target: CollectionTypes,
@@ -282,6 +316,10 @@ function createInstrumentationGetter(isReadonly: boolean, shallow: boolean) {
 
 export const mutableCollectionHandlers: ProxyHandler<CollectionTypes> = {
   get: createInstrumentationGetter(false, false)
+}
+
+export const readonlyCollectionHandlers: ProxyHandler<CollectionTypes> = {
+  get: createInstrumentationGetter(true, false)
 }
 
 function checkIdentityKeys(

@@ -5,7 +5,10 @@ import {
   shallowReactiveHandlers,
   shallowReadonlyHandlers
 } from './baseHandlers'
-import { mutableCollectionHandlers } from './collectionHandlers'
+import {
+  mutableCollectionHandlers,
+  readonlyCollectionHandlers
+} from './collectionHandlers'
 import { UnwrapRef, Ref } from './ref'
 
 export const enum ReactiveFlags {
@@ -100,7 +103,12 @@ export type DeepReadonly<T> = T extends Builtin
 export function readonly<T extends object>(
   target: T
 ): DeepReadonly<UnwrapNestedRefs<T>> {
-  return createReactiveObject(target, true, readonlyHandlers, {})
+  return createReactiveObject(
+    target,
+    true,
+    readonlyHandlers,
+    readonlyCollectionHandlers
+  )
 }
 
 export function shallowReadonly<T extends object>(
