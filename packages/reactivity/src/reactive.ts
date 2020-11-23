@@ -7,7 +7,8 @@ import {
 } from './baseHandlers'
 import {
   mutableCollectionHandlers,
-  readonlyCollectionHandlers
+  readonlyCollectionHandlers,
+  shallowCollectionHandlers
 } from './collectionHandlers'
 import { UnwrapRef, Ref } from './ref'
 
@@ -74,8 +75,12 @@ export function reactive(target: object) {
 }
 
 export function shallowReactive<T extends object>(target: T): T {
-  // TODO shallowCollectionHandlers
-  return createReactiveObject(target, false, shallowReactiveHandlers, {})
+  return createReactiveObject(
+    target,
+    false,
+    shallowReactiveHandlers,
+    shallowCollectionHandlers
+  )
 }
 
 type Primitive = string | number | boolean | bigint | symbol | undefined | null

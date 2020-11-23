@@ -271,6 +271,21 @@ const readonlyInstrumentations: Record<string, Function> = {
   forEach: createForEach(true, false)
 }
 
+const shallowInstrumentations: Recorde<string, Function> = {
+  get(this: MapTypes, key: unknown) {
+    return get(this, key, false, true)
+  },
+  get size() {
+    return size((this as unknown) as IterableCollections)
+  },
+  has,
+  add,
+  set,
+  delete: deleteEntry,
+  clear,
+  forEach: createForEach(false, true)
+}
+
 const iteratorMethods = ['keys', 'values', 'entries', Symbol.iterator]
 iteratorMethods.forEach(method => {
   mutableInstrumentations[method as string] = createIterableMethod(
@@ -281,9 +296,11 @@ iteratorMethods.forEach(method => {
 })
 
 function createInstrumentationGetter(isReadonly: boolean, shallow: boolean) {
-  const instrumentations = isReadonly
-    ? readonlyInstrumentations
-    : mutableInstrumentations
+  const instrumentations = shallow
+    ? shallowInstrumentations
+    : isReadonly
+      ? readonlyInstrumentations
+      : mutableInstrumentations
 
   return (
     target: CollectionTypes,
@@ -316,6 +333,10 @@ function createInstrumentationGetter(isReadonly: boolean, shallow: boolean) {
 
 export const mutableCollectionHandlers: ProxyHandler<CollectionTypes> = {
   get: createInstrumentationGetter(false, false)
+}
+
+export const shallowCollectionHandlers: ProxyHandler<CollectionTypes> = {
+  get: createInstrumentationGetter(false, true)
 }
 
 export const readonlyCollectionHandlers: ProxyHandler<CollectionTypes> = {
