@@ -1,4 +1,26 @@
 import { Position } from './ast'
+import {
+  TELEPORT,
+  SUSPENSE,
+  KEEP_ALIVE,
+  BASE_TRANSITION
+} from './runtimeHelpers'
+import { hyphenate } from '@vue/shared'
+
+export const isBuiltInType = (tag: string, expected: string): boolean =>
+  tag === expected || tag === hyphenate(expected)
+
+export function isCoreComponent(tag: string): symbol | void {
+  if (isBuiltInType(tag, 'Teleport')) {
+    return TELEPORT
+  } else if (isBuiltInType(tag, 'Suspense')) {
+    return SUSPENSE
+  } else if (isBuiltInType(tag, 'KeepAlive')) {
+    return KEEP_ALIVE
+  } else if (isBuiltInType(tag, 'BaseTransition')) {
+    return BASE_TRANSITION
+  }
+}
 
 // advance by mutation without cloning (for performance reasons), since this
 // gets called a lot in the parser

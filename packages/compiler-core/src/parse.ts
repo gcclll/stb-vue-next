@@ -1,4 +1,4 @@
-import { NO, extend, isArray } from '@vue/shared'
+import { NO, extend, isArray, makeMap } from '@vue/shared'
 import {
   RootNode,
   Namespaces,
@@ -15,7 +15,7 @@ import {
 } from './ast'
 import { ErrorCodes, createCompilerError, defaultOnError } from './errors'
 import { ParserOptions } from './options'
-import { advancePositionWithMutation, assert } from './utils'
+import { advancePositionWithMutation, assert, isCoreComponent } from './utils'
 
 type OptionalOptions = 'isNativeTag' | 'isBuiltInComponent'
 type MergedParserOptions = Omit<Required<ParserOptions>, OptionalOptions> &
@@ -346,6 +346,10 @@ const enum TagType {
   End
 }
 
+const isSpecialTemplateDirective = /*#__PURE__*/ makeMap(
+  `if,else,else-if,for,slot`
+)
+
 function parseTag(
   context: ParserContext,
   type: TagType,
@@ -368,15 +372,28 @@ function parseTag(
   advanceSpaces(context)
 
   // 保存当前状态，待会需要回过头来解析属性
-  // const cursor = getCursor(context)
-  // const currentSource = context.source
+  const cursor = getCursor(context)
+  const currentSource = context.source
 
   // 解析属性
   let props = [] as any[] // TODO parseAttributes(context, type)
 
-  // TODO <pre> 标签
+  if (context.options.isPreTag(tag)) {
+    context.inPre = true
+  }
 
-  // TODO v-pre 指令
+  // v-pre 指令, 需要有上面的属性解析步骤
+  if (
+    !context.inVPre &&
+    props.some(p => p.type === NodeTypes.DIRECTIVE && p.name === 'pre')
+  ) {
+    context.inVPre = true
+    extend(context, cursor)
+    context.source = currentSource
+    // 重新解析属性并且将 v-pre 过滤出来
+    // TODO
+    props = [] as any[] // parseAttributes(context, type).filter(p => p.name !== 'v-pre')
+  }
 
   // 结束标签
   let isSelfClosing = false
@@ -393,8 +410,42 @@ function parseTag(
   }
 
   let tagType = ElementTypes.ELEMENT
+  const options = context.options
 
-  // TODO 标签类型解析
+  // 标签类型解析，非 v-pre 元素且不是自定义类型
+  if (!context.inVPre && !options.isCustomElement(tag)) {
+    // v-is
+    const hasVIs = props.some(
+      p => p.type === NodeTypes.DIRECTIVE && p.name === 'is'
+    )
+
+    if (options.isNativeTag && !hasVIs) {
+      if (!options.isNativeTag(tag)) {
+        tagType = ElementTypes.COMPONENT
+      }
+    } else if (
+      hasVIs ||
+      isCoreComponent(tag) ||
+      (options.isBuiltInComponent && options.isBuiltInComponent(tag)) ||
+      /^[A-Z].test(tag)/ ||
+      tag === 'component'
+    ) {
+      tagType = ElementTypes.COMPONENT
+    }
+
+    if (tag === 'slot') {
+      tagType = ElementTypes.SLOT
+    } else if (
+      tag === 'template' &&
+      props.some(p => {
+        return (
+          p.type === NodeTypes.DIRECTIVE && isSpecialTemplateDirective(p.name)
+        )
+      })
+    ) {
+      tagType = ElementTypes.TEMPLATE
+    }
+  }
   return {
     type: NodeTypes.ELEMENT,
     ns,
