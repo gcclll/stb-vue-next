@@ -1,4 +1,5 @@
-import { NO, extend } from '@vue/shared'
+import { NO, extend, isArray } from '@vue/shared'
+import { assert } from 'console'
 import {
   RootNode,
   Namespaces,
@@ -6,10 +7,13 @@ import {
   ElementNode,
   TemplateChildNode,
   Position,
-  SourceLocation
+  SourceLocation,
+  NodeTypes,
+  TextNode
 } from './ast'
 import { defaultOnError } from './errors'
 import { ParserOptions } from './options'
+import { advancePositionWithMutation } from './utils'
 
 type OptionalOptions = 'isNativeTag' | 'isBuiltInComponent'
 type MergedParserOptions = Omit<Required<ParserOptions>, OptionalOptions> &
@@ -101,13 +105,109 @@ function parseChildren(
 
   // TODO while is end
   while (!isEnd(context, mode, ancestors)) {
-    // TODO
+    __TEST__ && assert(context.source.length > 0)
+    const s = context.source
+    let node: TemplateChildNode | TemplateChildNode[] | undefined = undefined
+
+    if (mode === TextModes.DATA || mode === TextModes.RCDATA) {
+      // TODO
+    }
+
+    // 纯文本节点
+    if (!node) {
+      node = parseText(context, mode)
+    }
+
+    if (isArray(node)) {
+      for (let i = 0; i < node.length; i++) {
+        pushNode(nodes, node[i])
+      }
+    } else {
+      pushNode(nodes, node)
+    }
   }
 
   let removedWhitespace = false
   // TODO 空格和空字符串节点合并
 
   return removedWhitespace ? nodes.filter(Boolean) : nodes
+}
+
+function pushNode(nodes: TemplateChildNode[], node: TemplateChildNode): void {
+  if (node.type === NodeTypes.TEXT) {
+    // 合并两个相邻的文本内容
+
+    const prev = last(nodes)
+    // Merge if both this and the previous node are text and those are
+    // consecutive. This happens for cases like "a < b".
+    if (
+      prev &&
+      prev.type === NodeTypes.TEXT &&
+      prev.loc.end.offset === node.loc.start.offset
+    ) {
+      prev.content += node.content
+      prev.loc.end = node.loc.end
+      prev.loc.source += node.loc.source
+      return
+    }
+  }
+
+  nodes.push(node)
+}
+
+function parseText(context: ParserContext, mode: TextModes): TextNode {
+  __TEST__ && assert(context.source.length > 0)
+
+  const endTokens = ['<', context.options.delimiters[0]]
+  if (mode === TextModes.CDATA) {
+    endTokens.push(']]>')
+  }
+
+  let endIndex = context.source.length
+  // 找到遇到的第一个结束符 }}, <
+  for (let i = 0; i < endTokens.length; i++) {
+    const index = context.source.indexOf(endTokens[i], 1)
+    if (index !== -1 && endIndex > index) {
+      endIndex = index
+    }
+  }
+
+  __TEST__ && assert(endIndex > 0)
+
+  const start = getCursor(context)
+  const content = parseTextData(context, endIndex, mode)
+
+  return {
+    type: NodeTypes.TEXT,
+    content,
+    loc: getSelection(context, start)
+  }
+}
+
+/**
+ * Get text data with a given length from the current location.
+ * This translates HTML entities in the text data.
+ */
+function parseTextData(
+  context: ParserContext,
+  length: number,
+  mode: TextModes
+): string {
+  const rawText = context.source.slice(0, length)
+  advanceBy(context, length)
+  if (
+    mode === TextModes.RAWTEXT ||
+    mode === TextModes.CDATA ||
+    rawText.indexOf('&') === -1
+  ) {
+    return rawText
+  } else {
+    // DATA or RCDATA containing "&"". Entity decoding required.
+    return context.options.decodeEntities(
+      rawText,
+      mode === TextModes.ATTRIBUTE_VALUE
+    )
+  }
 }
 
 function getCursor(context: ParserContext): Position {
@@ -134,6 +234,13 @@ function last<T>(xs: T[]): T | undefined {
 
 function startsWith(source: string, searchString: string): boolean {
   return source.startsWith(searchString)
+}
+
+function advanceBy(context: ParserContext, numberOfCharacters: number): void {
+  const { source } = context
+  __TEST__ && assert(numberOfCharacters <= source.length)
+  advancePositionWithMutation(context, source, numberOfCharacters)
+  context.source = source.slice(numberOfCharacters)
 }
 
 function isEnd(
