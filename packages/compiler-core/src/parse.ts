@@ -229,7 +229,7 @@ function parseChildren(
           }
         } else {
           // 空格合并从一个
-          node.content = node.content.replace(/[\t\r\n\f ]+/g, '')
+          node.content = node.content.replace(/[\t\r\n\f ]+/g, ' ')
         }
       }
       // 生成环境默认删除注释节点
