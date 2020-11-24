@@ -9,7 +9,8 @@ import {
   SourceLocation,
   NodeTypes,
   TextNode,
-  CommentNode
+  CommentNode,
+  InterpolationNode
 } from './ast'
 import { ErrorCodes, createCompilerError, defaultOnError } from './errors'
 import { ParserOptions } from './options'
@@ -111,7 +112,7 @@ function parseChildren(
 
     if (mode === TextModes.DATA || mode === TextModes.RCDATA) {
       if (!context.inVPre && startsWith(s, context.options.delimiters[0])) {
-        // TODO 插值 '{{'
+        node = parseInterpolation(context, mode)
       } else if (mode === TextModes.DATA && s[0] === '<') {
         if (s.length === 1) {
           emitError(context, ErrorCodes.EOF_BEFORE_TAG_NAME, 1)
@@ -290,10 +291,59 @@ function parseBogusComment(context: ParserContext): CommentNode | undefined {
   }
 }
 
-const enum TagType {
-  Start,
-  End
+// const enum TagType {
+//   Start,
+//   End
+// }
+
+function parseInterpolation(
+  context: ParserContext,
+  mode: TextModes
+): InterpolationNode | undefined {
+  const [open, close] = context.options.delimiters
+  __TEST__ && assert(startsWith(context.source, open))
+
+  const closeIndex = context.source.indexOf(close, open.length)
+  if (closeIndex === -1) {
+    emitError(context, ErrorCodes.X_MISSING_INTERPOLATION_END)
+    return undefined
+  }
+
+  const start = getCursor(context)
+  advanceBy(context, open.length)
+  const innerStart = getCursor(context)
+  const innerEnd = getCursor(context)
+  // 插值内容长度
+  const rawContentLength = closeIndex - open.length
+  const rawContent = context.source.slice(0, rawContentLength)
+  // html 语义化符号替换
+  const preTrimContent = parseTextData(context, rawContentLength, mode)
+  // 去掉前后空格
+  const content = preTrimContent.trim()
+  // 去掉空格后的内容所在的索引位置
+  const startOffset = preTrimContent.indexOf(content)
+  if (startOffset > 0) {
+    advancePositionWithMutation(innerStart, rawContent, startOffset)
+  }
+
+  const endOffset =
+    rawContentLength - (preTrimContent.length - content.length - startOffset)
+  advancePositionWithMutation(innerEnd, rawContent, endOffset)
+  advanceBy(context, close.length)
+
+  return {
+    type: NodeTypes.INTERPOLATION,
+    content: {
+      type: NodeTypes.SIMPLE_EXPRESSION,
+      isStatic: false,
+      isConstant: false,
+      content,
+      loc: getSelection(context, innerStart, innerEnd)
+    },
+    loc: getSelection(context, start)
+  }
 }
+
 function parseText(context: ParserContext, mode: TextModes): TextNode {
   __TEST__ && assert(context.source.length > 0)
 
