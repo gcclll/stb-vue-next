@@ -104,7 +104,6 @@ function parseChildren(
   const ns = parent ? parent.ns : Namespaces.HTML
   const nodes: TemplateChildNode[] = []
 
-  // TODO while is end
   while (!isEnd(context, mode, ancestors)) {
     __TEST__ && assert(context.source.length > 0)
     const s = context.source
@@ -159,7 +158,7 @@ function parseChildren(
           }
         } else if (/[a-z]/i.test(s[1])) {
           // 开始标签
-          // TODO parse element
+          node = parseElement(context, ancestors)
         } else if (s[1] === '?') {
           emitError(
             context,
@@ -289,6 +288,56 @@ function parseBogusComment(context: ParserContext): CommentNode | undefined {
     content,
     loc: getSelection(context, start)
   }
+}
+
+function parseElement(
+  context: ParserContext,
+  ancestors: ElementNode[]
+): ElementNode | undefined {
+  __TEST__ && assert(/^<[a-z]/i.test(context.source))
+
+  const wasInPre = context.inPre
+  const wasInVPre = context.inVPre
+  const parent = last(ancestors)
+  // 解析出开始标签
+  const element = {} as any // parseTag(context, TagType.Start, parent)
+  const isPreBoundray = context.inPre && !wasInPre
+  const isVPreBoundray = context.inVPre && !wasInVPre
+
+  if (element.isSelfClosing || context.options.isVoidTag(elment.tag)) {
+    return element
+  }
+
+  ancestors.push(element)
+  const mode = context.options.getTextMode(element, parent)
+  const children = parseChildren(context, mode, ancestors)
+  // 要将孩子节点解析完成的 parent element pop 掉，待处理下一个 parent 的 children
+  ancestors.pop()
+
+  if (startsWithEndTagOpen(context.source, element.tag)) {
+    // 结束标签
+    // parseTag(context, TagType.End, parent)
+  } else {
+    emitError(context, ErrorCodes.X_MISSING_END_TAG, 0, element.loc.start)
+    if (context.source.length === 0 && element.tag.toLowerCase() === 'script') {
+      const first = children[0]
+      if (first && startsWith(first.loc.source, '<!--')) {
+        emitError(context, ErrorCodes.EOF_IN_SCRIPT_HTML_COMMENT_LIKE_TEXT)
+      }
+    }
+  }
+
+  element.loc = getSelection(context, element.loc.start)
+
+  if (isPreBoundray) {
+    context.inPre = false
+  }
+
+  if (isVPreBoundray) {
+    context.inVPre = false
+  }
+
+  return element
 }
 
 // const enum TagType {
