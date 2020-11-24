@@ -99,8 +99,8 @@ function parseChildren(
   mode: TextModes,
   ancestors: ElementNode[]
 ): TemplateChildNode[] {
-  // const parent = last(ancestors)
-  // const ns = parent ? parent.ns : Namespaces.HTML
+  const parent = last(ancestors)
+  const ns = parent ? parent.ns : Namespaces.HTML
   const nodes: TemplateChildNode[] = []
 
   // TODO while is end
@@ -120,6 +120,18 @@ function parseChildren(
           if (startsWith(s, '<!--')) {
             // 注释
             node = parseComment(context)
+          } else if (startsWith(s, '<!DOCTYPE')) {
+            node = parseBogusComment(context)
+          } else if (startsWith(s, '<![CDATA[')) {
+            if (ns !== Namespaces.HTML) {
+              // TODO
+            } else {
+              emitError(context, ErrorCodes.CDATA_IN_HTML_CONTENT)
+              node = parseBogusComment(context)
+            }
+          } else {
+            emitError(context, ErrorCodes.INCORRECTLY_OPENED_COMMENT)
+            node = parseBogusComment(context)
           }
         }
       }
@@ -209,6 +221,31 @@ function parseComment(context: ParserContext): CommentNode {
     }
 
     advanceBy(context, match.index + match[0].length - prevIndex + 1)
+  }
+
+  return {
+    type: NodeTypes.COMMENT,
+    content,
+    loc: getSelection(context, start)
+  }
+}
+
+function parseBogusComment(context: ParserContext): CommentNode | undefined {
+  // <?... or <!... or </.... 形式注释 ???
+  __TEST__ && assert(/^<(?:[\!\?]|\/[^a-z>])/i.test(context.source))
+
+  const start = getCursor(context)
+  const contentStart = context.source[1] === '?' ? 1 : 2
+  let content: string
+
+  // 结束
+  const closeIndex = context.source.indexOf('>')
+  if (closeIndex === -1) {
+    content = context.source.slice(contentStart)
+    advanceBy(context, context.source.length)
+  } else {
+    content = context.source.slice(contentStart, closeIndex)
+    advanceBy(context, closeIndex + 1)
   }
 
   return {
