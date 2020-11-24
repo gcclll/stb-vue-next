@@ -95,8 +95,19 @@ function parseChildren(
   mode: TextModes,
   ancestors: ElementNode[]
 ): TemplateChildNode[] {
-  // TODO
-  return {} as TemplateChildNode[]
+  const parent = last(ancestors)
+  const ns = parent ? parent.ns : Namespaces.HTML
+  const nodes: TemplateChildNode[] = []
+
+  // TODO while is end
+  while (!isEnd(context, mode, ancestors)) {
+    // TODO
+  }
+
+  let removedWhitespace = false
+  // TODO 空格和空字符串节点合并
+
+  return removedWhitespace ? nodes.filter(Boolean) : nodes
 }
 
 function getCursor(context: ParserContext): Position {
@@ -117,6 +128,56 @@ function getSelection(
   }
 }
 
+function last<T>(xs: T[]): T | undefined {
+  return xs[xs.length - 1]
+}
+
 function startsWith(source: string, searchString: string): boolean {
   return source.startsWith(searchString)
+}
+
+function isEnd(
+  context: ParserContext,
+  mode: TextModes,
+  ancestors: ElementNode[]
+): boolean {
+  const s = context.source
+
+  switch (mode) {
+    case TextModes.DATA:
+      if (startsWith(s, '</')) {
+        //TODO: probably bad performance
+        for (let i = ancestors.length - 1; i >= 0; --i) {
+          if (startsWithEndTagOpen(s, ancestors[i].tag)) {
+            return true
+          }
+        }
+      }
+      break
+
+    case TextModes.RCDATA:
+    case TextModes.RAWTEXT: {
+      const parent = last(ancestors)
+      if (parent && startsWithEndTagOpen(s, parent.tag)) {
+        return true
+      }
+      break
+    }
+
+    case TextModes.CDATA:
+      if (startsWith(s, ']]>')) {
+        return true
+      }
+      break
+  }
+
+  return !s
+}
+
+function startsWithEndTagOpen(source: string, tag: string): boolean {
+  return (
+    startsWith(source, '</') &&
+    source.substr(2, tag.length).toLowerCase() === tag.toLowerCase() &&
+    /[\t\r\n\f />]/.test(source[2 + tag.length] || '>')
+  )
 }
