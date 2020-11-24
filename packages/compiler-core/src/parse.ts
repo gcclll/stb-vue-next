@@ -8,9 +8,10 @@ import {
   Position,
   SourceLocation,
   NodeTypes,
-  TextNode
+  TextNode,
+  CommentNode
 } from './ast'
-import { defaultOnError } from './errors'
+import { ErrorCodes, createCompilerError, defaultOnError } from './errors'
 import { ParserOptions } from './options'
 import { advancePositionWithMutation, assert } from './utils'
 
@@ -105,10 +106,23 @@ function parseChildren(
   // TODO while is end
   while (!isEnd(context, mode, ancestors)) {
     __TEST__ && assert(context.source.length > 0)
-    // const s = context.source
+    const s = context.source
     let node: TemplateChildNode | TemplateChildNode[] | undefined = undefined
 
     if (mode === TextModes.DATA || mode === TextModes.RCDATA) {
+      if (!context.inVPre && startsWith(s, context.options.delimiters[0])) {
+        // TODO 插值 '{{'
+      } else if (mode === TextModes.DATA && s[0] === '<') {
+        if (s.length === 1) {
+          emitError(context, ErrorCodes.EOF_BEFORE_TAG_NAME, 1)
+        } else if (s[1] === '!') {
+          // <!
+          if (startsWith(s, '<!--')) {
+            // 注释
+            node = parseComment(context)
+          }
+        }
+      }
       // TODO
     }
 
@@ -152,6 +166,56 @@ function pushNode(nodes: TemplateChildNode[], node: TemplateChildNode): void {
   }
 
   nodes.push(node)
+}
+
+function parseComment(context: ParserContext): CommentNode {
+  __TEST__ && assert(startsWith(context.source, '<!--'))
+
+  const start = getCursor(context)
+  let content: string
+
+  const match = /--(\!)?>/.exec(context.source)
+
+  if (!match) {
+    // 非法注释
+    content = context.source.slice(4)
+    advanceBy(context, context.source.length)
+    emitError(context, ErrorCodes.EOF_IN_COMMENT)
+  } else {
+    if (match.index <= 3) {
+      // 不满足 <!-- -->
+      emitError(context, ErrorCodes.ABRUPT_CLOSING_OF_EMPTY_COMMENT)
+    }
+
+    if (match[1]) {
+      // 非法结束 <!-- --!>
+      emitError(context, ErrorCodes.INCORRECTLY_CLOSED_COMMENT)
+    }
+
+    // 注释内容
+    content = context.source.slice(4, match.index)
+
+    // 嵌套注释
+    const s = context.source.slice(0, match.index)
+    let prevIndex = 1,
+      nestedIndex = 0
+
+    while ((nestedIndex = s.indexOf('<!--', prevIndex)) !== -1) {
+      advanceBy(context, nestedIndex - prevIndex + 1)
+      if (nestedIndex + 4 < s.length) {
+        emitError(context, ErrorCodes.NESTED_COMMENT)
+      }
+      prevIndex = nestedIndex + 1
+    }
+
+    advanceBy(context, match.index + match[0].length - prevIndex + 1)
+  }
+
+  return {
+    type: NodeTypes.COMMENT,
+    content,
+    loc: getSelection(context, start)
+  }
 }
 
 function parseText(context: ParserContext, mode: TextModes): TextNode {
@@ -240,6 +304,25 @@ function advanceBy(context: ParserContext, numberOfCharacters: number): void {
   __TEST__ && assert(numberOfCharacters <= source.length)
   advancePositionWithMutation(context, source, numberOfCharacters)
   context.source = source.slice(numberOfCharacters)
+}
+
+function emitError(
+  context: ParserContext,
+  code: ErrorCodes,
+  offset?: number,
+  loc: Position = getCursor(context)
+): void {
+  if (offset) {
+    loc.offset += offset
+    loc.column += offset
+  }
+  context.options.onError(
+    createCompilerError(code, {
+      start: loc,
+      end: loc,
+      source: ''
+    })
+  )
 }
 
 function isEnd(
