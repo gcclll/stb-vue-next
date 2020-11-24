@@ -1,5 +1,4 @@
 import { NO, extend, isArray } from '@vue/shared'
-import { assert } from 'console'
 import {
   RootNode,
   Namespaces,
@@ -13,7 +12,7 @@ import {
 } from './ast'
 import { defaultOnError } from './errors'
 import { ParserOptions } from './options'
-import { advancePositionWithMutation } from './utils'
+import { advancePositionWithMutation, assert } from './utils'
 
 type OptionalOptions = 'isNativeTag' | 'isBuiltInComponent'
 type MergedParserOptions = Omit<Required<ParserOptions>, OptionalOptions> &
@@ -99,14 +98,14 @@ function parseChildren(
   mode: TextModes,
   ancestors: ElementNode[]
 ): TemplateChildNode[] {
-  const parent = last(ancestors)
-  const ns = parent ? parent.ns : Namespaces.HTML
+  // const parent = last(ancestors)
+  // const ns = parent ? parent.ns : Namespaces.HTML
   const nodes: TemplateChildNode[] = []
 
   // TODO while is end
   while (!isEnd(context, mode, ancestors)) {
     __TEST__ && assert(context.source.length > 0)
-    const s = context.source
+    // const s = context.source
     let node: TemplateChildNode | TemplateChildNode[] | undefined = undefined
 
     if (mode === TextModes.DATA || mode === TextModes.RCDATA) {

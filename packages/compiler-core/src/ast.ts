@@ -1,4 +1,3 @@
-import { isString } from '@vue/shared'
 import { ForParseResult } from './transforms/vFor'
 
 import {
