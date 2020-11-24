@@ -133,6 +133,41 @@ function parseChildren(
             emitError(context, ErrorCodes.INCORRECTLY_OPENED_COMMENT)
             node = parseBogusComment(context)
           }
+        } else if (s[1] === '/') {
+          // end tag, </
+          if (s.length === 2) {
+            emitError(context, ErrorCodes.EOF_BEFORE_TAG_NAME, 2)
+          } else if (s[2] === '>') {
+            // </>
+            emitError(context, ErrorCodes.MISSING_END_TAG_NAME, 2)
+            advanceBy(context, 3)
+            continue
+          } else if (/[a-z]/i.test(s[2])) {
+            // 非法结束标签，因为结束标签会直接在 parseElement 解析完成
+            emitError(context, ErrorCodes.X_INVALID_END_TAG)
+            // TODO parseTag(context, TagType.End, parent)
+            continue
+          } else {
+            // 无效的标签名称
+            emitError(
+              context,
+              ErrorCodes.INVALID_FIRST_CHARACTER_OF_TAG_NAME,
+              2
+            )
+            node = parseBogusComment(context)
+          }
+        } else if (/[a-z]/i.test(s[1])) {
+          // 开始标签
+          // TODO parse element
+        } else if (s[1] === '?') {
+          emitError(
+            context,
+            ErrorCodes.UNEXPECTED_QUESTION_MARK_INSTEAD_OF_TAG_NAME,
+            1
+          )
+          node = parseBogusComment(context)
+        } else {
+          emitError(context, ErrorCodes.INVALID_FIRST_CHARACTER_OF_TAG_NAME, 1)
         }
       }
       // TODO
@@ -255,6 +290,10 @@ function parseBogusComment(context: ParserContext): CommentNode | undefined {
   }
 }
 
+const enum TagType {
+  Start,
+  End
+}
 function parseText(context: ParserContext, mode: TextModes): TextNode {
   __TEST__ && assert(context.source.length > 0)
 
