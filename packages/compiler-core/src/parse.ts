@@ -398,6 +398,8 @@ function parseElement(
   // 要将孩子节点解析完成的 parent element pop 掉，待处理下一个 parent 的 children
   ancestors.pop()
 
+  element.children = children
+
   if (startsWithEndTagOpen(context.source, element.tag)) {
     // 结束标签
     parseTag(context, TagType.End, parent)
