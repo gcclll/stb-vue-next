@@ -10,7 +10,8 @@ import {
   NodeTypes,
   TextNode,
   CommentNode,
-  InterpolationNode
+  InterpolationNode,
+  ElementTypes
 } from './ast'
 import { ErrorCodes, createCompilerError, defaultOnError } from './errors'
 import { ParserOptions } from './options'
@@ -300,11 +301,11 @@ function parseElement(
   const wasInVPre = context.inVPre
   const parent = last(ancestors)
   // 解析出开始标签
-  const element = {} as any // parseTag(context, TagType.Start, parent)
+  const element = parseTag(context, TagType.Start, parent)
   const isPreBoundray = context.inPre && !wasInPre
   const isVPreBoundray = context.inVPre && !wasInVPre
 
-  if (element.isSelfClosing || context.options.isVoidTag(elment.tag)) {
+  if (element.isSelfClosing || context.options.isVoidTag(element.tag)) {
     return element
   }
 
@@ -316,7 +317,7 @@ function parseElement(
 
   if (startsWithEndTagOpen(context.source, element.tag)) {
     // 结束标签
-    // parseTag(context, TagType.End, parent)
+    parseTag(context, TagType.End, parent)
   } else {
     emitError(context, ErrorCodes.X_MISSING_END_TAG, 0, element.loc.start)
     if (context.source.length === 0 && element.tag.toLowerCase() === 'script') {
@@ -340,10 +341,72 @@ function parseElement(
   return element
 }
 
-// const enum TagType {
-//   Start,
-//   End
-// }
+const enum TagType {
+  Start,
+  End
+}
+
+function parseTag(
+  context: ParserContext,
+  type: TagType,
+  parent: ElementNode | undefined
+): ElementNode {
+  // 匹配 <div> 或 </div>
+  __TEST__ && assert(/^<\/?[a-z]/i.test(context.source))
+  __TEST__ &&
+    assert(
+      type === (startsWith(context.source, '</') ? TagType.End : TagType.Start)
+    )
+
+  // 开始标签
+  const start = getCursor(context)
+  const match = /^<\/?([a-z][^\t\r\n\f />]*)/i.exec(context.source)!
+  const tag = match[1]
+  const ns = context.options.getNamespace(tag, parent)
+
+  advanceBy(context, match[0].length)
+  advanceSpaces(context)
+
+  // 保存当前状态，待会需要回过头来解析属性
+  // const cursor = getCursor(context)
+  // const currentSource = context.source
+
+  // 解析属性
+  let props = [] as any[] // TODO parseAttributes(context, type)
+
+  // TODO <pre> 标签
+
+  // TODO v-pre 指令
+
+  // 结束标签
+  let isSelfClosing = false
+  if (context.source.length === 0) {
+    emitError(context, ErrorCodes.EOF_IN_TAG)
+  } else {
+    // <div ... />
+    isSelfClosing = startsWith(context.source, '/>')
+    // 到这里不应该是 End 标签
+    if (type === TagType.End && isSelfClosing) {
+      emitError(context, ErrorCodes.END_TAG_WITH_TRAILING_SOLIDUS)
+    }
+    advanceBy(context, isSelfClosing ? 2 : 1)
+  }
+
+  let tagType = ElementTypes.ELEMENT
+
+  // TODO 标签类型解析
+  return {
+    type: NodeTypes.ELEMENT,
+    ns,
+    tag,
+    tagType,
+    props,
+    isSelfClosing,
+    children: [],
+    loc: getSelection(context, start),
+    codegenNode: undefined
+  }
+}
 
 function parseInterpolation(
   context: ParserContext,
@@ -479,6 +542,13 @@ function advanceBy(context: ParserContext, numberOfCharacters: number): void {
   __TEST__ && assert(numberOfCharacters <= source.length)
   advancePositionWithMutation(context, source, numberOfCharacters)
   context.source = source.slice(numberOfCharacters)
+}
+
+function advanceSpaces(context: ParserContext): void {
+  const match = /^[\t\r\n\f ]+/.exec(context.source)
+  if (match) {
+    advanceBy(context, match[0].length)
+  }
 }
 
 function emitError(
