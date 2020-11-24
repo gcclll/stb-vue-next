@@ -1,1 +1,1 @@
-import { baseParse } from './parse'
+export { baseParse } from './parse'
