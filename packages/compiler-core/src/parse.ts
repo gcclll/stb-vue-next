@@ -120,8 +120,10 @@ function parseChildren(
 
     if (mode === TextModes.DATA || mode === TextModes.RCDATA) {
       if (!context.inVPre && startsWith(s, context.options.delimiters[0])) {
+        // '{{'
         node = parseInterpolation(context, mode)
       } else if (mode === TextModes.DATA && s[0] === '<') {
+        // https://html.spec.whatwg.org/multipage/parsing.html#tag-open-state
         if (s.length === 1) {
           emitError(context, ErrorCodes.EOF_BEFORE_TAG_NAME, 1)
         } else if (s[1] === '!') {
@@ -133,7 +135,7 @@ function parseChildren(
             node = parseBogusComment(context)
           } else if (startsWith(s, '<![CDATA[')) {
             if (ns !== Namespaces.HTML) {
-              // TODO
+              node = parseCDATA(context, ancestors)
             } else {
               emitError(context, ErrorCodes.CDATA_IN_HTML_CONTENT)
               node = parseBogusComment(context)
@@ -154,7 +156,7 @@ function parseChildren(
           } else if (/[a-z]/i.test(s[2])) {
             // 非法结束标签，因为结束标签会直接在 parseElement 解析完成
             emitError(context, ErrorCodes.X_INVALID_END_TAG)
-            // TODO parseTag(context, TagType.End, parent)
+            parseTag(context, TagType.End, parent)
             continue
           } else {
             // 无效的标签名称
@@ -179,7 +181,6 @@ function parseChildren(
           emitError(context, ErrorCodes.INVALID_FIRST_CHARACTER_OF_TAG_NAME, 1)
         }
       }
-      // TODO
     }
 
     // 纯文本节点
@@ -222,6 +223,26 @@ function pushNode(nodes: TemplateChildNode[], node: TemplateChildNode): void {
   }
 
   nodes.push(node)
+}
+
+function parseCDATA(
+  context: ParserContext,
+  ancestors: ElementNode[]
+): TemplateChildNode[] {
+  __TEST__ &&
+    assert(last(ancestors) == null || last(ancestors)!.ns !== Namespaces.HTML)
+  __TEST__ && assert(startsWith(context.source, '<![CDATA['))
+
+  advanceBy(context, 9)
+  const nodes = parseChildren(context, TextModes.CDATA, ancestors)
+  if (context.source.length === 0) {
+    emitError(context, ErrorCodes.EOF_IN_CDATA)
+  } else {
+    __TEST__ && assert(startsWith(context.source, ']]>'))
+    advanceBy(context, 3)
+  }
+
+  return nodes
 }
 
 function parseComment(context: ParserContext): CommentNode {
