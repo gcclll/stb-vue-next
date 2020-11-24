@@ -198,7 +198,61 @@ function parseChildren(
   }
 
   let removedWhitespace = false
-  // TODO 空格和空字符串节点合并
+  // 空格和空字符串节点合并
+  if (mode !== TextModes.RAWTEXT) {
+    for (let i = 0; i < nodes.length; i++) {
+      const node = nodes[i]
+      if (!context.inPre && node.type === NodeTypes.TEXT) {
+        if (!/[^\t\r\n\f ]/.test(node.content)) {
+          const prev = nodes[i - 1]
+          const next = nodes[i + 1]
+          // If:
+          // - the whitespace is the first or last node, or:
+          // - the whitespace is adjacent to a comment, or:
+          // - the whitespace is between two elements AND contains newline
+          // Then the whitespace is ignored.
+          if (
+            !prev ||
+            !next ||
+            prev.type === NodeTypes.COMMENT ||
+            next.type === NodeTypes.COMMENT ||
+            (prev.type === NodeTypes.ELEMENT &&
+              next.type === NodeTypes.ELEMENT &&
+              /[\r\n]/.test(node.content))
+          ) {
+            removedWhitespace = true
+            nodes[i] = null as any
+          } else {
+            // Otherwise, condensed consecutive whitespace inside the text
+            // down to a single space
+            node.content = ' '
+          }
+        } else {
+          // 空格合并从一个
+          node.content = node.content.replace(/[\t\r\n\f ]+/g, '')
+        }
+      }
+      // 生成环境默认删除注释节点
+      if (
+        !__DEV__ &&
+        node.type === NodeTypes.COMMENT &&
+        !context.options.comments
+      ) {
+        removedWhitespace = true
+        nodes[i] = null as any
+      }
+    }
+
+    if (context.inPre && parent && context.options.isPreTag(parent.tag)) {
+      // 删除首行空行
+      // remove leading newline per html spec
+      // https://html.spec.whatwg.org/multipage/grouping-content.html#the-pre-element
+      const first = nodes[0]
+      if (first && first.type === NodeTypes.TEXT) {
+        first.content = first.content.replace(/^\r?\n/, '')
+      }
+    }
+  }
 
   return removedWhitespace ? nodes.filter(Boolean) : nodes
 }
