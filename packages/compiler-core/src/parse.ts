@@ -11,11 +11,19 @@ import {
   TextNode,
   CommentNode,
   InterpolationNode,
-  ElementTypes
+  ElementTypes,
+  AttributeNode,
+  DirectiveNode
 } from './ast'
 import { ErrorCodes, createCompilerError, defaultOnError } from './errors'
 import { ParserOptions } from './options'
-import { advancePositionWithMutation, assert, isCoreComponent } from './utils'
+import { ExpressionNode } from './transforms/vFor'
+import {
+  advancePositionWithMutation,
+  assert,
+  isCoreComponent,
+  advancePositionWithClone
+} from './utils'
 
 type OptionalOptions = 'isNativeTag' | 'isBuiltInComponent'
 type MergedParserOptions = Omit<Required<ParserOptions>, OptionalOptions> &
@@ -376,7 +384,7 @@ function parseTag(
   const currentSource = context.source
 
   // 解析属性
-  let props = [] as any[] // TODO parseAttributes(context, type)
+  let props = parseAttributes(context, type)
 
   if (context.options.isPreTag(tag)) {
     context.inPre = true
@@ -391,8 +399,7 @@ function parseTag(
     extend(context, cursor)
     context.source = currentSource
     // 重新解析属性并且将 v-pre 过滤出来
-    // TODO
-    props = [] as any[] // parseAttributes(context, type).filter(p => p.name !== 'v-pre')
+    props = parseAttributes(context, type).filter(p => p.name !== 'v-pre')
   }
 
   // 结束标签
@@ -457,6 +464,253 @@ function parseTag(
     loc: getSelection(context, start),
     codegenNode: undefined
   }
+}
+
+function parseAttributes(
+  context: ParserContext,
+  type: TagType
+): (AttributeNode | DirectiveNode)[] {
+  const props = []
+  const attributeNames = new Set<string>()
+
+  while (
+    context.source.length > 0 &&
+    !startsWith(context.source, '>') &&
+    !startsWith(context.source, '/>')
+  ) {
+    if (startsWith(context.source, '/')) {
+      emitError(context, ErrorCodes.UNEXPECTED_SOLIDUS_IN_TAG)
+      advanceBy(context, 1)
+      advanceSpaces(context)
+      continue
+    }
+
+    if (type === TagType.End) {
+      emitError(context, ErrorCodes.END_TAG_WITH_ATTRIBUTES)
+    }
+
+    const attr = parseAttribute(context, attributeNames)
+    if (type === TagType.Start) {
+      props.push(attr)
+    }
+
+    // 必须有空格分割属性
+    if (/^[^\t\r\n\f />]/.test(context.source)) {
+      emitError(context, ErrorCodes.MISSING_WHITESPACE_BETWEEN_ATTRIBUTES)
+    }
+
+    advanceSpaces(context)
+  }
+
+  return props
+}
+
+function parseAttribute(
+  context: ParserContext,
+  nameSet: Set<string>
+): AttributeNode | DirectiveNode {
+  __TEST__ && assert(/^[^\t\r\n\f />]/.test(context.source))
+
+  // 属性名
+  const start = getCursor(context)
+  // 匹配等号前的内容，属性名
+  const match = /^[^\t\r\n\f />][^\t\r\n\f />=]*/.exec(context.source)!
+  const name = match[0]
+
+  if (nameSet.has(name)) {
+    emitError(context, ErrorCodes.DUPLICATE_ATTRIBUTE)
+  }
+  nameSet.add(name)
+
+  if (name[0] === '=') {
+    // 不能用 `=` 做属性名
+    emitError(context, ErrorCodes.UNEXPECTED_EQUALS_SIGN_BEFORE_ATTRIBUTE_NAME)
+  }
+
+  {
+    const pattern = /["'<]/g
+    let m: RegExpExecArray | null
+    // 属性名中不能有 ", ', <
+    while ((m = pattern.exec(name))) {
+      emitError(
+        context,
+        ErrorCodes.UNEXPECTED_CHARACTER_IN_ATTRIBUTE_NAME,
+        m.index
+      )
+    }
+  }
+
+  advanceBy(context, name.length)
+
+  let value:
+    | {
+        content: string
+        isQuoted: boolean
+        loc: SourceLocation
+      }
+    | undefined = undefined
+
+  if (/^[\t\r\n\f ]*=/.test(context.source)) {
+    advanceSpaces(context)
+    advanceBy(context, 1) // =
+    advanceSpaces(context) // = 后面的空格
+    // 解析出属性值
+    value = parseAttributeValue(context)
+    if (!value) {
+      emitError(context, ErrorCodes.MISSING_ATTRIBUTE_VALUE)
+    }
+  }
+
+  const loc = getSelection(context, start)
+
+  if (!context.inVPre && /^(v-|:|@|#)/.test(name)) {
+    // 指令匹配，四个捕获组含义
+    // 1. v-bind,v-for,v-if
+    // 2. :, @, # 指令缩写
+    // 3. [name] 动态属性名
+    // 4. name.modifier 修饰符
+    const match = /(?:^v-([a-z0-9]+))?(?:(?::|^@|^#)(\[[^\]]+\]|[^\.]+))?(.+)?$/i.exec(
+      name
+    )!
+
+    // 缩写指令替换成指令单词
+    const dirName =
+      match[1] ||
+      (startsWith(name, ':') ? 'bind' : startsWith(name, '@') ? 'on' : 'slot')
+
+    let arg: ExpressionNode | undefined
+
+    if (match[2]) {
+      const isSlot = dirName === 'slot'
+      const startOffset = name.indexOf(match[2])
+      const loc = getSelection(
+        context,
+        getNewPosition(context, start, startOffset),
+        getNewPosition(
+          context,
+          start,
+          startOffset + match[2].length + ((isSlot && match[3]) || '').length
+        )
+      )
+
+      let content = match[2]
+      let isStatic = true
+
+      if (content.startsWith('[')) {
+        isStatic = false
+
+        if (!content.endsWith(']')) {
+          emitError(
+            context,
+            ErrorCodes.X_MISSING_DYNAMIC_DIRECTIVE_ARGUMENT_END
+          )
+        }
+
+        content = content.substr(1, content.length - 2)
+      } else if (isSlot) {
+        // #1241 special case for v-slot: vuetify relies extensively on slot
+        // names containing dots. v-slot doesn't have any modifiers and Vue 2.x
+        // supports such usage so we are keeping it consistent with 2.x.
+
+        content += match[3] || ''
+      }
+
+      arg = {
+        type: NodeTypes.SIMPLE_EXPRESSION,
+        content,
+        isStatic,
+        isConstant: isStatic,
+        loc
+      }
+    }
+
+    if (value && value.isQuoted) {
+      const valueLoc = value.loc
+      valueLoc.start.offset++
+      valueLoc.start.column++
+      valueLoc.end = advancePositionWithClone(valueLoc.start, value.content)
+      valueLoc.source = valueLoc.source.slice(1, -1)
+    }
+
+    return {
+      type: NodeTypes.DIRECTIVE,
+      name: dirName,
+      exp: value && {
+        type: NodeTypes.SIMPLE_EXPRESSION,
+        content: value.content,
+        isStatic: false,
+        // Treat as non-constant by default. This can be potentially set to
+        // true by `transformExpression` to make it eligible for hoisting.
+
+        isConstant: false,
+        loc: value.loc
+      },
+      arg,
+      modifiers: match[3] ? match[3].substr(1).split('.') : [],
+      loc
+    }
+  }
+
+  return {
+    type: NodeTypes.ATTRIBUTE,
+    name,
+    value: value && {
+      type: NodeTypes.TEXT,
+      content: value.content,
+      loc: value.loc
+    },
+    loc
+  }
+}
+
+function parseAttributeValue(
+  context: ParserContext
+):
+  | {
+      content: string
+      isQuoted: boolean
+      loc: SourceLocation
+    }
+  | undefined {
+  const start = getCursor(context)
+  let content: string
+
+  const quote = context.source[0]
+  const isQuoted = quote === `"` || quote === `'`
+  if (isQuoted) {
+    // Quoted value.
+    advanceBy(context, 1)
+
+    const endIndex = context.source.indexOf(quote)
+    if (endIndex === -1) {
+      content = parseTextData(
+        context,
+        context.source.length,
+        TextModes.ATTRIBUTE_VALUE
+      )
+    } else {
+      content = parseTextData(context, endIndex, TextModes.ATTRIBUTE_VALUE)
+      advanceBy(context, 1)
+    }
+  } else {
+    // Unquoted
+    const match = /^[^\t\r\n\f >]+/.exec(context.source)
+    if (!match) {
+      return undefined
+    }
+    const unexpectedChars = /["'<=`]/g
+    let m: RegExpExecArray | null
+    while ((m = unexpectedChars.exec(match[0]))) {
+      emitError(
+        context,
+        ErrorCodes.UNEXPECTED_CHARACTER_IN_UNQUOTED_ATTRIBUTE_VALUE,
+        m.index
+      )
+    }
+    content = parseTextData(context, match[0].length, TextModes.ATTRIBUTE_VALUE)
+  }
+
+  return { content, isQuoted, loc: getSelection(context, start) }
 }
 
 function parseInterpolation(
@@ -600,6 +854,18 @@ function advanceSpaces(context: ParserContext): void {
   if (match) {
     advanceBy(context, match[0].length)
   }
+}
+
+function getNewPosition(
+  context: ParserContext,
+  start: Position,
+  numberOfCharacters: number
+): Position {
+  return advancePositionWithClone(
+    start,
+    context.originalSource.slice(start.offset, numberOfCharacters),
+    numberOfCharacters
+  )
 }
 
 function emitError(
