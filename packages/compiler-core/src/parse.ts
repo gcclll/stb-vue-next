@@ -511,7 +511,7 @@ function parseTag(
       hasVIs ||
       isCoreComponent(tag) ||
       (options.isBuiltInComponent && options.isBuiltInComponent(tag)) ||
-      /^[A-Z].test(tag)/ ||
+      /^[A-Z]/.test(tag) ||
       tag === 'component'
     ) {
       tagType = ElementTypes.COMPONENT

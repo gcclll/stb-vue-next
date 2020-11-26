@@ -1,1 +1,1 @@
-export { baseParse } from './parse'
+export { baseParse, TextModes } from './parse'
