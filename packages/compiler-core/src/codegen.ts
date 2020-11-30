@@ -10,7 +10,12 @@ import {
   TextNode
 } from './ast'
 import { CodegenOptions } from './options'
-import { helperNameMap } from './runtimeHelpers'
+import {
+  helperNameMap,
+  POP_SCOPE_ID,
+  PUSH_SCOPE_ID,
+  WITH_SCOPE_ID
+} from './runtimeHelpers'
 
 const PURE_ANNOTATION = `/*#__PURE__*/`
 
@@ -233,7 +238,41 @@ function genModulePreamble(
   ast: RootNode,
   context: CodegenContext,
   genScopeId: boolean
-) {}
+) {
+  const { push, helper, newline, scopeId } = context
+
+  if (genScopeId) {
+    ast.helpers.push(WITH_SCOPE_ID)
+    if (ast.hoists.length) {
+      ast.helpers.push(PUSH_SCOPE_ID, POP_SCOPE_ID)
+    }
+  }
+
+  // 为所有的 helpers 生成 import 语句
+  if (ast.helpers.length) {
+    // TODO helpers
+  }
+
+  // 服务端渲染 helpers import 语法
+  if (ast.ssrHelpers && ast.ssrHelpers.length) {
+    // TODO ssr helpers
+  }
+
+  if (ast.imports.length) {
+    // TODO imports
+  }
+
+  if (genScopeId) {
+    push(
+      `const _withId = ${PURE_ANNOTATION}${helper(WITH_SCOPE_ID)}("${scopeId}")`
+    )
+    newline()
+  }
+
+  // TODO gen hoists
+  newline()
+  push(`export `)
+}
 
 function genNode(node: CodegenNode | symbol | string, context: CodegenContext) {
   if (isString(node)) {
