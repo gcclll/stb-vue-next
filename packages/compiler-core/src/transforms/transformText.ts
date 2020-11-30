@@ -1,5 +1,13 @@
-import { ElementTypes, NodeTypes } from '../ast'
+import { PatchFlagNames, PatchFlags } from '@vue/shared/src'
+import {
+  CallExpression,
+  createCallExpression,
+  ElementTypes,
+  NodeTypes
+} from '../ast'
+import { CREATE_TEXT } from '../runtimeHelpers'
 import { NodeTransform } from '../transform'
+import { isText } from '../utils'
 
 // 合并相邻的文本节点(包含插值)
 // Merge adjacent text nodes and expressions into a single expression
@@ -21,7 +29,11 @@ export const transformText: NodeTransform = (node, context) => {
 
       // 遍历所有孩子节点，合并文本
       for (let i = 0; i < children.length; i++) {
-        // TODO
+        const child = children[i]
+        if (isText(child)) {
+          hasText = true
+          // TODO 合并
+        }
       }
 
       // 不处理的几种情况
@@ -39,7 +51,32 @@ export const transformText: NodeTransform = (node, context) => {
 
       // 将文本节点转换成用 createTextVNode(text) 创建
       for (let i = 0; i < children.length; i++) {
-        // TODO
+        const child = children[i]
+        if (isText(child) || child.type === NodeTypes.COMPOUND_EXPRESSION) {
+          const callArgs: CallExpression['arguments'] = []
+          // createTextVNode defaults to single whitespace, so if it is a
+          // single space the code could be an empty call to save bytes.
+          if (child.type !== NodeTypes.TEXT || child.content !== ' ') {
+            callArgs.push(child)
+          }
+
+          // mark dynamic text with flag so it gets patched inside a block
+          if (!context.ssr && child.type !== NodeTypes.TEXT) {
+            callArgs.push(
+              `${PatchFlags.TEXT} /* ${PatchFlagNames[PatchFlags.TEXT]} */`
+            )
+          }
+
+          children[i] = {
+            type: NodeTypes.TEXT_CALL,
+            content: child,
+            loc: child.loc,
+            codegenNode: createCallExpression(
+              context.helper(CREATE_TEXT),
+              callArgs
+            )
+          }
+        }
       }
     }
   }

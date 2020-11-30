@@ -1,4 +1,10 @@
-import { Position } from './ast'
+import {
+  InterpolationNode,
+  NodeTypes,
+  Position,
+  TemplateChildNode,
+  TextNode
+} from './ast'
 import {
   TELEPORT,
   SUSPENSE,
@@ -65,4 +71,10 @@ export function assert(condition: boolean, msg?: string) {
   if (!condition) {
     throw new Error(msg || `unexpected compiler condition`)
   }
+}
+
+export function isText(
+  node: TemplateChildNode
+): node is TextNode | InterpolationNode {
+  return node.type === NodeTypes.INTERPOLATION || node.type === NodeTypes.TEXT
 }

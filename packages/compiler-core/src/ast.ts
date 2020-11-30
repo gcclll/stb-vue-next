@@ -530,3 +530,20 @@ export function createRoot(
     loc
   }
 }
+
+type InferCodegenNodeType<T> = T extends typeof RENDER_SLOT
+  ? RenderSlotCall
+  : CallExpression
+
+export function createCallExpression<T extends CallExpression['callee']>(
+  callee: T,
+  args: CallExpression['arguments'] = [],
+  loc: SourceLocation = locStub
+): InferCodegenNodeType<T> {
+  return {
+    type: NodeTypes.JS_CALL_EXPRESSION,
+    loc,
+    callee,
+    arguments: args
+  } as any
+}
