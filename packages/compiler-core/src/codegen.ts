@@ -1,7 +1,18 @@
+import { isString, isSymbol } from '@vue/shared'
 import { RawSourceMap, SourceMapGenerator } from 'source-map'
-import { JSChildNode, RootNode, SSRCodegenNode, TemplateChildNode } from './ast'
+import {
+  JSChildNode,
+  NodeTypes,
+  RootNode,
+  SimpleExpressionNode,
+  SSRCodegenNode,
+  TemplateChildNode,
+  TextNode
+} from './ast'
 import { CodegenOptions } from './options'
 import { helperNameMap } from './runtimeHelpers'
+
+const PURE_ANNOTATION = `/*#__PURE__*/`
 
 type CodegenNode = TemplateChildNode | JSChildNode | SSRCodegenNode
 
@@ -104,7 +115,148 @@ export function generate(
   } = {}
 ): CodegenResult {
   const context = createCodegenContext(ast, options)
+  // 上下文创建结束的钩子函数
+  if (options.onContextCreated) {
+    options.onContextCreated(context)
+  }
 
-  // TODO
-  return context as any
+  const {
+    prefixIdentifiers,
+    scopeId,
+    push,
+    ssr,
+    mode,
+    indent,
+    deindent,
+    newline
+  } = context
+
+  const hasHelpers = ast.helpers.length > 0
+  const useWithBlock = !prefixIdentifiers && mode !== 'module'
+  const genScopeId = !__BROWSER__ && scopeId != null && mode === 'module'
+
+  if (!__BROWSER__ && mode === 'module') {
+    genModulePreamble(ast, context, genScopeId)
+  } else {
+    // -> `function ...`
+    genFunctionPreamble(ast, context)
+  }
+
+  const optimizeSources = options.bindingMetadata
+    ? `, $props, $setup, $data, $options`
+    : ``
+
+  if (!ssr) {
+    if (genScopeId) {
+      push(`const render = ${PURE_ANNOTATION}_withId(`)
+    }
+    push(`function render(_ctx, _cache${optimizeSources}) {`)
+  } else {
+    // TODO ssr
+  }
+  indent()
+
+  if (useWithBlock) {
+    push(`with (_ctx) {`)
+    indent()
+    // function mode const declarations should be inside with block
+    // also they should be renamed to avoid collision with user properties
+    // 重命名引入的函数避免冲突
+    if (hasHelpers) {
+      push(
+        `const { ${ast.helpers
+          .map(s => `${helperNameMap[s]} : _${helperNameMap[s]}`)
+          .join(', ')} } = _Vue`
+      )
+      push(`\n`)
+      newline()
+    }
+  }
+
+  // TODO ast.components, generate asset resolution statements
+
+  // TODO generate directives, ast.directives
+
+  // TODO 临时变量 ast.temps
+
+  // 生成 VNode 树表达式
+  if (!ssr) {
+    // 这里是真正 render 函数核心，上面都是为了引入变量，函数，imports 等做的处理
+    push(`return `)
+  }
+
+  if (ast.codegenNode) {
+    // genNode 为 codegen 阶段最最最核心函数
+    genNode(ast.codegenNode, context)
+  } else {
+    push(`null`)
+  }
+
+  if (useWithBlock) {
+    deindent()
+    push(`}`)
+  }
+
+  if (genScopeId) {
+    push(`)`)
+  }
+  return {
+    ast,
+    code: context.code,
+    map: context.map ? (context.map as any).toJSON() : undefined
+  }
+}
+
+function genFunctionPreamble(ast: RootNode, context: CodegenContext) {
+  const { push, newline } = context
+
+  // Generate const declaration for helpers
+  // In prefix mode, we place the const declaration at top so it's done
+  // only once; But if we not prefixing, we place the declaration inside the
+  // with block so it doesn't incur the `in` check cost for every helper access.
+  if (ast.helpers.length > 0) {
+    // TODO
+  }
+
+  // ssr helpers
+  if (!__BROWSER__ && ast.ssrHelpers && ast.ssrHelpers.length) {
+    // TODO
+  }
+
+  // TODO gen hoists 静态提升
+  newline()
+  push(`return `)
+}
+
+// TODO
+function genModulePreamble(
+  ast: RootNode,
+  context: CodegenContext,
+  genScopeId: boolean
+) {}
+
+function genNode(node: CodegenNode | symbol | string, context: CodegenContext) {
+  if (isString(node)) {
+    // 节点是字符串，直接 code += node
+    context.push(node)
+    return
+  }
+
+  if (isSymbol(node)) {
+    context.push(context.helper(node))
+    return
+  }
+
+  switch (node.type) {
+    case NodeTypes.TEXT:
+      genText(node, context)
+      break
+  }
+}
+
+function genText(
+  node: TextNode | SimpleExpressionNode,
+  context: CodegenContext
+) {
+  context.push(JSON.stringify(node.content), node)
 }
