@@ -2,18 +2,19 @@ import { NOOP, isArray } from '@vue/shared'
 import {
   ExpressionNode,
   RootNode,
-  NodeTypes,
   TemplateChildNode,
   JSChildNode,
   SimpleExpressionNode,
   CacheExpression,
   ElementNode,
   DirectiveNode,
-  ParentNode
+  ParentNode,
+  Property,
+  TemplateLiteral
 } from './ast'
 import { defaultOnError } from './errors'
 import { TransformOptions } from './options'
-import { CREATE_COMMENT } from './runtimeHelpers'
+// import { CREATE_COMMENT } from './runtimeHelpers'
 
 // There are two types of transforms:
 //
@@ -24,6 +25,24 @@ export type NodeTransform = (
   node: RootNode | TemplateChildNode,
   context: TransformContext
 ) => void | (() => void) | (() => void)[]
+
+// - DirectiveTransform:
+//   Transforms that handles a single directive attribute on an element.
+//   It translates the raw directive into actual props for the VNode.
+export type DirectiveTransform = (
+  dir: DirectiveNode,
+  node: ElementNode,
+  context: TransformContext,
+  // a platform specific compiler can import the base transform and augment
+  // it by passing in this optional argument.
+  augmentor?: (ret: DirectiveTransformResult) => DirectiveTransformResult
+) => DirectiveTransformResult
+
+export interface DirectiveTransformResult {
+  props: Property[]
+  needRuntime?: boolean | symbol
+  ssrTagParts?: TemplateLiteral['elements']
+}
 
 export interface ImportItem {
   exp: string | ExpressionNode
