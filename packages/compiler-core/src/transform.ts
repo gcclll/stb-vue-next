@@ -153,11 +153,26 @@ export function createTransformContext(
 }
 
 export function transform(root: RootNode, options: TransformOptions) {
-  // TODO
+  const context = createTransformContext(root, options)
+  traverseNode(root, context)
+  if (options.hoistStatic) {
+    // TODO hoist static nodes
+  }
+
+  if (!options.ssr) {
+    createRootCodegen(root, context)
+  }
+
+  root.helpers = [...context.helpers]
+  root.components = [...context.components]
+  root.directives = [...context.directives]
+  root.imports = [...context.imports]
+  root.hoists = context.hoists
+  root.temps = context.temps
+  root.cached = context.cached
 }
 
-// TODO
-// createRootCodegen
+function createRootCodegen(root: RootNode, context: TransformContext) {}
 
 export function traverseChildren(
   parent: ParentNode,
