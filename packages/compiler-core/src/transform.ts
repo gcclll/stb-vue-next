@@ -1,7 +1,8 @@
-import { NOOP } from '@vue/shared'
+import { NOOP, isArray } from '@vue/shared'
 import {
   ExpressionNode,
   RootNode,
+  NodeTypes,
   TemplateChildNode,
   JSChildNode,
   SimpleExpressionNode,
@@ -12,6 +13,7 @@ import {
 } from './ast'
 import { defaultOnError } from './errors'
 import { TransformOptions } from './options'
+import { CREATE_COMMENT } from './runtimeHelpers'
 
 // There are two types of transforms:
 //
@@ -184,7 +186,45 @@ export function traverseChildren(
 export function traverseNode(
   node: RootNode | TemplateChildNode,
   context: TransformContext
-) {}
+) {
+  // 保存当前被处理的 节点
+  context.currentNode = node
+  // 应用 transform 插件
+  const { nodeTransforms } = context
+  // 针对每个节点会收集到一个或多个 transformXxx 函数，用来解析它的 ast
+  // 得到 codegenNode ，这些函数会在当前的节点树被递归遍历完之后调用
+  const exitFns = []
+  for (let i = 0; i < nodeTransforms.length; i++) {
+    const onExit = nodeTransforms[i](node, context)
+    if (onExit) {
+      if (isArray(onExit)) {
+        exitFns.push(...onExit)
+      } else {
+        exitFns.push(onExit)
+      }
+    }
+
+    if (!context.currentNode) {
+      // 节点可能被删除了，比如： v-else-if, v-else 会合并到 v-if 的 branches[] 中
+      return
+    } else {
+      // 节点可能会替换了，需要更新
+      node = context.currentNode
+    }
+  }
+
+  switch (
+    node.type
+    // TODO
+  ) {
+  }
+
+  context.currentNode = node
+  let i = exitFns.length
+  while (i--) {
+    exitFns[i]()
+  }
+}
 
 export function createStructuralDirectiveTransform(
   name: string | RegExp,
