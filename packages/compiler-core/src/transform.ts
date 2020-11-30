@@ -14,6 +14,7 @@ import {
 } from './ast'
 import { defaultOnError } from './errors'
 import { TransformOptions } from './options'
+import { isSingleElementRoot } from './transforms/hoistStatic'
 // import { CREATE_COMMENT } from './runtimeHelpers'
 
 // There are two types of transforms:
@@ -193,7 +194,27 @@ export function transform(root: RootNode, options: TransformOptions) {
   root.cached = context.cached
 }
 
-function createRootCodegen(root: RootNode, context: TransformContext) {}
+function createRootCodegen(root: RootNode, context: TransformContext) {
+  // const { helper } = context
+  const { children } = root
+  if (children.length === 1) {
+    // 只有一个孩子节点，直接取该孩子节点 的 codegenNode
+    const child = children[0]
+    if (isSingleElementRoot(root, child) && child.codegenNode) {
+      // 当 root 节点下只有一个 element 元素的孩子节点时，不进行提升
+    } else {
+      // - single <slot/>, IfNode, ForNode: already blocks.
+      // - single text node: always patched.
+      // root codegen falls through via genNode()
+
+      root.codegenNode = child
+    }
+  } else if (children.length > 1) {
+    // TODO
+  } else {
+    // no children = noop, codegen will return null.
+  }
+}
 
 export function traverseChildren(
   parent: ParentNode,

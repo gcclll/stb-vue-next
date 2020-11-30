@@ -1,7 +1,10 @@
 import {
+  ElementTypes,
   InterpolationNode,
   NodeTypes,
   Position,
+  RootNode,
+  SlotOutletNode,
   TemplateChildNode,
   TextNode
 } from './ast'
@@ -77,4 +80,10 @@ export function isText(
   node: TemplateChildNode
 ): node is TextNode | InterpolationNode {
   return node.type === NodeTypes.INTERPOLATION || node.type === NodeTypes.TEXT
+}
+
+export function isSlotOutlet(
+  node: RootNode | TemplateChildNode
+): node is SlotOutletNode {
+  return node.type === NodeTypes.ELEMENT && node.tagType === ElementTypes.SLOT
 }
