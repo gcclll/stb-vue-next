@@ -1,14 +1,7 @@
 import { RawSourceMap, SourceMapGenerator } from 'source-map'
-import {
-  JSChildNode,
-  NodeTypes,
-  RootNode,
-  SSRCodegenNode,
-  TemplateChildNode
-} from './ast'
+import { JSChildNode, RootNode, SSRCodegenNode, TemplateChildNode } from './ast'
 import { CodegenOptions } from './options'
 import { helperNameMap } from './runtimeHelpers'
-import { advancePositionWithMutation, isSimpleIdentifier } from './utils'
 
 type CodegenNode = TemplateChildNode | JSChildNode | SSRCodegenNode
 
@@ -110,5 +103,8 @@ export function generate(
     onContextCreated?: (context: CodegenContext) => void
   } = {}
 ): CodegenResult {
-  return ast as any
+  const context = createCodegenContext(ast, options)
+
+  // TODO
+  return context as any
 }
