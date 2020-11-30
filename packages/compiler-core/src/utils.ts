@@ -31,6 +31,10 @@ export function isCoreComponent(tag: string): symbol | void {
   }
 }
 
+const nonIdentifierRE = /^\d|[^\$\w]/
+export const isSimpleIdentifier = (name: string): boolean =>
+  !nonIdentifierRE.test(name)
+
 export function advancePositionWithClone(
   pos: Position,
   source: string,
