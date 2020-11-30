@@ -202,6 +202,9 @@ export function generate(
     push(`}`)
   }
 
+  deindent()
+  push(`}`)
+
   if (genScopeId) {
     push(`)`)
   }
