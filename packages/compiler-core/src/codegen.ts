@@ -33,5 +33,5 @@ export function generate(
     onContextCreated?: (context: CodegenContext) => void
   } = {}
 ): CodegenResult {
-  return {} as CodegenResult
+  return ast as any
 }

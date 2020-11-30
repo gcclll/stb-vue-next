@@ -1,9 +1,8 @@
-// 合并相邻的文本节点(包含插值)
-// Merge adjacent text nodes and expressions into a single expression
-
-import { CompoundExpressionNode, ElementTypes, NodeTypes } from '../ast'
+import { ElementTypes, NodeTypes } from '../ast'
 import { NodeTransform } from '../transform'
 
+// 合并相邻的文本节点(包含插值)
+// Merge adjacent text nodes and expressions into a single expression
 // e.g. <div>abc {{ d }} {{ e }}</div> should have a single expression node as child.
 export const transformText: NodeTransform = (node, context) => {
   // 只有这四种类型才会收集这个函数
