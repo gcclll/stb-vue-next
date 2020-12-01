@@ -19,7 +19,9 @@ import { isSingleElementRoot } from './transforms/hoistStatic'
 import {
   TO_DISPLAY_STRING,
   helperNameMap,
-  CREATE_COMMENT
+  CREATE_COMMENT,
+  OPEN_BLOCK,
+  CREATE_BLOCK
 } from './runtimeHelpers'
 
 // There are two types of transforms:
@@ -200,13 +202,21 @@ export function transform(root: RootNode, options: TransformOptions) {
 }
 
 function createRootCodegen(root: RootNode, context: TransformContext) {
-  // const { helper } = context
+  const { helper } = context
   const { children } = root
   if (children.length === 1) {
     // 只有一个孩子节点，直接取该孩子节点 的 codegenNode
     const child = children[0]
     if (isSingleElementRoot(root, child) && child.codegenNode) {
       // 当 root 节点下只有一个 element 元素的孩子节点时，不进行提升
+      const codegenNode = child.codegenNode
+      if (codegenNode.type === NodeTypes.VNODE_CALL) {
+        codegenNode.isBlock = true
+        helper(OPEN_BLOCK)
+        helper(CREATE_BLOCK)
+      }
+
+      root.codegenNode = codegenNode
     } else {
       // - single <slot/>, IfNode, ForNode: already blocks.
       // - single text node: always patched.

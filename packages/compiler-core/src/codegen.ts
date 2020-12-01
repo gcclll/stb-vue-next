@@ -20,6 +20,7 @@ import {
   TO_DISPLAY_STRING,
   WITH_SCOPE_ID
 } from './runtimeHelpers'
+import { assert } from './utils'
 
 const PURE_ANNOTATION = `/*#__PURE__*/`
 
@@ -310,6 +311,15 @@ function genNode(node: CodegenNode | symbol | string, context: CodegenContext) {
   }
 
   switch (node.type) {
+    case NodeTypes.ELEMENT:
+      __DEV__ &&
+        assert(
+          node.codegenNode != null,
+          `Codegen node is missing for element/if/for node. ` +
+            `Apply appropriate transforms first.`
+        )
+      genNode(node, context)
+      break
     case NodeTypes.TEXT:
       genText(node, context)
       break
