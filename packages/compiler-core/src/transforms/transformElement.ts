@@ -2,6 +2,7 @@ import {
   ObjectExpression,
   CallExpression,
   ExpressionNode,
+  Property,
   NodeTypes,
   ElementTypes,
   ComponentNode,
@@ -9,21 +10,46 @@ import {
   createCallExpression,
   VNodeCall,
   TemplateTextChildNode,
-  createVNodeCall
+  createVNodeCall,
+  ElementNode,
+  DirectiveNode,
+  createObjectProperty,
+  createObjectExpression,
+  createArrayExpression
 } from '../ast'
-import { isObject, PatchFlagNames, PatchFlags } from '@vue/shared'
-import { findProp, findDir, isCoreComponent, toValidAssetId } from '../utils'
+import {
+  isOn,
+  isObject,
+  isSymbol,
+  isReservedProp,
+  PatchFlagNames,
+  PatchFlags
+} from '@vue/shared'
+import {
+  findProp,
+  findDir,
+  isCoreComponent,
+  toValidAssetId,
+  getInnerRange,
+  isBindKey,
+  isStaticExp
+} from '../utils'
 import { NodeTransform, TransformContext } from '../transform'
 import {
   KEEP_ALIVE,
+  MERGE_PROPS,
   RESOLVE_COMPONENT,
   RESOLVE_DYNAMIC_COMPONENT,
   SUSPENSE,
-  TELEPORT
+  TELEPORT,
+  TO_HANDLERS
 } from '../runtimeHelpers'
 import { getStaticType } from './hoistStatic'
+import { createCompilerError, ErrorCodes } from '../errors'
 
-export type PropsExpression = ObjectExpression | CallExpression | ExpressionNode
+// some directive transforms (e.g. v-model) may return a symbol for runtime
+// import, which should be used instead of a resolveDirective call.
+const directiveImportMap = new WeakMap<DirectiveNode, symbol>()
 
 export const transformElement: NodeTransform = (node, context) => {
   if (
@@ -74,7 +100,7 @@ export const transformElement: NodeTransform = (node, context) => {
           findProp(node, 'key', true)))
 
     if (props.length > 0) {
-      // TODO props
+      const propsBuildResult = buildProps(node, context)
     }
 
     if (node.children.length > 0) {
@@ -198,6 +224,307 @@ export function resolveComponentType(
   context.helper(RESOLVE_COMPONENT)
   context.components.add(tag)
   return toValidAssetId(tag, `component`)
+}
+
+export type PropsExpression = ObjectExpression | CallExpression | ExpressionNode
+
+export function buildProps(
+  node: ElementNode,
+  context: TransformContext,
+  props: ElementNode['props'] = node.props,
+  ssr = false
+): {
+  props: PropsExpression | undefined
+  directives: DirectiveNode[]
+  patchFlag: number
+  dynamicPropNames: string[]
+} {
+  const { tag, loc: elementLoc } = node
+  const isComponent = node.tagType === ElementTypes.COMPONENT
+  let properties: ObjectExpression['properties'] = []
+  const mergeArgs: PropsExpression[] = []
+  const runtimeDirectives: DirectiveNode[] = []
+
+  let patchFlag = 0
+  let hasRef = false
+  // <div :class="..."
+  let hasClassBinding = false
+  // <div :style="..."
+  let hasStyleBinding = false
+  // <div @eventName="handler"
+  let hasHydrationEventBinding = false
+  // <div :key="..."
+  let hasDynamicKeys = false
+  let hasVnodeHook = false
+  const dynamicPropNames: string[] = []
+
+  const analyzePatchFlag = ({ key, value }: Property) => {
+    // TODO
+    if (isStaticExp(key)) {
+      const name = key.content
+      const isEventHandler = isOn(name)
+      if (
+        !isComponent &&
+        isEventHandler &&
+        // omit the flag for click handlers because hydration gives click
+        // dedicated fast path.
+        name.toLowerCase() !== 'onclick' &&
+        // omit v-model handlers
+        name !== 'onUpdate:modelValue' &&
+        // omit onVnodeXXX hooks
+        !isReservedProp(name)
+      ) {
+        hasHydrationEventBinding = true
+      }
+
+      if (isEventHandler && isReservedProp(name)) {
+        hasVnodeHook = true
+      }
+
+      if (
+        value.type === NodeTypes.JS_CACHE_EXPRESSION ||
+        ((value.type === NodeTypes.SIMPLE_EXPRESSION ||
+          value.type === NodeTypes.COMPOUND_EXPRESSION) &&
+          getStaticType(value) > 0)
+      ) {
+        // skip if the prop is a cached handler or has constant value
+        return
+      }
+      if (name === 'ref') {
+        hasRef = true
+      } else if (name === 'class' && !isComponent) {
+        hasClassBinding = true
+      } else if (name === 'style' && !isComponent) {
+        hasStyleBinding = true
+      } else if (name !== 'key' && !dynamicPropNames.includes(name)) {
+        dynamicPropNames.push(name)
+      }
+    } else {
+      hasDynamicKeys = true
+    }
+  }
+
+  for (let i = 0; i < props.length; i++) {
+    // 静态属性
+    const prop = props[i]
+    if (prop.type === NodeTypes.ATTRIBUTE) {
+      const { loc, name, value } = prop
+      if (name === 'ref') {
+        hasRef = true
+      }
+
+      // skip :is on <component>
+      if (name === 'is' && tag === 'component') {
+        continue
+      }
+
+      properties.push(
+        createObjectProperty(
+          createSimpleExpression(
+            name,
+            true,
+            getInnerRange(loc, 0, name.length)
+          ),
+          createSimpleExpression(
+            value ? value.content : '',
+            true,
+            value ? value.loc : loc
+          )
+        )
+      )
+    } else {
+      // directives, 指令属性
+      const { name, arg, exp, loc } = prop
+      const isBind = name === 'bind'
+      const isOn = name === 'on'
+
+      // skip v-slot - it is handled by its dedicated transform.
+      // v-slot 由 vSlot.ts 处理
+      if (name === 'slot') {
+        if (!isComponent) {
+          context.onError(
+            createCompilerError(ErrorCodes.X_V_SLOT_MISPLACED, loc)
+          )
+        }
+        continue
+      }
+
+      // skip v-once, 由 vOnce.ts 处理
+      if (name === 'once') {
+        continue
+      }
+
+      // skip v-is and :is on <component>
+      if (
+        name === 'is' ||
+        (isBind && tag === 'component' && isBindKey(arg, 'is'))
+      ) {
+        continue
+      }
+
+      // skip v-on ins SSR compilation
+      if (isOn && ssr) {
+        continue
+      }
+
+      // v-bind, v-on 没有参数情况
+      if (!arg && (isBind || isOn)) {
+        hasDynamicKeys = true
+        if (exp) {
+          if (properties.length) {
+            mergeArgs.push(
+              createObjectExpression(dedupeProperties(properties), elementLoc)
+            )
+            properties = []
+          }
+
+          if (isBind) {
+            mergeArgs.push(exp)
+          } else {
+            // v-on="obj" => toHandlers(obj)
+            mergeArgs.push({
+              type: NodeTypes.JS_CACHE_EXPRESSION,
+              loc,
+              callee: context.helper(TO_HANDLERS),
+              arguments: [exp]
+            })
+          }
+        } else {
+          context.onError(
+            createCompilerError(
+              isBind
+                ? ErrorCodes.X_V_BIND_NO_EXPRESSION
+                : ErrorCodes.X_V_ON_NO_EXPRESSION,
+              loc
+            )
+          )
+        }
+
+        continue
+      }
+
+      const directieTransform = context.directiveTransforms[name]
+      if (directieTransform) {
+        // has built-in directive transform.
+        const { props, needRuntime } = directieTransform(prop, node, context)
+        !ssr && props.forEach(analyzePatchFlag)
+        properties.push(...props)
+        if (needRuntime) {
+          runtimeDirectives.push(prop)
+          if (isSymbol(needRuntime)) {
+            directiveImportMap.set(prop, needRuntime)
+          }
+        }
+      } else {
+        // no built-in transform, this is a user custom directive.
+        runtimeDirectives.push(prop)
+      }
+    }
+  }
+
+  let propsExpression: PropsExpression | undefined = undefined
+  // has v-bind="object" or v-on="object", wrap with mergeProps
+  if (mergeArgs.length) {
+    if (properties.length) {
+      mergeArgs.push(
+        createObjectExpression(dedupeProperties(properties), elementLoc)
+      )
+    }
+
+    if (mergeArgs.length > 1) {
+      propsExpression = createCallExpression(
+        context.helper(MERGE_PROPS),
+        mergeArgs,
+        elementLoc
+      )
+    } else {
+      // single v-bind with nothing else - no need for a mergeProps call
+      propsExpression = mergeArgs[0]
+    }
+  } else if (properties.length) {
+    propsExpression = createObjectExpression(
+      dedupeProperties(properties),
+      elementLoc
+    )
+  }
+
+  // patchFlag analysis
+  if (hasDynamicKeys) {
+    patchFlag |= PatchFlags.FULL_PROPS
+  } else {
+    if (hasClassBinding) {
+      patchFlag |= PatchFlags.CLASS
+    }
+    if (hasStyleBinding) {
+      patchFlag |= PatchFlags.STYLE
+    }
+    if (dynamicPropNames.length) {
+      patchFlag |= PatchFlags.PROPS
+    }
+    if (hasHydrationEventBinding) {
+      patchFlag |= PatchFlags.HYDRATE_EVENTS
+    }
+  }
+  if (
+    (patchFlag === 0 || patchFlag === PatchFlags.HYDRATE_EVENTS) &&
+    (hasRef || hasVnodeHook || runtimeDirectives.length > 0)
+  ) {
+    patchFlag |= PatchFlags.NEED_PATCH
+  }
+
+  return {
+    props: propsExpression,
+    directives: runtimeDirectives,
+    patchFlag,
+    dynamicPropNames
+  }
+}
+
+// Dedupe props in an object literal.
+// Literal duplicated attributes would have been warned during the parse phase,
+// however, it's possible to encounter duplicated `onXXX` handlers with different
+// modifiers. We also need to merge static and dynamic class / style attributes.
+// - onXXX handlers / style: merge into array
+// - class: merge into single expression with concatenation
+function dedupeProperties(properties: Property[]): Property[] {
+  // 合并同类属性
+  const knownProps: Map<string, Property> = new Map()
+  const deduped: Property[] = []
+  for (let i = 0; i < properties.length; i++) {
+    const prop = properties[i]
+    // 允许重复的动态属性
+    if (prop.key.type === NodeTypes.COMPOUND_EXPRESSION || !prop.key.isStatic) {
+      deduped.push(prop)
+      continue
+    }
+
+    const name = prop.key.content
+    const existing = knownProps.get(name)
+    if (existing) {
+      // 合并 style, class, onXxx
+      if (name === 'style' || name === 'class' || name.startsWith('on')) {
+        mergeAsArray(existing, prop)
+      }
+      // unexpected duplicate, should have emitted error during parse
+    } else {
+      // cache
+      knownProps.set(name, prop)
+      deduped.push(prop)
+    }
+  }
+
+  return deduped
+}
+
+function mergeAsArray(existing: Property, incoming: Property) {
+  if (existing.value.type == NodeTypes.JS_ARRAY_EXPRESSION) {
+    existing.value.elements.push(incoming.value)
+  } else {
+    existing.value = createArrayExpression(
+      [existing.value, incoming.value],
+      existing.loc
+    )
+  }
 }
 
 function stringifyDynamicPropNames(props: string[]): string {

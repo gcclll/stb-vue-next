@@ -11,6 +11,7 @@ import {
 } from './runtimeHelpers'
 import { PropsExpression } from './transforms/transformElement'
 import { ImportItem, TransformContext } from './transform'
+import { isString } from '@vue/shared'
 
 // Vue template is a platform-agnostic superset of HTML (syntax only).
 // More namespaces like SVG and MathML are declared by platform specific
@@ -573,6 +574,17 @@ export function createVNodeCall(
   }
 }
 
+export function createArrayExpression(
+  elements: ArrayExpression['elements'],
+  loc: SourceLocation = locStub
+): ArrayExpression {
+  return {
+    type: NodeTypes.JS_ARRAY_EXPRESSION,
+    loc,
+    elements
+  }
+}
+
 export function createObjectExpression(
   properties: ObjectExpression['properties'],
   loc: SourceLocation = locStub
@@ -584,17 +596,16 @@ export function createObjectExpression(
   }
 }
 
-export function createCallExpression<T extends CallExpression['callee']>(
-  callee: T,
-  args: CallExpression['arguments'] = [],
-  loc: SourceLocation = locStub
-): InferCodegenNodeType<T> {
+export function createObjectProperty(
+  key: Property['key'] | string,
+  value: Property['value']
+): Property {
   return {
-    type: NodeTypes.JS_CALL_EXPRESSION,
-    loc,
-    callee,
-    arguments: args
-  } as any
+    type: NodeTypes.JS_PROPERTY,
+    loc: locStub,
+    key: isString(key) ? createSimpleExpression(key, true) : key,
+    value
+  }
 }
 
 export function createSimpleExpression(
@@ -610,4 +621,17 @@ export function createSimpleExpression(
     content,
     isStatic
   }
+}
+
+export function createCallExpression<T extends CallExpression['callee']>(
+  callee: T,
+  args: CallExpression['arguments'] = [],
+  loc: SourceLocation = locStub
+): InferCodegenNodeType<T> {
+  return {
+    type: NodeTypes.JS_CALL_EXPRESSION,
+    loc,
+    callee,
+    arguments: args
+  } as any
 }
