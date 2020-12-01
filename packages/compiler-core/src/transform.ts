@@ -18,7 +18,8 @@ import {
   ParentNode,
   Property,
   TemplateLiteral,
-  createVNodeCall
+  createVNodeCall,
+  createSimpleExpression
 } from './ast'
 import { defaultOnError } from './errors'
 import { TransformOptions } from './options'
@@ -177,8 +178,15 @@ export function createTransformContext(
       // TODO
     },
     hoist(exp) {
-      // TODO
-      return {} as any
+      context.hoists.push(exp)
+      const identifier = createSimpleExpression(
+        `_hoisted_${context.hoists.length}`,
+        false,
+        exp.loc,
+        true
+      )
+      identifier.hoisted = exp
+      return identifier
     },
     cache(exp, isVNode = false) {
       // TODO

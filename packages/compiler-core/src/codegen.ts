@@ -17,6 +17,8 @@ import { CodegenOptions } from './options'
 import {
   CREATE_BLOCK,
   CREATE_COMMENT,
+  CREATE_STATIC,
+  CREATE_TEXT,
   CREATE_VNODE,
   helperNameMap,
   OPEN_BLOCK,
@@ -249,7 +251,19 @@ function genFunctionPreamble(ast: RootNode, context: CodegenContext) {
       // in "with" mode, helpers are declared inside the with block to avoid
       // has check cost, but hoists are lifted out of the function - we need
       // to provide the helper here.
-      // TODO
+      if (ast.hoists.length) {
+        const staticHelpers = [
+          CREATE_VNODE,
+          CREATE_COMMENT,
+          CREATE_TEXT,
+          CREATE_STATIC
+        ]
+          .filter(helper => ast.helpers.includes(helper))
+          .map(aliasHelper)
+          .join(', ')
+
+        push(`const { ${staticHelpers} } = _Vue\n`)
+      }
     }
   }
 
@@ -258,7 +272,7 @@ function genFunctionPreamble(ast: RootNode, context: CodegenContext) {
     // TODO
   }
 
-  // TODO gen hoists 静态提升
+  genHoists(ast.hoists, context)
   newline()
   push(`return `)
 }
@@ -304,6 +318,39 @@ function genModulePreamble(
   push(`export `)
 }
 
+function genHoists(hoists: (JSChildNode | null)[], context: CodegenContext) {
+  if (!hoists.length) {
+    return
+  }
+
+  context.pure = true
+  const { push, newline, helper, scopeId, mode } = context
+  const genScopeId = !__BROWSER__ && scopeId != null && mode !== 'function'
+  newline()
+
+  // push scope Id before initializing hoisted vnodes so that these vnodes
+  // get the proper scopeId as well.
+  if (genScopeId) {
+    push(`${helper(PUSH_SCOPE_ID)}("${scopeId}")`)
+    newline()
+  }
+
+  hoists.forEach((exp, i) => {
+    if (exp) {
+      push(`const _hoisted_${i + 1} = `)
+      genNode(exp, context)
+      newline()
+    }
+  })
+
+  if (genScopeId) {
+    push(`${helper(POP_SCOPE_ID)}()`)
+    newline()
+  }
+
+  context.pure = false
+}
+
 function isText(n: string | CodegenNode) {
   return (
     isString(n) ||
@@ -332,7 +379,7 @@ function genNodeListAsArray(
 // nodes: 对应 [tag, props, children, patchFlag, dynamicProps]
 // 遍历递归处理这些节点
 function genNodeList(
-  nodes: (string | symbol | CodegenNode | TemplateChildNode)[],
+  nodes: (string | symbol | CodegenNode | TemplateChildNode[])[],
   context: CodegenContext,
   multilines: boolean = false,
   comma: boolean = true
@@ -353,10 +400,11 @@ function genNodeList(
     if (i < nodes.length - 1) {
       // 最后一个不用加逗号
       if (multilines) {
-        comma && push(', ')
+        comma && push(',')
         newline()
       } else {
-        comma && push(',')
+        // 生成在一行，如： _createVnode("div", null, null, -1)
+        comma && push(', ')
       }
     }
   }
