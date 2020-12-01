@@ -15,7 +15,9 @@ import {
   DirectiveNode,
   createObjectProperty,
   createObjectExpression,
-  createArrayExpression
+  createArrayExpression,
+  DirectiveArguments,
+  ArrayExpression
 } from '../ast'
 import {
   isOn,
@@ -39,6 +41,7 @@ import {
   KEEP_ALIVE,
   MERGE_PROPS,
   RESOLVE_COMPONENT,
+  RESOLVE_DIRECTIVE,
   RESOLVE_DYNAMIC_COMPONENT,
   SUSPENSE,
   TELEPORT,
@@ -101,6 +104,16 @@ export const transformElement: NodeTransform = (node, context) => {
 
     if (props.length > 0) {
       const propsBuildResult = buildProps(node, context)
+      vnodeProps = propsBuildResult.props
+      patchFlag = propsBuildResult.patchFlag
+      dynamicPropNames = propsBuildResult.dynamicPropNames
+      const directives = propsBuildResult.directives
+      vnodeDirectives =
+        directives && directives.length
+          ? (createArrayExpression(
+              directives.map(dir => buildDirectiveArgs(dir, context))
+            ) as DirectiveArguments)
+          : undefined
     }
 
     if (node.children.length > 0) {
@@ -525,6 +538,48 @@ function mergeAsArray(existing: Property, incoming: Property) {
       existing.loc
     )
   }
+}
+
+function buildDirectiveArgs(
+  dir: DirectiveNode,
+  context: TransformContext
+): ArrayExpression {
+  const dirArgs: ArrayExpression['elements'] = []
+  const runtime = directiveImportMap.get(dir)
+  if (runtime) {
+    dirArgs.push(context.helperString(runtime))
+  } else {
+    // inject statement for resolving directive
+    context.helper(RESOLVE_DIRECTIVE)
+    context.directives.add(dir.name)
+    dirArgs.push(toValidAssetId(dir.name, `directive`))
+  }
+  const { loc } = dir
+  if (dir.exp) dirArgs.push(dir.exp)
+  if (dir.arg) {
+    if (!dir.exp) {
+      dirArgs.push(`void 0`)
+    }
+    dirArgs.push(dir.arg)
+  }
+  if (Object.keys(dir.modifiers).length) {
+    if (!dir.arg) {
+      if (!dir.exp) {
+        dirArgs.push(`void 0`)
+      }
+      dirArgs.push(`void 0`)
+    }
+    const trueExpression = createSimpleExpression(`true`, false, loc)
+    dirArgs.push(
+      createObjectExpression(
+        dir.modifiers.map(modifier =>
+          createObjectProperty(modifier, trueExpression)
+        ),
+        loc
+      )
+    )
+  }
+  return createArrayExpression(dirArgs, dir.loc)
 }
 
 function stringifyDynamicPropNames(props: string[]): string {
