@@ -1,6 +1,7 @@
 import { isString, isSymbol } from '@vue/shared'
 import { RawSourceMap, SourceMapGenerator } from 'source-map'
 import {
+  CommentNode,
   InterpolationNode,
   JSChildNode,
   NodeTypes,
@@ -12,6 +13,7 @@ import {
 } from './ast'
 import { CodegenOptions } from './options'
 import {
+  CREATE_COMMENT,
   helperNameMap,
   POP_SCOPE_ID,
   PUSH_SCOPE_ID,
@@ -317,6 +319,9 @@ function genNode(node: CodegenNode | symbol | string, context: CodegenContext) {
     case NodeTypes.INTERPOLATION:
       genInterpolation(node, context)
       break
+    case NodeTypes.COMMENT:
+      genComment(node, context)
+      break
   }
 }
 
@@ -338,4 +343,14 @@ function genInterpolation(node: InterpolationNode, context: CodegenContext) {
   push(`${helper(TO_DISPLAY_STRING)}(`)
   genNode(node.content, context)
   push(')')
+}
+
+function genComment(node: CommentNode, context: CodegenContext) {
+  if (__DEV__) {
+    const { push, helper, pure } = context
+    if (pure) {
+      push(PURE_ANNOTATION)
+    }
+    push(`${helper(CREATE_COMMENT)}(${JSON.stringify(node.content)})`, node)
+  }
 }

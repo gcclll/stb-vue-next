@@ -16,7 +16,11 @@ import {
 import { defaultOnError } from './errors'
 import { TransformOptions } from './options'
 import { isSingleElementRoot } from './transforms/hoistStatic'
-import { TO_DISPLAY_STRING, helperNameMap } from './runtimeHelpers'
+import {
+  TO_DISPLAY_STRING,
+  helperNameMap,
+  CREATE_COMMENT
+} from './runtimeHelpers'
 
 // There are two types of transforms:
 //
@@ -268,6 +272,13 @@ export function traverseNode(
 
   switch (node.type) {
     // TODO
+    case NodeTypes.COMMENT:
+      if (!context.ssr) {
+        // inject import for the Comment symbol, which is needed for creating
+        // comment nodes with `createVNode`
+        context.helper(CREATE_COMMENT)
+      }
+      break
     case NodeTypes.INTERPOLATION:
       // no need to traverse, but we need to inject toString helper
       if (!context.ssr) {
