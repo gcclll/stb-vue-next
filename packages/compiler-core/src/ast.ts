@@ -547,3 +547,18 @@ export function createCallExpression<T extends CallExpression['callee']>(
     arguments: args
   } as any
 }
+
+export function createSimpleExpression(
+  content: SimpleExpressionNode['content'],
+  isStatic: SimpleExpressionNode['isStatic'],
+  loc: SourceLocation = locStub,
+  isConstant: boolean = false
+): SimpleExpressionNode {
+  return {
+    type: NodeTypes.SIMPLE_EXPRESSION,
+    loc,
+    isConstant,
+    content,
+    isStatic
+  }
+}
