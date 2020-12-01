@@ -6,6 +6,7 @@ import { CompilerOptions } from './options'
 import { baseParse } from './parse'
 import { NodeTransform, DirectiveTransform, transform } from './transform'
 import { transformText } from './transforms/transformText'
+import { transformElement } from './transforms/transformElement'
 
 export type TransformPreset = [
   NodeTransform[],
@@ -16,7 +17,7 @@ export type TransformPreset = [
 export function getBaseTransformPreset(
   prefixIdentifiers?: boolean
 ): TransformPreset {
-  return [[transformText], {}]
+  return [[transformElement, transformText], {}]
 }
 
 export function baseCompile(

@@ -4,10 +4,13 @@ import {
   RENDER_SLOT,
   CREATE_SLOTS,
   RENDER_LIST,
-  FRAGMENT
+  FRAGMENT,
+  OPEN_BLOCK,
+  CREATE_BLOCK,
+  CREATE_VNODE
 } from './runtimeHelpers'
 import { PropsExpression } from './transforms/transformElement'
-import { ImportItem } from './transform'
+import { ImportItem, TransformContext } from './transform'
 
 // Vue template is a platform-agnostic superset of HTML (syntax only).
 // More namespaces like SVG and MathML are declared by platform specific
@@ -534,6 +537,52 @@ export function createRoot(
 type InferCodegenNodeType<T> = T extends typeof RENDER_SLOT
   ? RenderSlotCall
   : CallExpression
+
+export function createVNodeCall(
+  context: TransformContext | null,
+  tag: VNodeCall['tag'],
+  props?: VNodeCall['props'],
+  children?: VNodeCall['children'],
+  patchFlag?: VNodeCall['patchFlag'],
+  dynamicProps?: VNodeCall['dynamicProps'],
+  directives?: VNodeCall['directives'],
+  isBlock: VNodeCall['isBlock'] = false,
+  disableTracking: VNodeCall['disableTracking'] = false,
+  loc = locStub
+): VNodeCall {
+  if (context) {
+    if (isBlock) {
+      context.helper(OPEN_BLOCK)
+      context.helper(CREATE_BLOCK)
+    } else {
+      context.helper(CREATE_VNODE)
+    }
+  }
+
+  return {
+    type: NodeTypes.VNODE_CALL,
+    tag,
+    props,
+    children,
+    patchFlag,
+    dynamicProps,
+    directives,
+    isBlock,
+    disableTracking,
+    loc
+  }
+}
+
+export function createObjectExpression(
+  properties: ObjectExpression['properties'],
+  loc: SourceLocation = locStub
+): ObjectExpression {
+  return {
+    type: NodeTypes.JS_OBJECT_EXPRESSION,
+    loc,
+    properties
+  }
+}
 
 export function createCallExpression<T extends CallExpression['callee']>(
   callee: T,
