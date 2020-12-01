@@ -353,7 +353,7 @@ function genNodeList(
     if (i < nodes.length - 1) {
       // 最后一个不用加逗号
       if (multilines) {
-        comma && push(',')
+        comma && push(', ')
         newline()
       } else {
         comma && push(',')
