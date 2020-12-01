@@ -3,9 +3,11 @@ import { RawSourceMap, SourceMapGenerator } from 'source-map'
 import {
   CallExpression,
   CommentNode,
+  ExpressionNode,
   InterpolationNode,
   JSChildNode,
   NodeTypes,
+  ObjectExpression,
   RootNode,
   SimpleExpressionNode,
   SSRCodegenNode,
@@ -28,7 +30,7 @@ import {
   WITH_DIRECTIVES,
   WITH_SCOPE_ID
 } from './runtimeHelpers'
-import { assert } from './utils'
+import { assert, isSimpleIdentifier } from './utils'
 
 const PURE_ANNOTATION = `/*#__PURE__*/`
 
@@ -448,6 +450,9 @@ function genNode(node: CodegenNode | symbol | string, context: CodegenContext) {
     case NodeTypes.VNODE_CALL:
       genVNodeCall(node, context)
       break
+    case NodeTypes.JS_OBJECT_EXPRESSION:
+      genObjectExpression(node, context)
+      break
   }
 }
 
@@ -469,6 +474,26 @@ function genInterpolation(node: InterpolationNode, context: CodegenContext) {
   push(`${helper(TO_DISPLAY_STRING)}(`)
   genNode(node.content, context)
   push(')')
+}
+
+// 生成对象的属性 key (可能是静态，动态)
+function genExpressionAsPropertyKey(
+  node: ExpressionNode,
+  context: CodegenContext
+) {
+  const { push } = context
+  if (node.type === NodeTypes.COMPOUND_EXPRESSION) {
+    // TODO 动态属性名或表达式
+  } else if (node.isStatic) {
+    // only quote key if necessary
+    const text = isSimpleIdentifier(node.content)
+      ? node.content
+      : JSON.stringify(node.content)
+
+    push(text, node)
+  } else {
+    push(`[${node.content}]`, node)
+  }
 }
 
 function genComment(node: CommentNode, context: CodegenContext) {
@@ -533,4 +558,39 @@ function genNullableArgs(args: any[]): CallExpression['arguments'] {
   }
 
   return args.slice(0, i + 1).map(arg => arg || `null`)
+}
+
+// JavaScript
+// 将属性(attribute, prop, events, bindings, ...)生成对象
+function genObjectExpression(node: ObjectExpression, context: CodegenContext) {
+  const { push, indent, deindent, newline } = context
+  const { properties } = node
+
+  if (!properties.length) {
+    push(`{}`, node)
+    return
+  }
+
+  const multilines =
+    properties.length > 1 ||
+    ((!__BROWSER__ || __DEV__) &&
+      properties.some(p => p.value.type !== NodeTypes.SIMPLE_EXPRESSION))
+
+  push(multilines ? `{` : `{ `)
+  multilines && indent()
+  for (let i = 0; i < properties.length; i++) {
+    const { key, value } = properties[i]
+    // key
+    genExpressionAsPropertyKey(key, context)
+    push(`: `)
+    // value
+    genNode(value, context)
+    if (i < properties.length - 1) {
+      push(`,`)
+      newline()
+    }
+  }
+
+  multilines && deindent()
+  push(multilines ? `}` : ` }`)
 }
