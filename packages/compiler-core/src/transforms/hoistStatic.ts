@@ -87,7 +87,21 @@ function walk(
         continue
       } else {
         // 节点可能包含动态孩子节点，但是有可提升的属性
-        // TODO prop hoist
+        const codegenNode = child.codegenNode!
+        if (codegenNode.type === NodeTypes.VNODE_CALL) {
+          const flag = getPatchFlag(codegenNode)
+          if (
+            (!flag ||
+              flag === PatchFlags.NEED_PATCH ||
+              flag === PatchFlags.TEXT) &&
+            !hasNonHoistableProps(child)
+          ) {
+            const props = getNodeProps(child)
+            if (props) {
+              codegenNode.props = context.hoist(props)
+            }
+          }
+        }
       }
     } else if (child.type === NodeTypes.TEXT_CALL) {
       // 纯文本节点
@@ -162,4 +176,41 @@ export function getStaticType(
       }
       return StaticType.NOT_STATIC
   }
+}
+
+/**
+ * Even for a node with no patch flag, it is possible for it to contain
+ * non-hoistable expressions that refers to scope variables, e.g. compiler
+ * injected keys or cached event handlers. Therefore we need to always check the
+ * codegenNode's props to be sure.
+ */
+function hasNonHoistableProps(node: PlainElementNode): boolean {
+  const props = getNodeProps(node)
+  if (props && props.type === NodeTypes.JS_OBJECT_EXPRESSION) {
+    const { properties } = props
+    for (let i = 0; i < properties.length; i++) {
+      const { key, value } = properties[i]
+      if (
+        key.type !== NodeTypes.SIMPLE_EXPRESSION ||
+        !key.isStatic ||
+        (value.type !== NodeTypes.SIMPLE_EXPRESSION ||
+          (!value.isStatic && !value.isConstant))
+      ) {
+        return true
+      }
+    }
+  }
+  return false
+}
+
+function getNodeProps(node: PlainElementNode) {
+  const codegenNode = node.codegenNode!
+  if (codegenNode.type === NodeTypes.VNODE_CALL) {
+    return codegenNode.props
+  }
+}
+
+function getPatchFlag(node: VNodeCall): number | undefined {
+  const flag = node.patchFlag
+  return flag ? parseInt(flag, 10) : undefined
 }
