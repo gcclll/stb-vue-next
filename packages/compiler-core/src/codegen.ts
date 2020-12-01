@@ -1,6 +1,7 @@
-import { isString, isSymbol } from '@vue/shared'
+import { isString, isSymbol, isArray } from '@vue/shared'
 import { RawSourceMap, SourceMapGenerator } from 'source-map'
 import {
+  CallExpression,
   CommentNode,
   InterpolationNode,
   JSChildNode,
@@ -9,15 +10,20 @@ import {
   SimpleExpressionNode,
   SSRCodegenNode,
   TemplateChildNode,
-  TextNode
+  TextNode,
+  VNodeCall
 } from './ast'
 import { CodegenOptions } from './options'
 import {
+  CREATE_BLOCK,
   CREATE_COMMENT,
+  CREATE_VNODE,
   helperNameMap,
+  OPEN_BLOCK,
   POP_SCOPE_ID,
   PUSH_SCOPE_ID,
   TO_DISPLAY_STRING,
+  WITH_DIRECTIVES,
   WITH_SCOPE_ID
 } from './runtimeHelpers'
 import { assert } from './utils'
@@ -298,6 +304,64 @@ function genModulePreamble(
   push(`export `)
 }
 
+function isText(n: string | CodegenNode) {
+  return (
+    isString(n) ||
+    n.type === NodeTypes.SIMPLE_EXPRESSION ||
+    n.type === NodeTypes.TEXT ||
+    n.type === NodeTypes.INTERPOLATION ||
+    n.type === NodeTypes.COMPOUND_EXPRESSION
+  )
+}
+
+function genNodeListAsArray(
+  nodes: (string | CodegenNode | TemplateChildNode[])[],
+  context: CodegenContext
+) {
+  const multilines =
+    nodes.length > 3 ||
+    ((!__BROWSER__ || __DEV__) && nodes.some(n => isArray(n) || !isText(n)))
+
+  context.push(`[`)
+  multilines && context.indent()
+  genNodeList(nodes, context, multilines)
+  multilines && context.deindent()
+  context.push(']')
+}
+
+// nodes: 对应 [tag, props, children, patchFlag, dynamicProps]
+// 遍历递归处理这些节点
+function genNodeList(
+  nodes: (string | symbol | CodegenNode | TemplateChildNode)[],
+  context: CodegenContext,
+  multilines: boolean = false,
+  comma: boolean = true
+) {
+  const { push, newline } = context
+  for (let i = 0; i < nodes.length; i++) {
+    const node = nodes[i]
+    if (isString(node)) {
+      // 节点是字符串，直接 code += node
+      push(node)
+    } else if (isArray(node)) {
+      // 将节点生成数组类型
+      genNodeListAsArray(node, context)
+    } else {
+      genNode(node, context)
+    }
+
+    if (i < nodes.length - 1) {
+      // 最后一个不用加逗号
+      if (multilines) {
+        comma && push(',')
+        newline()
+      } else {
+        comma && push(',')
+      }
+    }
+  }
+}
+
 function genNode(node: CodegenNode | symbol | string, context: CodegenContext) {
   if (isString(node)) {
     // 节点是字符串，直接 code += node
@@ -332,6 +396,9 @@ function genNode(node: CodegenNode | symbol | string, context: CodegenContext) {
     case NodeTypes.COMMENT:
       genComment(node, context)
       break
+    case NodeTypes.VNODE_CALL:
+      genVNodeCall(node, context)
+      break
   }
 }
 
@@ -363,4 +430,58 @@ function genComment(node: CommentNode, context: CodegenContext) {
     }
     push(`${helper(CREATE_COMMENT)}(${JSON.stringify(node.content)})`, node)
   }
+}
+
+function genVNodeCall(node: VNodeCall, context: CodegenContext) {
+  const { push, helper, pure } = context
+  const {
+    tag,
+    props,
+    children,
+    patchFlag,
+    dynamicProps,
+    directives,
+    isBlock,
+    disableTracking
+  } = node
+
+  if (directives) {
+    push(helper(WITH_DIRECTIVES) + `(`)
+  }
+
+  if (isBlock) {
+    push(`(${helper(OPEN_BLOCK)}(${disableTracking ? `true` : ``}), `)
+  }
+
+  if (pure) {
+    push(PURE_ANNOTATION)
+  }
+
+  push(helper(isBlock ? CREATE_BLOCK : CREATE_VNODE) + '(', node)
+  genNodeList(
+    // 过滤掉空值
+    genNullableArgs([tag, props, children, patchFlag, dynamicProps]),
+    context
+  )
+
+  push(`)`)
+  if (isBlock) {
+    push(`)`)
+  }
+
+  if (directives) {
+    push(`, `)
+    genNode(directives, context)
+    push(`)`)
+  }
+}
+
+function genNullableArgs(args: any[]): CallExpression['arguments'] {
+  let i = args.length
+  // 从末尾开始淘汰掉空值参数
+  while (i--) {
+    if (args[i] != null) break
+  }
+
+  return args.slice(0, i + 1).map(arg => arg || `null`)
 }
