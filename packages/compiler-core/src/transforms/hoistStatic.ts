@@ -10,7 +10,10 @@ import {
   TemplateNode,
   VNodeCall
 } from '../ast'
+import { TransformContext } from '../transform'
 import { isSlotOutlet } from '../utils'
+
+export function hoistStatic(root: RootNode, context: TransformContext) {}
 
 export function isSingleElementRoot(
   root: RootNode,

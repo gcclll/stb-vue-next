@@ -22,7 +22,7 @@ import {
 } from './ast'
 import { defaultOnError } from './errors'
 import { TransformOptions } from './options'
-import { isSingleElementRoot } from './transforms/hoistStatic'
+import { hoistStatic, isSingleElementRoot } from './transforms/hoistStatic'
 import {
   TO_DISPLAY_STRING,
   helperNameMap,
@@ -193,7 +193,7 @@ export function transform(root: RootNode, options: TransformOptions) {
   const context = createTransformContext(root, options)
   traverseNode(root, context)
   if (options.hoistStatic) {
-    // TODO hoist static nodes
+    hoistStatic(root, context)
   }
 
   if (!options.ssr) {
