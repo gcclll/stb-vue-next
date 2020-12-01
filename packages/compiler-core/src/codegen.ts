@@ -1,6 +1,7 @@
 import { isString, isSymbol } from '@vue/shared'
 import { RawSourceMap, SourceMapGenerator } from 'source-map'
 import {
+  InterpolationNode,
   JSChildNode,
   NodeTypes,
   RootNode,
@@ -14,6 +15,7 @@ import {
   helperNameMap,
   POP_SCOPE_ID,
   PUSH_SCOPE_ID,
+  TO_DISPLAY_STRING,
   WITH_SCOPE_ID
 } from './runtimeHelpers'
 
@@ -216,14 +218,30 @@ export function generate(
 }
 
 function genFunctionPreamble(ast: RootNode, context: CodegenContext) {
-  const { push, newline } = context
+  const { push, newline, runtimeGlobalName, prefixIdentifiers, ssr } = context
+
+  const VueBinding = !__BROWSER__ && ssr ? `` : runtimeGlobalName
+
+  const aliasHelper = (s: symbol) => `${helperNameMap[s]}: _${helperNameMap[s]}`
 
   // Generate const declaration for helpers
   // In prefix mode, we place the const declaration at top so it's done
   // only once; But if we not prefixing, we place the declaration inside the
   // with block so it doesn't incur the `in` check cost for every helper access.
   if (ast.helpers.length > 0) {
-    // TODO
+    if (!__BROWSER__ && prefixIdentifiers) {
+      push(
+        `const { ${ast.helpers.map(aliasHelper).join(', ')} } = ${VueBinding}\n`
+      )
+    } else {
+      // "with" mode.
+      // save Vue in a separate variable to avoid collision
+      push(`const _Vue = ${VueBinding}\n`)
+      // in "with" mode, helpers are declared inside the with block to avoid
+      // has check cost, but hoists are lifted out of the function - we need
+      // to provide the helper here.
+      // TODO
+    }
   }
 
   // ssr helpers
@@ -293,6 +311,12 @@ function genNode(node: CodegenNode | symbol | string, context: CodegenContext) {
     case NodeTypes.TEXT:
       genText(node, context)
       break
+    case NodeTypes.SIMPLE_EXPRESSION:
+      genExpression(node, context)
+      break
+    case NodeTypes.INTERPOLATION:
+      genInterpolation(node, context)
+      break
   }
 }
 
@@ -301,4 +325,17 @@ function genText(
   context: CodegenContext
 ) {
   context.push(JSON.stringify(node.content), node)
+}
+
+function genExpression(node: SimpleExpressionNode, context: CodegenContext) {
+  const { content, isStatic } = node
+  context.push(isStatic ? JSON.stringify(content) : content, node)
+}
+
+function genInterpolation(node: InterpolationNode, context: CodegenContext) {
+  const { push, helper, pure } = context
+  if (pure) push(PURE_ANNOTATION)
+  push(`${helper(TO_DISPLAY_STRING)}(`)
+  genNode(node.content, context)
+  push(')')
 }

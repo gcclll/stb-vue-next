@@ -1,7 +1,8 @@
-import { NOOP, isArray } from '@vue/shared'
+import { NOOP, isArray, isString } from '@vue/shared'
 import {
   ExpressionNode,
   RootNode,
+  NodeTypes,
   TemplateChildNode,
   JSChildNode,
   SimpleExpressionNode,
@@ -15,7 +16,7 @@ import {
 import { defaultOnError } from './errors'
 import { TransformOptions } from './options'
 import { isSingleElementRoot } from './transforms/hoistStatic'
-// import { CREATE_COMMENT } from './runtimeHelpers'
+import { TO_DISPLAY_STRING, helperNameMap } from './runtimeHelpers'
 
 // There are two types of transforms:
 //
@@ -150,7 +151,7 @@ export function createTransformContext(
       return name
     },
     helperString(name) {
-      return ``
+      return `_${helperNameMap[context.helper(name)]}`
     },
     replaceNode(node) {},
     removeNode(node) {},
@@ -220,7 +221,19 @@ export function traverseChildren(
   parent: ParentNode,
   context: TransformContext
 ) {
-  // TODO
+  let i = 0
+  const nodeRemoved = () => {
+    i--
+  }
+
+  for (; i < parent.children.length; i++) {
+    const child = parent.children[i]
+    if (isString(child)) continue
+    context.parent = parent
+    context.childIndex = i
+    context.onNodeRemoved = nodeRemoved
+    traverseNode(child, context)
+  }
 }
 
 export function traverseNode(
@@ -253,10 +266,20 @@ export function traverseNode(
     }
   }
 
-  switch (
-    node.type
+  switch (node.type) {
     // TODO
-  ) {
+    case NodeTypes.INTERPOLATION:
+      // no need to traverse, but we need to inject toString helper
+      if (!context.ssr) {
+        context.helper(TO_DISPLAY_STRING)
+      }
+      break
+    case NodeTypes.IF_BRANCH:
+    case NodeTypes.FOR:
+    case NodeTypes.ELEMENT:
+    case NodeTypes.ROOT:
+      traverseChildren(node, context)
+      break
   }
 
   context.currentNode = node
