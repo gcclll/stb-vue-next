@@ -1,4 +1,10 @@
-import { NOOP, isArray, isString } from '@vue/shared'
+import {
+  NOOP,
+  isArray,
+  isString,
+  PatchFlags,
+  PatchFlagNames
+} from '@vue/shared'
 import {
   ExpressionNode,
   RootNode,
@@ -11,7 +17,8 @@ import {
   DirectiveNode,
   ParentNode,
   Property,
-  TemplateLiteral
+  TemplateLiteral,
+  createVNodeCall
 } from './ast'
 import { defaultOnError } from './errors'
 import { TransformOptions } from './options'
@@ -21,7 +28,8 @@ import {
   helperNameMap,
   CREATE_COMMENT,
   OPEN_BLOCK,
-  CREATE_BLOCK
+  CREATE_BLOCK,
+  FRAGMENT
 } from './runtimeHelpers'
 
 // There are two types of transforms:
@@ -225,7 +233,19 @@ function createRootCodegen(root: RootNode, context: TransformContext) {
       root.codegenNode = child
     }
   } else if (children.length > 1) {
-    // TODO
+    // 有多个节点的时候，返回一个 fragment bloc
+    root.codegenNode = createVNodeCall(
+      context,
+      helper(FRAGMENT),
+      undefined,
+      root.children,
+      `${PatchFlags.STABLE_FRAGMENT} /* ${
+        PatchFlagNames[PatchFlags.STABLE_FRAGMENT]
+      } */`,
+      undefined,
+      undefined,
+      true
+    )
   } else {
     // no children = noop, codegen will return null.
   }

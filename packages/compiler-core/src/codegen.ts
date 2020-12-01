@@ -382,7 +382,7 @@ function genNode(node: CodegenNode | symbol | string, context: CodegenContext) {
           `Codegen node is missing for element/if/for node. ` +
             `Apply appropriate transforms first.`
         )
-      genNode(node, context)
+      genNode(node.codegenNode!, context)
       break
     case NodeTypes.TEXT:
       genText(node, context)
