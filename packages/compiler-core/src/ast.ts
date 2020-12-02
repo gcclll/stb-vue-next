@@ -623,6 +623,17 @@ export function createSimpleExpression(
   }
 }
 
+export function createCompoundExpression(
+  children: CompoundExpressionNode['children'],
+  loc: SourceLocation = locStub
+): CompoundExpressionNode {
+  return {
+    type: NodeTypes.COMPOUND_EXPRESSION,
+    loc,
+    children
+  }
+}
+
 export function createCallExpression<T extends CallExpression['callee']>(
   callee: T,
   args: CallExpression['arguments'] = [],
