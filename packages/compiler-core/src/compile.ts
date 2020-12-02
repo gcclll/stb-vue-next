@@ -6,6 +6,7 @@ import { CompilerOptions } from './options'
 import { baseParse } from './parse'
 import { NodeTransform, DirectiveTransform, transform } from './transform'
 import { transformOn } from './transforms/vOn'
+import { transformBind } from './transforms/vBind'
 import { transformText } from './transforms/transformText'
 import { transformElement } from './transforms/transformElement'
 
@@ -21,7 +22,8 @@ export function getBaseTransformPreset(
   return [
     [transformElement, transformText],
     {
-      on: transformOn
+      on: transformOn,
+      bind: transformBind
     }
   ]
 }
