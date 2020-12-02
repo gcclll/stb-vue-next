@@ -396,7 +396,7 @@ export function buildProps(
           } else {
             // v-on="obj" => toHandlers(obj)
             mergeArgs.push({
-              type: NodeTypes.JS_CACHE_EXPRESSION,
+              type: NodeTypes.JS_CALL_EXPRESSION,
               loc,
               callee: context.helper(TO_HANDLERS),
               arguments: [exp]
