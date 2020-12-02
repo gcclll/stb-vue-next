@@ -5,6 +5,7 @@ import { CodegenResult, generate } from './codegen'
 import { CompilerOptions } from './options'
 import { baseParse } from './parse'
 import { NodeTransform, DirectiveTransform, transform } from './transform'
+import { transformOn } from './transforms/vOn'
 import { transformText } from './transforms/transformText'
 import { transformElement } from './transforms/transformElement'
 
@@ -17,7 +18,12 @@ export type TransformPreset = [
 export function getBaseTransformPreset(
   prefixIdentifiers?: boolean
 ): TransformPreset {
-  return [[transformElement, transformText], {}]
+  return [
+    [transformElement, transformText],
+    {
+      on: transformOn
+    }
+  ]
 }
 
 export function baseCompile(
