@@ -449,6 +449,10 @@ function genNode(node: CodegenNode | symbol | string, context: CodegenContext) {
     case NodeTypes.VNODE_CALL:
       genVNodeCall(node, context)
       break
+
+    case NodeTypes.JS_CALL_EXPRESSION:
+      genCallExpression(node, context)
+      break
     case NodeTypes.JS_OBJECT_EXPRESSION:
       genObjectExpression(node, context)
       break
@@ -560,6 +564,19 @@ function genNullableArgs(args: any[]): CallExpression['arguments'] {
 }
 
 // JavaScript
+
+// 根据 node 中的 callee 和 arguments 生成 callee(arguments)
+function genCallExpression(node: CallExpression, context: CodegenContext) {
+  const { push, helper, pure } = context
+  const callee = isString(node.callee) ? node.callee : helper(node.callee)
+  if (pure) {
+    push(PURE_ANNOTATION)
+  }
+
+  push(callee + `(`, node)
+  genNodeList(node.arguments, context)
+  push(`)`)
+}
 // 将属性(attribute, prop, events, bindings, ...)生成对象
 function genObjectExpression(node: ObjectExpression, context: CodegenContext) {
   const { push, indent, deindent, newline } = context
