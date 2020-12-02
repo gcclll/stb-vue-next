@@ -387,7 +387,6 @@ function genNodeList(
   comma: boolean = true
 ) {
   const { push, newline } = context
-  console.log(nodes, '------')
   for (let i = 0; i < nodes.length; i++) {
     const node = nodes[i]
     if (isString(node)) {
