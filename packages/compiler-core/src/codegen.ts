@@ -488,6 +488,7 @@ function genCompoundExpression(
   node: CompoundExpressionNode,
   context: CodegenContext
 ) {
+  console.log(node, 'compound expression')
   for (let i = 0; i < node.children!.length; i++) {
     const child = node.children![i]
     if (isString(child)) {
@@ -505,7 +506,9 @@ function genExpressionAsPropertyKey(
 ) {
   const { push } = context
   if (node.type === NodeTypes.COMPOUND_EXPRESSION) {
-    // TODO 动态属性名或表达式
+    push(`[`)
+    genCompoundExpression(node, context)
+    push(`]`)
   } else if (node.isStatic) {
     // only quote key if necessary
     const text = isSimpleIdentifier(node.content)
