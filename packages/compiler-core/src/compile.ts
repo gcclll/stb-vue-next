@@ -1,7 +1,6 @@
 import { extend, isString } from '@vue/shared'
 import { RootNode } from './ast'
 import { CodegenResult, generate } from './codegen'
-// import { defaultOnError } from './errors'
 import { CompilerOptions } from './options'
 import { baseParse } from './parse'
 import { NodeTransform, DirectiveTransform, transform } from './transform'
@@ -10,6 +9,7 @@ import { transformOn } from './transforms/vOn'
 import { transformBind } from './transforms/vBind'
 import { transformText } from './transforms/transformText'
 import { transformModel } from './transforms/vModel'
+import { createCompilerError, defaultOnError, ErrorCodes } from './errors'
 
 export type TransformPreset = [
   NodeTransform[],
@@ -34,13 +34,29 @@ export function baseCompile(
   template: string | RootNode,
   options: CompilerOptions = {}
 ): CodegenResult {
-  // const onError = options.onError || defaultOnError
+  const onError = options.onError || defaultOnError
   const isModuleMode = options.mode === 'module'
+
+  /* istanbul ignore if */
+  if (__BROWSER__) {
+    if (options.prefixIdentifiers === true) {
+      onError(createCompilerError(ErrorCodes.X_PREFIX_ID_NOT_SUPPORTED))
+    } else if (isModuleMode) {
+      onError(createCompilerError(ErrorCodes.X_MODULE_MODE_NOT_SUPPORTED))
+    }
+  }
 
   const prefixIdentifiers =
     !__BROWSER__ && (options.prefixIdentifiers === true || isModuleMode)
 
-  // TODO errors
+  if (!prefixIdentifiers && options.cacheHandlers) {
+    onError(createCompilerError(ErrorCodes.X_CACHE_HANDLER_NOT_SUPPORTED))
+  }
+
+  if (options.scopeId && !isModuleMode) {
+    onError(createCompilerError(ErrorCodes.X_SCOPE_ID_NOT_SUPPORTED))
+  }
+
   const ast = isString(template) ? baseParse(template, options) : template
   const [nodeTransforms, directiveTransforms] = getBaseTransformPreset(
     prefixIdentifiers
