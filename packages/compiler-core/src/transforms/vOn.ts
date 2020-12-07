@@ -1,12 +1,12 @@
 import { camelize, toHandlerKey } from '@vue/shared'
 import {
-  createObjectExpression,
   createObjectProperty,
   createSimpleExpression,
   DirectiveNode,
   ExpressionNode,
   NodeTypes,
-  SimpleExpressionNode
+  SimpleExpressionNode,
+  createCompoundExpression
 } from '../ast'
 import { createCompilerError, ErrorCodes } from '../errors'
 import { TO_HANDLER_KEY } from '../runtimeHelpers'
@@ -52,7 +52,12 @@ export const transformOn: DirectiveTransform = (
       )
     } else {
       // #2388
-      // TODO 动态事件参数 <div v-on:[eventName] ...
+      // 动态事件参数 <div v-on:[eventName] ...
+      eventName = createCompoundExpression([
+        `${context.helperString(TO_HANDLER_KEY)}(`,
+        arg,
+        `)`
+      ])
     }
   } else {
     // already a compound expression.

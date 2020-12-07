@@ -1,4 +1,4 @@
-import { PatchFlags } from '@vue/shared'
+import { isString, isSymbol, PatchFlags } from '@vue/shared'
 import {
   ComponentNode,
   ElementTypes,
@@ -156,12 +156,55 @@ export function getStaticType(
         return StaticType.NOT_STATIC
       }
 
-    // TODO more
-    // const flag = getPatchFlag(codegenNode)
+      const flag = getPatchFlag(codegenNode)
+      if (!flag && !hasNonHoistableProps(node)) {
+        // element self is static. check its children.
+        let returnType = StaticType.FULL_STATIC
+        for (let i = 0; i < node.children.length; i++) {
+          const childType = getStaticType(node.children[i], resultCache)
+          if (childType === StaticType.NOT_STATIC) {
+          } else if (childType === StaticType.HAS_RUNTIME_CONSTANT) {
+            returnType = StaticType.HAS_RUNTIME_CONSTANT
+          }
+        }
+
+        // check if any of the props contain runtime constants
+        if (returnType !== StaticType.HAS_RUNTIME_CONSTANT) {
+          for (let i = 0; i < node.props.length; i++) {
+            const p = node.props[i]
+            if (
+              p.type === NodeTypes.DIRECTIVE &&
+              p.name === 'bind' &&
+              p.exp &&
+              (p.exp.type === NodeTypes.COMPOUND_EXPRESSION ||
+                p.exp.isRuntimeConstant)
+            ) {
+              returnType = StaticType.HAS_RUNTIME_CONSTANT
+            }
+          }
+        }
+
+        // only svg/foreignObject could be block here, however if they are
+        // stati then they don't need to be blocks since there will be no
+        // nested updates.
+        if (codegenNode.isBlock) {
+          codegenNode.isBlock = false
+        }
+        resultCache.set(node, returnType)
+        return returnType
+      } else {
+        resultCache.set(node, StaticType.NOT_STATIC)
+        return StaticType.NOT_STATIC
+      }
     case NodeTypes.COMMENT:
     case NodeTypes.TEXT:
       return StaticType.FULL_STATIC
+    case NodeTypes.IF:
+    case NodeTypes.FOR:
+    case NodeTypes.IF_BRANCH:
+      return StaticType.NOT_STATIC
     case NodeTypes.INTERPOLATION:
+    case NodeTypes.TEXT_CALL:
       return getStaticType(node.content, resultCache)
     case NodeTypes.SIMPLE_EXPRESSION:
       return node.isConstant
@@ -169,6 +212,21 @@ export function getStaticType(
           ? StaticType.HAS_RUNTIME_CONSTANT
           : StaticType.FULL_STATIC
         : StaticType.NOT_STATIC
+    case NodeTypes.COMPOUND_EXPRESSION:
+      let returnType = StaticType.FULL_STATIC
+      for (let i = 0; i < node.children.length; i++) {
+        const child = node.children[i]
+        if (isString(child) || isSymbol(child)) {
+          continue
+        }
+        const childType = getStaticType(child, resultCache)
+        if (childType === StaticType.NOT_STATIC) {
+          return StaticType.NOT_STATIC
+        } else if (childType === StaticType.HAS_RUNTIME_CONSTANT) {
+          returnType = StaticType.HAS_RUNTIME_CONSTANT
+        }
+      }
+      return returnType
     default:
       if (__DEV__) {
         const exhaustiveCheck: never = node

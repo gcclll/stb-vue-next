@@ -488,7 +488,6 @@ function genCompoundExpression(
   node: CompoundExpressionNode,
   context: CodegenContext
 ) {
-  console.log(node, 'compound expression')
   for (let i = 0; i < node.children!.length; i++) {
     const child = node.children![i]
     if (isString(child)) {
