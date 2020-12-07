@@ -13,7 +13,8 @@ import {
   SSRCodegenNode,
   TemplateChildNode,
   TextNode,
-  VNodeCall
+  VNodeCall,
+  CompoundExpressionNode
 } from './ast'
 import { CodegenOptions } from './options'
 import {
@@ -443,6 +444,9 @@ function genNode(node: CodegenNode | symbol | string, context: CodegenContext) {
     case NodeTypes.INTERPOLATION:
       genInterpolation(node, context)
       break
+    case NodeTypes.COMPOUND_EXPRESSION:
+      genCompoundExpression(node, context)
+      break
     case NodeTypes.COMMENT:
       genComment(node, context)
       break
@@ -477,6 +481,21 @@ function genInterpolation(node: InterpolationNode, context: CodegenContext) {
   push(`${helper(TO_DISPLAY_STRING)}(`)
   genNode(node.content, context)
   push(')')
+}
+
+// 如： v-model="model" -> "onUpdate:modelValue": $event => (model = $event)
+function genCompoundExpression(
+  node: CompoundExpressionNode,
+  context: CodegenContext
+) {
+  for (let i = 0; i < node.children!.length; i++) {
+    const child = node.children![i]
+    if (isString(child)) {
+      context.push(child)
+    } else {
+      genNode(child, context)
+    }
+  }
 }
 
 // 生成对象的属性 key (可能是静态，动态)

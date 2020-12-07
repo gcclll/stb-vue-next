@@ -5,10 +5,11 @@ import { CodegenResult, generate } from './codegen'
 import { CompilerOptions } from './options'
 import { baseParse } from './parse'
 import { NodeTransform, DirectiveTransform, transform } from './transform'
+import { transformElement } from './transforms/transformElement'
 import { transformOn } from './transforms/vOn'
 import { transformBind } from './transforms/vBind'
 import { transformText } from './transforms/transformText'
-import { transformElement } from './transforms/transformElement'
+import { transformModel } from './transforms/vModel'
 
 export type TransformPreset = [
   NodeTransform[],
@@ -23,7 +24,8 @@ export function getBaseTransformPreset(
     [transformElement, transformText],
     {
       on: transformOn,
-      bind: transformBind
+      bind: transformBind,
+      model: transformModel
     }
   ]
 }
