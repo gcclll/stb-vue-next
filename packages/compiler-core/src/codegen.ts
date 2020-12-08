@@ -15,7 +15,8 @@ import {
   TextNode,
   VNodeCall,
   CompoundExpressionNode,
-  CacheExpression
+  CacheExpression,
+  ConditionalExpression
 } from './ast'
 import { CodegenOptions } from './options'
 import {
@@ -429,6 +430,7 @@ function genNode(node: CodegenNode | symbol | string, context: CodegenContext) {
 
   switch (node.type) {
     case NodeTypes.ELEMENT:
+    case NodeTypes.IF:
       __DEV__ &&
         assert(
           node.codegenNode != null,
@@ -461,6 +463,9 @@ function genNode(node: CodegenNode | symbol | string, context: CodegenContext) {
       break
     case NodeTypes.JS_OBJECT_EXPRESSION:
       genObjectExpression(node, context)
+      break
+    case NodeTypes.JS_CONDITIONAL_EXPRESSION:
+      genConditionalExpression(node, context)
       break
     case NodeTypes.JS_CACHE_EXPRESSION:
       genCacheExpression(node, context)
@@ -635,6 +640,46 @@ function genObjectExpression(node: ObjectExpression, context: CodegenContext) {
 
   multilines && deindent()
   push(multilines ? `}` : ` }`)
+}
+
+function genConditionalExpression(
+  node: ConditionalExpression,
+  context: CodegenContext
+) {
+  const { test, consequent, alternate, newline: needNewline } = node
+  const { push, indent, deindent, newline } = context
+  if (test.type === NodeTypes.SIMPLE_EXPRESSION) {
+    // 非简单的标识符需要用括号，可能是表达式，所以需要 (a + b) ? ... : ...
+    const needsParams = !isSimpleIdentifier(test.content)
+    needsParams && push(`(`)
+    genExpression(test, context)
+    needsParams && push(`)`)
+  } else {
+    push(`(`)
+    genNode(test, context)
+    push(`)`)
+  }
+
+  needNewline && indent()
+  context.indentLevel++
+  needNewline || push(` `)
+  push(`? `)
+  genNode(consequent, context)
+  context.indentLevel--
+  needNewline && newline()
+  needNewline || push(` `)
+  push(`: `)
+  const isNested = alternate.type === NodeTypes.JS_CONDITIONAL_EXPRESSION
+  if (!isNested) {
+    // 不是嵌套
+    context.indentLevel++
+  }
+  genNode(alternate, context)
+  if (!isNested) {
+    context.indentLevel--
+  }
+
+  needNewline && deindent(true /* without newline */)
 }
 
 function genCacheExpression(node: CacheExpression, context: CodegenContext) {
