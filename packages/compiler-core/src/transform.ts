@@ -171,7 +171,20 @@ export function createTransformContext(
     helperString(name) {
       return `_${helperNameMap[context.helper(name)]}`
     },
-    replaceNode(node) {},
+    replaceNode(node) {
+      /* istanbul ignore if */
+      if (__DEV__) {
+        if (!context.currentNode) {
+          throw new Error(`Node being replaced is already removed.`)
+        }
+        if (!context.parent) {
+          throw new Error(`Cannot replace root node.`)
+        }
+      }
+
+      // 替换原来 ast 🌲中的节点，并且重置 currentNode 为最新的节点
+      context.parent!.children[context.childIndex] = context.currentNode = node
+    },
     removeNode(node) {},
     onNodeRemoved: () => {},
     addIdentifiers(exp) {
