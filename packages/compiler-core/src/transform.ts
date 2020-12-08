@@ -338,6 +338,13 @@ export function traverseNode(
         context.helper(TO_DISPLAY_STRING)
       }
       break
+
+    // for container types, further traverse downwards
+    case NodeTypes.IF:
+      for (let i = 0; i < node.branches.length; i++) {
+        traverseNode(node.branches[i], context)
+      }
+      break
     case NodeTypes.IF_BRANCH:
     case NodeTypes.FOR:
     case NodeTypes.ELEMENT:
