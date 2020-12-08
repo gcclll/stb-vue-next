@@ -647,6 +647,22 @@ export function createCallExpression<T extends CallExpression['callee']>(
   } as any
 }
 
+export function createConditionalExpression(
+  test: ConditionalExpression['test'],
+  consequent: ConditionalExpression['consequent'],
+  alternate: ConditionalExpression['alternate'],
+  newline = true
+) {
+  return {
+    type: NodeTypes.JS_CONDITIONAL_EXPRESSION,
+    test,
+    consequent,
+    alternate,
+    newline,
+    loc: locStub
+  }
+}
+
 export function createCacheExpression(
   index: number,
   value: JSChildNode,
