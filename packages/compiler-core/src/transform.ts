@@ -20,7 +20,8 @@ import {
   TemplateLiteral,
   createVNodeCall,
   createSimpleExpression,
-  createCacheExpression
+  createCacheExpression,
+  ElementTypes
 } from './ast'
 import { defaultOnError } from './errors'
 import { TransformOptions } from './options'
@@ -33,6 +34,7 @@ import {
   CREATE_BLOCK,
   FRAGMENT
 } from './runtimeHelpers'
+import { isVSlot } from './utils'
 
 // There are two types of transforms:
 //
@@ -342,5 +344,35 @@ export function createStructuralDirectiveTransform(
   name: string | RegExp,
   fn: StructuralDirectiveTransform
 ): NodeTransform {
-  return {} as any
+  const matches = isString(name)
+    ? (n: string) => n === name
+    : (n: string) => name.test(n)
+
+  return (node, context) => {
+    if (node.type === NodeTypes.ELEMENT) {
+      const { props } = node
+      // structural directive transforms are not concerned with slots
+      // as they are handled separately in vSlot.ts
+      // 过滤掉 v-slot 它在 vSlot.ts 中处理
+      if (node.tagType === ElementTypes.TEMPLATE && props.some(isVSlot)) {
+        return
+      }
+
+      const exitFns = []
+      for (let i = 0; i < props.length; i++) {
+        const prop = props[i]
+        if (prop.type === NodeTypes.DIRECTIVE && matches(prop.name)) {
+          // structural directives are removed to avoid infinite recursion
+          // also we remove them *before* applying so that it can further
+          // traverse itself in case it moves the node around
+          props.splice(i, 1)
+          i--
+          const onExit = fn(node, prop, context)
+          if (onExit) exitFns.push(onExit)
+        }
+      }
+
+      return exitFns
+    }
+  }
 }
