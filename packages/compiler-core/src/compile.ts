@@ -1,5 +1,5 @@
-import { extend, isString } from '@vue/shared'
 import { RootNode } from './ast'
+import { extend, isString } from '@vue/shared'
 import { CodegenResult, generate } from './codegen'
 import { CompilerOptions } from './options'
 import { baseParse } from './parse'
@@ -8,6 +8,7 @@ import { transformElement } from './transforms/transformElement'
 import { transformOn } from './transforms/vOn'
 import { transformBind } from './transforms/vBind'
 import { transformText } from './transforms/transformText'
+import { transformOnce } from './transforms/vOnce'
 import { transformModel } from './transforms/vModel'
 import { createCompilerError, defaultOnError, ErrorCodes } from './errors'
 
@@ -21,7 +22,7 @@ export function getBaseTransformPreset(
   prefixIdentifiers?: boolean
 ): TransformPreset {
   return [
-    [transformElement, transformText],
+    [transformOnce, transformElement, transformText],
     {
       on: transformOn,
       bind: transformBind,

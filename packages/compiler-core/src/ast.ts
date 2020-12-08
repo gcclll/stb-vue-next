@@ -646,3 +646,17 @@ export function createCallExpression<T extends CallExpression['callee']>(
     arguments: args
   } as any
 }
+
+export function createCacheExpression(
+  index: number,
+  value: JSChildNode,
+  isVNode: boolean = false
+): CacheExpression {
+  return {
+    type: NodeTypes.JS_CACHE_EXPRESSION,
+    index,
+    value,
+    isVNode,
+    loc: locStub
+  }
+}

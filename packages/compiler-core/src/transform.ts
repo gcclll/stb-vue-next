@@ -19,7 +19,8 @@ import {
   Property,
   TemplateLiteral,
   createVNodeCall,
-  createSimpleExpression
+  createSimpleExpression,
+  createCacheExpression
 } from './ast'
 import { defaultOnError } from './errors'
 import { TransformOptions } from './options'
@@ -189,8 +190,7 @@ export function createTransformContext(
       return identifier
     },
     cache(exp, isVNode = false) {
-      // TODO
-      return {} as any
+      return createCacheExpression(++context.cached, exp, isVNode)
     }
   }
 
