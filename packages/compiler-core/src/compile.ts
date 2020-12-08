@@ -4,6 +4,7 @@ import { NodeTransform, DirectiveTransform, transform } from './transform'
 import { CodegenResult, generate } from './codegen'
 import { RootNode } from './ast'
 import { extend, isString } from '@vue/shared'
+import { transformIf } from './transforms/vIf'
 import { transformElement } from './transforms/transformElement'
 import { transformOn } from './transforms/vOn'
 import { transformBind } from './transforms/vBind'
@@ -22,7 +23,7 @@ export function getBaseTransformPreset(
   prefixIdentifiers?: boolean
 ): TransformPreset {
   return [
-    [transformOnce, transformElement, transformText],
+    [transformOnce, transformIf, transformElement, transformText],
     {
       on: transformOn,
       bind: transformBind,
