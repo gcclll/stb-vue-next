@@ -14,7 +14,8 @@ import {
   TemplateChildNode,
   TextNode,
   VNodeCall,
-  CompoundExpressionNode
+  CompoundExpressionNode,
+  CacheExpression
 } from './ast'
 import { CodegenOptions } from './options'
 import {
@@ -27,6 +28,7 @@ import {
   OPEN_BLOCK,
   POP_SCOPE_ID,
   PUSH_SCOPE_ID,
+  SET_BLOCK_TRACKING,
   TO_DISPLAY_STRING,
   WITH_DIRECTIVES,
   WITH_SCOPE_ID
@@ -460,6 +462,9 @@ function genNode(node: CodegenNode | symbol | string, context: CodegenContext) {
     case NodeTypes.JS_OBJECT_EXPRESSION:
       genObjectExpression(node, context)
       break
+    case NodeTypes.JS_CACHE_EXPRESSION:
+      genCacheExpression(node, context)
+      break
   }
 }
 
@@ -630,4 +635,25 @@ function genObjectExpression(node: ObjectExpression, context: CodegenContext) {
 
   multilines && deindent()
   push(multilines ? `}` : ` }`)
+}
+
+function genCacheExpression(node: CacheExpression, context: CodegenContext) {
+  const { push, helper, indent, deindent, newline } = context
+  if (node.isVNode) {
+    indent()
+    push(`${helper(SET_BLOCK_TRACKING)}(-1),`)
+    newline()
+  }
+
+  push(`_cache[${node.index}] = `)
+  genNode(node.value, context)
+  if (node.isVNode) {
+    push(`,`)
+    newline()
+    push(`${helper(SET_BLOCK_TRACKING)}(1),`)
+    newline()
+    push(`_cache[${node.index}]`)
+    deindent()
+  }
+  push(`)`)
 }
