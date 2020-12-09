@@ -185,7 +185,38 @@ export function createTransformContext(
       // 替换原来 ast 🌲中的节点，并且重置 currentNode 为最新的节点
       context.parent!.children[context.childIndex] = context.currentNode = node
     },
-    removeNode(node) {},
+    removeNode(node) {
+      if (__DEV__ && !context.parent) {
+        throw new Error(`Cannot remove root node.`)
+      }
+
+      const list = context.parent!.children
+      // traverseChildren 里面会用 childIndex 记录下当前被 traverse 的节点
+      const removalIndex = node
+        ? list.indexOf(node)
+        : context.currentNode
+          ? context.childIndex
+          : -1
+
+      /* istanbul ignore if */
+      if (__DEV__ && removalIndex < 0) {
+        throw new Error(`node being removed is not a child of current parent`)
+      }
+
+      if (!node || node === context.currentNode) {
+        // current node removed
+        context.currentNode = null
+        context.onNodeRemoved()
+      } else {
+        // sibling node removed
+        if (context.childIndex > removalIndex) {
+          context.childIndex--
+          context.onNodeRemoved()
+        }
+      }
+
+      context.parent!.children.splice(removalIndex, 1)
+    },
     onNodeRemoved: () => {},
     addIdentifiers(exp) {
       // TODO
