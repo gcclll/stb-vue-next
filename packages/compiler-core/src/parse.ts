@@ -13,11 +13,11 @@ import {
   InterpolationNode,
   ElementTypes,
   AttributeNode,
-  DirectiveNode
+  DirectiveNode,
+  ExpressionNode
 } from './ast'
 import { ErrorCodes, createCompilerError, defaultOnError } from './errors'
 import { ParserOptions } from './options'
-import { ExpressionNode } from './transforms/vFor'
 import {
   advancePositionWithMutation,
   assert,

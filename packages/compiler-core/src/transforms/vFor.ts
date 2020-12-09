@@ -1,5 +1,4 @@
-import { SimpleExpressionNode, CompoundExpressionNode } from '../ast'
-export type ExpressionNode = SimpleExpressionNode | CompoundExpressionNode
+import { ExpressionNode } from '../ast'
 
 export interface ForParseResult {
   source: ExpressionNode

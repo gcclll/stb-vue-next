@@ -149,7 +149,7 @@ export function processIf(
       if (
         sibling &&
         sibling.type === NodeTypes.TEXT &&
-        !sibling.content.trim().lenth
+        !sibling.content.trim().length
       ) {
         context.removeNode(sibling)
         continue
