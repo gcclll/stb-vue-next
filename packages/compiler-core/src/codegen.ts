@@ -375,7 +375,6 @@ function genNodeListAsArray(
     nodes.length > 3 ||
     ((!__BROWSER__ || __DEV__) && nodes.some(n => isArray(n) || !isText(n)))
 
-  console.log(nodes, 'gen node list')
   context.push(`[`)
   multilines && context.indent()
   genNodeList(nodes, context, multilines)
