@@ -646,7 +646,7 @@ function parseAttribute(
     // 2. :, @, # 指令缩写
     // 3. [name] 动态属性名
     // 4. name.modifier 修饰符
-    const match = /(?:^v-([a-z0-9]+))?(?:(?::|^@|^#)(\[[^\]]+\]|[^\.]+))?(.+)?$/i.exec(
+    const match = /(?:^v-([a-z0-9-]+))?(?:(?::|^@|^#)(\[[^\]]+\]|[^\.]+))?(.+)?$/i.exec(
       name
     )!
 
