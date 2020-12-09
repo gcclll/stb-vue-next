@@ -1,6 +1,8 @@
 import { PatchFlagNames, PatchFlags } from '@vue/shared'
 import {
+  AttributeNode,
   BlockCodegenNode,
+  CacheExpression,
   createCallExpression,
   createConditionalExpression,
   createObjectExpression,
@@ -26,7 +28,8 @@ import {
 } from '../runtimeHelpers'
 import {
   createStructuralDirectiveTransform,
-  TransformContext
+  TransformContext,
+  traverseNode
 } from '../transform'
 import { findDir, findProp, injectProp } from '../utils'
 import { validateBrowserExpression } from '../validateExpression'
@@ -64,13 +67,20 @@ export const transformIf = createStructuralDirectiveTransform(
             context
           ) as IfConditionalExpression
         } else {
-          // TODO
+          // attach this branch's codegen node to the v-if root.
+          const parentCondition = getParentCondition(ifNode.codegenNode!)
+          parentCondition.alternate = createCodegenNodeForBranch(
+            branch,
+            key + ifNode.branches.length - 1,
+            context
+          )
         }
       }
     })
   }
 )
 
+// target-agnostic transform used for both Client and SSR
 export function processIf(
   node: ElementNode,
   dir: DirectiveNode,
@@ -121,7 +131,76 @@ export function processIf(
     }
   } else {
     // v-else, v-else-if 分支
-    // TODO
+    // locate the adjacent v-if
+    const siblings = context.parent!.children
+    const comments = []
+    let i = siblings.indexOf(node)
+    // 一直往回找到 v-if 节点
+    while (i-- >= -1) {
+      const sibling = siblings[i]
+      // 开发模式忽略注释，但缓存将来需要回复，生产模式不需要注释
+      if (__DEV__ && sibling && sibling.type === NodeTypes.COMMENT) {
+        context.removeNode(sibling)
+        comments.unshift(sibling)
+        continue
+      }
+
+      // 空文本内容，直接删除
+      if (
+        sibling &&
+        sibling.type === NodeTypes.TEXT &&
+        !sibling.content.trim().lenth
+      ) {
+        context.removeNode(sibling)
+        continue
+      }
+
+      if (sibling && sibling.type === NodeTypes.IF) {
+        // 找到目标节点
+        context.removeNode()
+        const branch = createIfBranch(node, dir)
+        if (__DEV__ && comments.length) {
+          branch.children = [...comments, ...branch.children]
+        }
+
+        // check if user is forcing same key on different branches
+        // 在不同分支上应用了同一个 `key`
+        if (__DEV__ || !__BROWSER__) {
+          const key = branch.userKey
+          if (key) {
+            sibling.branches.forEach(({ userKey }) => {
+              if (isSameKey(userKey, key)) {
+                context.onError(
+                  createCompilerError(
+                    ErrorCodes.X_V_IF_SAME_KEY,
+                    branch.userKey!.loc
+                  )
+                )
+              }
+            })
+          }
+        }
+
+        sibling.branches.push(branch)
+        const onExit = processCodegen && processCodegen(sibling, branch, false)
+        // since the branch was removed, it will not be traversed.
+        // make sure to traverse here.
+        // 分支节点被上面删除，所以要手动 traverse 该节点
+        traverseNode(branch, context)
+        // call on exit
+        if (onExit) onExit()
+        // make sure to reset currentNode after traversal to indicate this
+        // node has been removed.
+        // 标识当前节点被删除了， traverseNode 中会用到
+        context.currentNode = null
+      } else {
+        context.onError(
+          createCompilerError(ErrorCodes.X_V_ELSE_NO_ADJACENT_IF, node.loc)
+        )
+      }
+
+      break
+    }
   }
 }
 
@@ -219,5 +298,50 @@ function createChildrenCodegenNode(
     // inject branch key
     injectProp(vnodeCall, keyProperty, context)
     return vnodeCall
+  }
+}
+
+function isSameKey(
+  a: AttributeNode | DirectiveNode | undefined,
+  b: AttributeNode | DirectiveNode
+): boolean {
+  if (!a || a.type !== b.type) {
+    return false
+  }
+  if (a.type === NodeTypes.ATTRIBUTE) {
+    if (a.value!.content !== (b as AttributeNode).value!.content) {
+      return false
+    }
+  } else {
+    // directive
+    const exp = a.exp!
+    const branchExp = (b as DirectiveNode).exp!
+    if (exp.type !== branchExp.type) {
+      return false
+    }
+    if (
+      exp.type !== NodeTypes.SIMPLE_EXPRESSION ||
+      (exp.isStatic !== (branchExp as SimpleExpressionNode).isStatic ||
+        exp.content !== (branchExp as SimpleExpressionNode).content)
+    ) {
+      return false
+    }
+  }
+  return true
+}
+
+function getParentCondition(
+  node: IfConditionalExpression | CacheExpression
+): IfConditionalExpression {
+  while (true) {
+    if (node.type === NodeTypes.JS_CONDITIONAL_EXPRESSION) {
+      if (node.alternate.type === NodeTypes.JS_CONDITIONAL_EXPRESSION) {
+        node = node.alternate
+      } else {
+        return node
+      }
+    } else if (node.type === NodeTypes.JS_CACHE_EXPRESSION) {
+      node = node.value as IfConditionalExpression
+    }
   }
 }
