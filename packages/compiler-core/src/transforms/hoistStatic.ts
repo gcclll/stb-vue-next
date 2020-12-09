@@ -196,8 +196,8 @@ export function getStaticType(
         resultCache.set(node, StaticType.NOT_STATIC)
         return StaticType.NOT_STATIC
       }
-    case NodeTypes.COMMENT:
     case NodeTypes.TEXT:
+    case NodeTypes.COMMENT:
       return StaticType.FULL_STATIC
     case NodeTypes.IF:
     case NodeTypes.FOR:

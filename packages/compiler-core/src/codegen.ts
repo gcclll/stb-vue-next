@@ -375,6 +375,7 @@ function genNodeListAsArray(
     nodes.length > 3 ||
     ((!__BROWSER__ || __DEV__) && nodes.some(n => isArray(n) || !isText(n)))
 
+  console.log(nodes, 'gen node list')
   context.push(`[`)
   multilines && context.indent()
   genNodeList(nodes, context, multilines)
@@ -447,6 +448,9 @@ function genNode(node: CodegenNode | symbol | string, context: CodegenContext) {
       break
     case NodeTypes.INTERPOLATION:
       genInterpolation(node, context)
+      break
+    case NodeTypes.TEXT_CALL:
+      genNode(node.codegenNode, context)
       break
     case NodeTypes.COMPOUND_EXPRESSION:
       genCompoundExpression(node, context)
