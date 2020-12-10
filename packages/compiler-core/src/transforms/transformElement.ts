@@ -49,6 +49,7 @@ import {
 } from '../runtimeHelpers'
 import { getStaticType } from './hoistStatic'
 import { createCompilerError, ErrorCodes } from '../errors'
+import { buildSlots } from './vSlot'
 
 // some directive transforms (e.g. v-model) may return a symbol for runtime
 // import, which should be used instead of a resolveDirective call.
@@ -128,7 +129,12 @@ export const transformElement: NodeTransform = (node, context) => {
         vnodeTag !== KEEP_ALIVE
 
       if (shouldBuildAsSlots) {
-        // TODO
+        const { slots, hasDynamicSlots } = buildSlots(node, context)
+        vnodeChildren = slots // { type: 15,JS_OBJECT_EXPRESSION, properties: [...]}
+        if (hasDynamicSlots) {
+          // 动态插槽
+          patchFlag != PatchFlags.DYNAMIC_SLOTS
+        }
       } else if (node.children.length === 1 && vnodeTag !== TELEPORT) {
         // 只有一个孩子节点的时候
         const child = node.children[0]
