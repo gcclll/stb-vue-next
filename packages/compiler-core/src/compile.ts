@@ -5,6 +5,7 @@ import { CodegenResult, generate } from './codegen'
 import { RootNode } from './ast'
 import { extend, isString } from '@vue/shared'
 import { transformIf } from './transforms/vIf'
+import { transformFor } from './transforms/vFor'
 import { transformElement } from './transforms/transformElement'
 import { transformOn } from './transforms/vOn'
 import { transformBind } from './transforms/vBind'
@@ -23,7 +24,7 @@ export function getBaseTransformPreset(
   prefixIdentifiers?: boolean
 ): TransformPreset {
   return [
-    [transformOnce, transformIf, transformElement, transformText],
+    [transformOnce, transformIf, transformFor, transformElement, transformText],
     {
       on: transformOn,
       bind: transformBind,
