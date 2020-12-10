@@ -16,7 +16,8 @@ import {
   VNodeCall,
   CompoundExpressionNode,
   CacheExpression,
-  ConditionalExpression
+  ConditionalExpression,
+  FunctionExpression
 } from './ast'
 import { CodegenOptions } from './options'
 import {
@@ -32,7 +33,8 @@ import {
   SET_BLOCK_TRACKING,
   TO_DISPLAY_STRING,
   WITH_DIRECTIVES,
-  WITH_SCOPE_ID
+  WITH_SCOPE_ID,
+  WITH_CTX
 } from './runtimeHelpers'
 import { assert, isSimpleIdentifier } from './utils'
 
@@ -431,6 +433,7 @@ function genNode(node: CodegenNode | symbol | string, context: CodegenContext) {
   switch (node.type) {
     case NodeTypes.ELEMENT:
     case NodeTypes.IF:
+    case NodeTypes.FOR:
       __DEV__ &&
         assert(
           node.codegenNode != null,
@@ -466,6 +469,9 @@ function genNode(node: CodegenNode | symbol | string, context: CodegenContext) {
       break
     case NodeTypes.JS_OBJECT_EXPRESSION:
       genObjectExpression(node, context)
+      break
+    case NodeTypes.JS_FUNCTION_EXPRESSION:
+      genFunctionExpression(node, context)
       break
     case NodeTypes.JS_CONDITIONAL_EXPRESSION:
       genConditionalExpression(node, context)
@@ -643,6 +649,59 @@ function genObjectExpression(node: ObjectExpression, context: CodegenContext) {
 
   multilines && deindent()
   push(multilines ? `}` : ` }`)
+}
+
+function genFunctionExpression(
+  node: FunctionExpression,
+  context: CodegenContext
+) {
+  const { push, indent, deindent, scopeId, mode } = context
+  const { params, returns, body, newline, isSlot } = node
+  // slot functions also need to push scopeId before rendering its content
+  const genScopeId =
+    !__BROWSER__ && isSlot && scopeId != null && mode !== 'function'
+
+  if (genScopeId) {
+    push(`_withId(`)
+  } else if (isSlot) {
+    push(`_${helperNameMap[WITH_CTX]}(`)
+  }
+
+  push(`(`, node)
+  // 解析函数参数
+  if (isArray(params)) {
+    genNodeList(params, context)
+  } else if (params) {
+    genNode(params, context)
+  }
+  push(`) => `)
+  if (newline || body) {
+    push(`{`)
+    indent()
+  }
+
+  // 函数返回值
+  if (returns) {
+    if (newline) {
+      push(`return `)
+    }
+    if (isArray(returns)) {
+      genNodeListAsArray(returns, context)
+    } else {
+      genNode(returns, context)
+    }
+  } else if (body) {
+    genNode(body, context)
+  }
+
+  if (newline || body) {
+    deindent()
+    push(`)`)
+  }
+
+  if (genScopeId || isSlot) {
+    push(`)`)
+  }
 }
 
 function genConditionalExpression(
