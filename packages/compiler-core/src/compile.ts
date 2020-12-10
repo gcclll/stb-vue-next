@@ -10,6 +10,7 @@ import { transformSlotOutlet } from './transforms/transformSlotOutlet'
 import { transformElement } from './transforms/transformElement'
 import { transformOn } from './transforms/vOn'
 import { transformBind } from './transforms/vBind'
+import { trackSlotScopes } from './transforms/vSlot'
 import { transformText } from './transforms/transformText'
 import { transformOnce } from './transforms/vOnce'
 import { transformModel } from './transforms/vModel'
@@ -31,6 +32,7 @@ export function getBaseTransformPreset(
       transformFor,
       transformSlotOutlet,
       transformElement,
+      trackSlotScopes,
       transformText
     ],
     {
