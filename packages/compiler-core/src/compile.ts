@@ -6,6 +6,7 @@ import { RootNode } from './ast'
 import { extend, isString } from '@vue/shared'
 import { transformIf } from './transforms/vIf'
 import { transformFor } from './transforms/vFor'
+import { transformSlotOutlet } from './transforms/transformSlotOutlet'
 import { transformElement } from './transforms/transformElement'
 import { transformOn } from './transforms/vOn'
 import { transformBind } from './transforms/vBind'
@@ -24,7 +25,14 @@ export function getBaseTransformPreset(
   prefixIdentifiers?: boolean
 ): TransformPreset {
   return [
-    [transformOnce, transformIf, transformFor, transformElement, transformText],
+    [
+      transformOnce,
+      transformIf,
+      transformFor,
+      transformSlotOutlet,
+      transformElement,
+      transformText
+    ],
     {
       on: transformOn,
       bind: transformBind,
