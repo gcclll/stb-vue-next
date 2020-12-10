@@ -647,6 +647,23 @@ export function createCallExpression<T extends CallExpression['callee']>(
   } as any
 }
 
+export function createFunctionExpression(
+  params: FunctionExpression['params'],
+  returns: FunctionExpression['returns'] = undefined,
+  newline: boolean = false,
+  isSlot: boolean = false,
+  loc: SourceLocation = locStub
+): FunctionExpression {
+  return {
+    type: NodeTypes.JS_FUNCTION_EXPRESSION,
+    params,
+    returns,
+    newline,
+    isSlot,
+    loc
+  }
+}
+
 export function createConditionalExpression(
   test: ConditionalExpression['test'],
   consequent: ConditionalExpression['consequent'],
