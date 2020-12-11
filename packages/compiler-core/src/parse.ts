@@ -14,7 +14,8 @@ import {
   ElementTypes,
   AttributeNode,
   DirectiveNode,
-  ExpressionNode
+  ExpressionNode,
+  ConstantTypes
 } from './ast'
 import { ErrorCodes, createCompilerError, defaultOnError } from './errors'
 import { ParserOptions } from './options'
@@ -28,6 +29,13 @@ import {
 type OptionalOptions = 'isNativeTag' | 'isBuiltInComponent'
 type MergedParserOptions = Omit<Required<ParserOptions>, OptionalOptions> &
   Pick<ParserOptions, OptionalOptions>
+type AttributeValue =
+  | {
+      content: string
+      isQuoted: boolean
+      loc: SourceLocation
+    }
+  | undefined
 
 // The default decoder only provides escapes for characters reserved as part of
 // the template syntax, and is only used if the custom renderer did not provide
@@ -74,7 +82,10 @@ export interface ParserContext {
   inVPre: boolean // v-pre, do not process directives and interpolations
 }
 
-export function baseParse(content: string, options: ParserOptions): RootNode {
+export function baseParse(
+  content: string,
+  options: ParserOptions = {}
+): RootNode {
   const context = createParserContext(content, options)
   const start = getCursor(context)
   return createRoot(
@@ -197,6 +208,8 @@ function parseChildren(
     }
   }
 
+  // Whitespace management for more efficient output
+  // (same as v2 whitespace: 'condense')
   let removedWhitespace = false
   // 空格和空字符串节点合并
   if (mode !== TextModes.RAWTEXT) {
@@ -385,8 +398,8 @@ function parseElement(
   const parent = last(ancestors)
   // 解析出开始标签
   const element = parseTag(context, TagType.Start, parent)
-  const isPreBoundray = context.inPre && !wasInPre
-  const isVPreBoundray = context.inVPre && !wasInVPre
+  const isPreBoundary = context.inPre && !wasInPre
+  const isVPreBoundary = context.inVPre && !wasInVPre
 
   if (element.isSelfClosing || context.options.isVoidTag(element.tag)) {
     return element
@@ -415,11 +428,11 @@ function parseElement(
 
   element.loc = getSelection(context, element.loc.start)
 
-  if (isPreBoundray) {
+  if (isPreBoundary) {
     context.inPre = false
   }
 
-  if (isVPreBoundray) {
+  if (isVPreBoundary) {
     context.inVPre = false
   }
 
@@ -619,13 +632,7 @@ function parseAttribute(
 
   advanceBy(context, name.length)
 
-  let value:
-    | {
-        content: string
-        isQuoted: boolean
-        loc: SourceLocation
-      }
-    | undefined = undefined
+  let value: AttributeValue = undefined
 
   if (/^[\t\r\n\f ]*=/.test(context.source)) {
     advanceSpaces(context)
@@ -696,7 +703,9 @@ function parseAttribute(
         type: NodeTypes.SIMPLE_EXPRESSION,
         content,
         isStatic,
-        isConstant: isStatic,
+        constType: isStatic
+          ? ConstantTypes.CAN_STRINGIFY
+          : ConstantTypes.NOT_CONSTANT,
         loc
       }
     }
@@ -717,9 +726,8 @@ function parseAttribute(
         content: value.content,
         isStatic: false,
         // Treat as non-constant by default. This can be potentially set to
-        // true by `transformExpression` to make it eligible for hoisting.
-
-        isConstant: false,
+        // other values by `transformExpression` to make it eligible for hoisting.
+        constType: ConstantTypes.NOT_CONSTANT,
         loc: value.loc
       },
       arg,
@@ -740,15 +748,7 @@ function parseAttribute(
   }
 }
 
-function parseAttributeValue(
-  context: ParserContext
-):
-  | {
-      content: string
-      isQuoted: boolean
-      loc: SourceLocation
-    }
-  | undefined {
+function parseAttributeValue(context: ParserContext): AttributeValue {
   const start = getCursor(context)
   let content: string
 
@@ -830,7 +830,8 @@ function parseInterpolation(
     content: {
       type: NodeTypes.SIMPLE_EXPRESSION,
       isStatic: false,
-      isConstant: false,
+      // Set `isConstant` to false by default and will decide in transformExpression
+      constType: ConstantTypes.NOT_CONSTANT,
       content,
       loc: getSelection(context, innerStart, innerEnd)
     },

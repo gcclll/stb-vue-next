@@ -1,4 +1,16 @@
 export { baseCompile } from './compile'
+
+// Also expose lower level APIs & types
+export {
+  CompilerOptions,
+  ParserOptions,
+  TransformOptions,
+  CodegenOptions,
+  HoistTransform,
+  BindingMetadata,
+  BindingTypes
+} from './options'
+
 export { baseParse, TextModes } from './parse'
 export {
   transform,
@@ -23,5 +35,17 @@ export * from './utils'
 export * from './runtimeHelpers'
 
 export { getBaseTransformPreset, TransformPreset } from './compile'
-
+export { transformModel } from './transforms/vModel'
+export { transformOn } from './transforms/vOn'
+export { transformBind } from './transforms/vBind'
+export { processIf } from './transforms/vIf'
+export { processFor, createForLoopParams } from './transforms/vFor'
+export { processExpression } from './transforms/transformExpression'
+export { buildSlots, SlotFnBuilder, trackSlotScopes } from './transforms/vSlot'
+export {
+  transformElement,
+  resolveComponentType,
+  buildProps
+} from './transforms/transformElement'
+export { processSlotOutlet } from './transforms/transformSlotOutlet'
 export { generateCodeFrame } from '@vue/shared'
