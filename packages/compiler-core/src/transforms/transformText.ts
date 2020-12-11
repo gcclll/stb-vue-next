@@ -2,6 +2,7 @@ import { PatchFlagNames, PatchFlags } from '@vue/shared'
 import {
   CallExpression,
   CompoundExpressionNode,
+  ConstantTypes,
   createCallExpression,
   ElementTypes,
   NodeTypes
@@ -9,6 +10,7 @@ import {
 import { CREATE_TEXT } from '../runtimeHelpers'
 import { NodeTransform } from '../transform'
 import { isText } from '../utils'
+import { getConstantType } from './hoistStatic'
 
 // 合并相邻的文本节点(包含插值)
 // Merge adjacent text nodes and expressions into a single expression

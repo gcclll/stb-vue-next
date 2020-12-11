@@ -1,4 +1,3 @@
-import { directive } from '@babel/types'
 import { camelize } from '@vue/shared'
 import {
   CallExpression,
@@ -11,7 +10,7 @@ import {
 import { createCompilerError, ErrorCodes } from '../errors'
 import { RENDER_SLOT } from '../runtimeHelpers'
 import { NodeTransform, TransformContext } from '../transform'
-import { findProp, isBindKey, isSlotOutlet, isStaticExp } from '../utils'
+import { isBindKey, isSlotOutlet, isStaticExp } from '../utils'
 import { buildProps, PropsExpression } from './transformElement'
 
 export const transformSlotOutlet: NodeTransform = (node, context) => {

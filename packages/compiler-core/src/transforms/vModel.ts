@@ -4,7 +4,8 @@ import {
   createCompoundExpression,
   createObjectProperty,
   ElementTypes,
-  Property
+  Property,
+  ConstantTypes
 } from '../ast'
 import { createCompilerError, ErrorCodes } from '../errors'
 import { DirectiveTransform } from '../transform'

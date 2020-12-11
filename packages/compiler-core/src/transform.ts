@@ -24,7 +24,8 @@ import {
   createVNodeCall,
   createSimpleExpression,
   createCacheExpression,
-  ElementTypes
+  ElementTypes,
+  ConstantTypes
 } from './ast'
 import { defaultOnError } from './errors'
 import { TransformOptions } from './options'

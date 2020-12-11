@@ -1,13 +1,9 @@
 import { SlotFlags, slotFlagsText } from '@vue/shared'
 import {
-  CallExpression,
-  ConditionalExpression,
-  createConditionalExpression,
   createFunctionExpression,
   createObjectExpression,
   createObjectProperty,
   createSimpleExpression,
-  DirectiveNode,
   ElementNode,
   ElementTypes,
   ExpressionNode,
@@ -22,8 +18,6 @@ import { createCompilerError, ErrorCodes } from '../errors'
 import { WITH_CTX } from '../runtimeHelpers'
 import { NodeTransform, TransformContext } from '../transform'
 import { findDir, hasScopeRef, isStaticExp, isTemplateNode } from '../utils'
-
-const defaultFallback = createSimpleExpression(`undefined`, false)
 
 // A NodeTransform that:
 // 1. Tracks scope identifiers for scoped slots so that they don't get prefixed
@@ -139,6 +133,14 @@ export function buildSlots(
         implicitDefaultChildren.push(slotElement)
       }
       continue
+    }
+
+    if (onComponentSlot) {
+      // 组件上已经有v-slot 的时候，里面所有孩子都不能在使用 v-slot
+      context.onError(
+        createCompilerError(ErrorCodes.X_V_SLOT_MIXED_SLOT_USAGE, slotDir.loc)
+      )
+      break
     }
 
     // TODO more

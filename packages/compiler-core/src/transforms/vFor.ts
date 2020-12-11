@@ -25,6 +25,7 @@ import {
 import { createCompilerError, ErrorCodes } from '../errors'
 import {
   CREATE_BLOCK,
+  CREATE_VNODE,
   FRAGMENT,
   OPEN_BLOCK,
   RENDER_LIST

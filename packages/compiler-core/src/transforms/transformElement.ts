@@ -17,7 +17,8 @@ import {
   createObjectExpression,
   createArrayExpression,
   DirectiveArguments,
-  ArrayExpression
+  ArrayExpression,
+  ConstantTypes
 } from '../ast'
 import {
   isOn,
@@ -47,9 +48,9 @@ import {
   TELEPORT,
   TO_HANDLERS
 } from '../runtimeHelpers'
-import { getStaticType } from './hoistStatic'
 import { createCompilerError, ErrorCodes } from '../errors'
 import { buildSlots } from './vSlot'
+import { getConstantType } from './hoistStatic'
 
 // some directive transforms (e.g. v-model) may return a symbol for runtime
 // import, which should be used instead of a resolveDirective call.
@@ -254,11 +255,18 @@ export function resolveComponentType(
   }
 
   // 3. 用户自定义组件(setup 期间绑定的)，缓存到 $setup 对象上
-  if (context.bindingMetadata[tag] === 'setup') {
-    return `$setup[${JSON.stringify(tag)}]`
+  // this is skipped in browser build since browser builds do not perform
+  // binding analysis.
+  if (!__BROWSER__) {
+    // TODO from setup
   }
 
-  // 4. 用户组件(resolve)
+  // 4. Self referencing component (inferred from filename)
+  if (!__BROWSER__ && context.selfName) {
+    // TODO
+  }
+
+  // 5. user component(resolve)
   context.helper(RESOLVE_COMPONENT)
   context.components.add(tag)
   return toValidAssetId(tag, `component`)
@@ -347,6 +355,7 @@ export function buildProps(
     const prop = props[i]
     if (prop.type === NodeTypes.ATTRIBUTE) {
       const { loc, name, value } = prop
+      let isStatic = true
       if (name === 'ref') {
         hasRef = true
         // in inline mode there is no setupState object, so we can't use string
