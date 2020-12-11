@@ -53,6 +53,7 @@ type CodegenNode = TemplateChildNode | JSChildNode | SSRCodegenNode
 
 export interface CodegenResult {
   code: string
+  preamble: string
   ast: RootNode
   map?: RawSourceMap
 }
@@ -210,23 +211,36 @@ export function generate(
     ? createCodegenContext(ast, options)
     : context
   if (!__BROWSER__ && mode === 'module') {
-    genModulePreamble(ast, context, genScopeId, isSetupInlined)
+    genModulePreamble(ast, preambleContext, genScopeId, isSetupInlined)
   } else {
     // -> `function ...`
     genFunctionPreamble(ast, preambleContext)
   }
 
-  const optimizeSources = options.bindingMetadata
-    ? `, $props, $setup, $data, $options`
-    : ``
+  // enter render function
+  const functionName = ssr ? `ssrRender` : `render`
+  const args = ssr ? ['_ctx', '_push', '_parent', '_attrs'] : ['_ctx', '_cache']
+  if (!__BROWSER__ && options.bindingMetadata && !options.inline) {
+    // binding optimization args
+    args.push('$props', '$setup', '$data', '$options')
+  }
+  const signature =
+    !__BROWSER__ && options.isTS
+      ? args.map(arg => `${arg}: any`).join(',')
+      : args.join(', ')
 
-  if (!ssr) {
-    if (genScopeId) {
-      push(`const render = ${PURE_ANNOTATION}_withId(`)
+  if (genScopeId) {
+    if (isSetupInlined) {
+      push(`${PURE_ANNOTATION}_withId(`)
+    } else {
+      push(`const ${functionName} = ${PURE_ANNOTATION}_withId(`)
     }
-    push(`function render(_ctx, _cache${optimizeSources}) {`)
+  }
+
+  if (isSetupInlined || genScopeId) {
+    push(`(${signature}) => {`)
   } else {
-    // TODO ssr
+    push(`function ${functionName}(${signature}) {`)
   }
   indent()
 
@@ -291,14 +305,26 @@ export function generate(
   return {
     ast,
     code: context.code,
+    preamble: isSetupInlined ? preambleContext.code : ``,
+    // SourceMapGenerator does have toJSON() method but it's not in the types
     map: context.map ? (context.map as any).toJSON() : undefined
   }
 }
 
 function genFunctionPreamble(ast: RootNode, context: CodegenContext) {
-  const { push, newline, runtimeGlobalName, prefixIdentifiers, ssr } = context
+  const {
+    push,
+    newline,
+    runtimeGlobalName,
+    runtimeModuleName,
+    prefixIdentifiers,
+    ssr
+  } = context
 
-  const VueBinding = !__BROWSER__ && ssr ? `` : runtimeGlobalName
+  const VueBinding =
+    !__BROWSER__ && ssr
+      ? `require(${JSON.stringify(runtimeModuleName)})`
+      : runtimeGlobalName
 
   const aliasHelper = (s: symbol) => `${helperNameMap[s]}: _${helperNameMap[s]}`
 
@@ -794,10 +820,10 @@ function genConditionalExpression(
   const { push, indent, deindent, newline } = context
   if (test.type === NodeTypes.SIMPLE_EXPRESSION) {
     // 非简单的标识符需要用括号，可能是表达式，所以需要 (a + b) ? ... : ...
-    const needsParams = !isSimpleIdentifier(test.content)
-    needsParams && push(`(`)
+    const needsParens = !isSimpleIdentifier(test.content)
+    needsParens && push(`(`)
     genExpression(test, context)
-    needsParams && push(`)`)
+    needsParens && push(`)`)
   } else {
     push(`(`)
     genNode(test, context)
