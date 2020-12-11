@@ -18,7 +18,8 @@ export function hoistStatic(root: RootNode, context: TransformContext) {
   walk(
     root,
     context,
-    new Map(),
+    // Root node is unfortunately non-hoistable due to potential parent
+    // fallthrough attributes.
     // 只有一个孩子且为 ELEMENT的根元素节点，不做提升
     isSingleElementRoot(root, root.children[0])
   )
@@ -36,16 +37,9 @@ export function isSingleElementRoot(
   )
 }
 
-const enum StaticType {
-  NOT_STATIC = 0,
-  FULL_STATIC,
-  HAS_RUNTIME_CONSTANT
-}
-
 function walk(
   node: ParentNode,
   context: TransformContext,
-  resultCache: Map<TemplateChildNode, StaticType>,
   doNotHoistNode: boolean = false
 ) {
   let hasHoistedNode = false

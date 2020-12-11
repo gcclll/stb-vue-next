@@ -17,7 +17,9 @@ import {
   CompoundExpressionNode,
   CacheExpression,
   ConditionalExpression,
-  FunctionExpression
+  FunctionExpression,
+  Position,
+  locStub
 } from './ast'
 import { CodegenOptions } from './options'
 import {
@@ -38,7 +40,12 @@ import {
   RESOLVE_COMPONENT,
   RESOLVE_DIRECTIVE
 } from './runtimeHelpers'
-import { assert, isSimpleIdentifier, toValidAssetId } from './utils'
+import {
+  advancePositionWithMutation,
+  assert,
+  isSimpleIdentifier,
+  toValidAssetId
+} from './utils'
 
 const PURE_ANNOTATION = `/*#__PURE__*/`
 
@@ -51,7 +58,10 @@ export interface CodegenResult {
 }
 
 export interface CodegenContext
-  extends Omit<Required<CodegenOptions>, 'bindingMetadata'> {
+  extends Omit<
+      Required<CodegenOptions>,
+      'bindingMetadata' | 'inline' | 'isTS'
+    > {
   source: string
   code: string
   line: number
@@ -105,7 +115,21 @@ function createCodegenContext(
     push(code, node) {
       context.code += code
       if (!__BROWSER__ && context.map) {
-        // TODO 非浏览器环境增加 map 代码位置映射关系
+        if (node) {
+          let name
+          if (node.type === NodeTypes.SIMPLE_EXPRESSION && !node.isStatic) {
+            const content = node.content.replace(/^_ctx\./, '')
+            if (content !== node.content && isSimpleIdentifier(content)) {
+              name = content
+            }
+          }
+
+          addMapping(node.loc.start, name)
+        }
+        advancePositionWithMutation(context, code)
+        if (node && node.loc !== locStub) {
+          addMapping(node.loc.end)
+        }
       }
     },
     indent() {
@@ -125,6 +149,21 @@ function createCodegenContext(
 
   function newline(n: number) {
     context.push('\n' + `  `.repeat(n))
+  }
+
+  function addMapping(loc: Position, name?: string) {
+    context.map!.addMapping({
+      name,
+      source: context.filename,
+      original: {
+        line: loc.line,
+        column: loc.column - 1 // source-map column is 0 based
+      },
+      generated: {
+        line: context.line,
+        column: context.column - 1
+      }
+    })
   }
 
   if (!__BROWSER__ && sourceMap) {
@@ -162,12 +201,19 @@ export function generate(
   const hasHelpers = ast.helpers.length > 0
   const useWithBlock = !prefixIdentifiers && mode !== 'module'
   const genScopeId = !__BROWSER__ && scopeId != null && mode === 'module'
+  const isSetupInlined = !__BROWSER__ && !!options.inline
 
+  // preambles
+  // in setup() inline mode, the preamble is generated in a sub context
+  // and returned separately.
+  const preambleContext = isSetupInlined
+    ? createCodegenContext(ast, options)
+    : context
   if (!__BROWSER__ && mode === 'module') {
-    genModulePreamble(ast, context, genScopeId)
+    genModulePreamble(ast, context, genScopeId, isSetupInlined)
   } else {
     // -> `function ...`
-    genFunctionPreamble(ast, context)
+    genFunctionPreamble(ast, preambleContext)
   }
 
   const optimizeSources = options.bindingMetadata
@@ -298,11 +344,11 @@ function genFunctionPreamble(ast: RootNode, context: CodegenContext) {
   push(`return `)
 }
 
-// TODO
 function genModulePreamble(
   ast: RootNode,
   context: CodegenContext,
-  genScopeId: boolean
+  genScopeId: boolean,
+  inline?: boolean
 ) {
   const { push, helper, newline, scopeId } = context
 
@@ -334,9 +380,12 @@ function genModulePreamble(
     newline()
   }
 
-  // TODO gen hoists
+  genHoists(ast.hoists, context)
   newline()
-  push(`export `)
+
+  if (!inline) {
+    push(`export `)
+  }
 }
 
 function genAssets(

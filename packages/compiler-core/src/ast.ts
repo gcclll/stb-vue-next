@@ -1,17 +1,17 @@
+import { isString } from '@vue/shared'
 import { ForParseResult } from './transforms/vFor'
-
 import {
   RENDER_SLOT,
   CREATE_SLOTS,
   RENDER_LIST,
-  FRAGMENT,
   OPEN_BLOCK,
   CREATE_BLOCK,
-  CREATE_VNODE
+  FRAGMENT,
+  CREATE_VNODE,
+  WITH_DIRECTIVES
 } from './runtimeHelpers'
 import { PropsExpression } from './transforms/transformElement'
 import { ImportItem, TransformContext } from './transform'
-import { isString } from '@vue/shared'
 
 // Vue template is a platform-agnostic superset of HTML (syntax only).
 // More namespaces like SVG and MathML are declared by platform specific
@@ -189,11 +189,23 @@ export interface DirectiveNode extends Node {
   parseResult?: ForParseResult
 }
 
+/**
+ * Static types have several levels.
+ * Higher levels implies lower levels. e.g. a node that can be stringified
+ * can always be hoisted and skipped for patch.
+ */
+export const enum ConstantTypes {
+  NOT_CONSTANT = 0,
+  CAN_SKIP_PATCH,
+  CAN_HOIST,
+  CAN_STRINGIFY
+}
+
 export interface SimpleExpressionNode extends Node {
   type: NodeTypes.SIMPLE_EXPRESSION
   content: string
   isStatic: boolean
-  isConstant: boolean
+  constType: ConstantTypes
   /**
    * Indicates this is an identifier for a hoist vnode call and points to the
    * hoisted node.
@@ -204,11 +216,6 @@ export interface SimpleExpressionNode extends Node {
    * the identifiers declared inside the function body.
    */
   identifiers?: string[]
-  /**
-   * some expressions (e.g. transformAssetUrls import identifiers) are constant,
-   * but cannot be stringified because they must be first evaluated at runtime.
-   */
-  isRuntimeConstant?: boolean
 }
 
 export interface InterpolationNode extends Node {
@@ -535,10 +542,6 @@ export function createRoot(
   }
 }
 
-type InferCodegenNodeType<T> = T extends typeof RENDER_SLOT
-  ? RenderSlotCall
-  : CallExpression
-
 export function createVNodeCall(
   context: TransformContext | null,
   tag: VNodeCall['tag'],
@@ -557,6 +560,10 @@ export function createVNodeCall(
       context.helper(CREATE_BLOCK)
     } else {
       context.helper(CREATE_VNODE)
+    }
+
+    if (directives) {
+      context.helper(WITH_DIRECTIVES)
     }
   }
 
@@ -612,14 +619,27 @@ export function createSimpleExpression(
   content: SimpleExpressionNode['content'],
   isStatic: SimpleExpressionNode['isStatic'],
   loc: SourceLocation = locStub,
-  isConstant: boolean = false
+  constType: ConstantTypes = ConstantTypes.NOT_CONSTANT
 ): SimpleExpressionNode {
   return {
     type: NodeTypes.SIMPLE_EXPRESSION,
     loc,
-    isConstant,
     content,
-    isStatic
+    isStatic,
+    constType: isStatic ? ConstantTypes.CAN_STRINGIFY : constType
+  }
+}
+
+export function createInterpolation(
+  content: InterpolationNode['content'] | string,
+  loc: SourceLocation
+): InterpolationNode {
+  return {
+    type: NodeTypes.INTERPOLATION,
+    loc,
+    content: isString(content)
+      ? createSimpleExpression(content, false, loc)
+      : content
   }
 }
 
@@ -633,6 +653,10 @@ export function createCompoundExpression(
     children
   }
 }
+
+type InferCodegenNodeType<T> = T extends typeof RENDER_SLOT
+  ? RenderSlotCall
+  : CallExpression
 
 export function createCallExpression<T extends CallExpression['callee']>(
   callee: T,
@@ -669,7 +693,7 @@ export function createConditionalExpression(
   consequent: ConditionalExpression['consequent'],
   alternate: ConditionalExpression['alternate'],
   newline = true
-) {
+): ConditionalExpression {
   return {
     type: NodeTypes.JS_CONDITIONAL_EXPRESSION,
     test,
