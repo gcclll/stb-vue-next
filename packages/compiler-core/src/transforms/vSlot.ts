@@ -1,4 +1,4 @@
-import { SlotFlags } from '@vue/shared/src'
+import { SlotFlags, slotFlagsText } from '@vue/shared'
 import {
   CallExpression,
   ConditionalExpression,
@@ -152,7 +152,10 @@ export function buildSlots(
         `_`,
         // 2 = compiled but dynamic = can skip normalization, but must run diff
         // 1 = compiled and static = can skip normalization AND diff as optimized
-        createSimpleExpression('' + slotFlag, false)
+        createSimpleExpression(
+          slotFlag + (__DEV__ ? ` /* ${slotFlagsText[slotFlag]} */` : ``),
+          false
+        )
       )
     ),
     loc
