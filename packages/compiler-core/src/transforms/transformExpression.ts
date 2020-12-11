@@ -11,7 +11,7 @@ export function processExpression(
   // function params
   asParams = false,
   // v-on handler values may contain multiple statements
-  asRowStatements = false
+  asRawStatements = false
 ): ExpressionNode {
   return {} as ExpressionNode
 }

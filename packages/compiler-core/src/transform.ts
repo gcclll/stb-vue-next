@@ -4,7 +4,9 @@ import {
   isString,
   PatchFlags,
   PatchFlagNames,
-  EMPTY_OBJ
+  EMPTY_OBJ,
+  capitalize,
+  camelize
 } from '@vue/shared'
 import {
   ExpressionNode,
