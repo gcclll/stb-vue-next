@@ -119,7 +119,24 @@ export const transformElement: NodeTransform = (node, context) => {
 
     if (node.children.length > 0) {
       if (vnodeTag === KEEP_ALIVE) {
-        // TODO KeepAlive
+        // Although a built-in component, we compile KeepAlive with raw children
+        // instead of slot functions so that it can be used inside Transition
+        // or other Transition-wrapping HOCs.
+        // To ensure correct updates with block optimizations, we need to:
+        // 1. Force keep-alive into a block. This avoids its children being
+        //    collected by a parent block.
+        shouldUseBlock = true
+        // 2. Force keep-alive to always be updated, since it uses raw children.
+        patchFlag |= PatchFlags.DYNAMIC_SLOTS
+        if (__DEV__ && node.children.length > 1) {
+          context.onError(
+            createCompilerError(ErrorCodes.X_KEEP_ALIVE_INVALID_CHILDREN, {
+              start: node.children[0].loc.start,
+              end: node.children[node.children.length - 1].loc.end,
+              source: ''
+            })
+          )
+        }
       }
 
       const shouldBuildAsSlots =
@@ -143,8 +160,10 @@ export const transformElement: NodeTransform = (node, context) => {
         const hasDynamicTextChild =
           type === NodeTypes.INTERPOLATION ||
           type === NodeTypes.COMPOUND_EXPRESSION
-
-        if (hasDynamicTextChild && !getStaticType(child)) {
+        if (
+          hasDynamicTextChild &&
+          getConstantType(child, context) === ConstantTypes.NOT_CONSTANT
+        ) {
           patchFlag |= PatchFlags.TEXT
         }
 
@@ -304,7 +323,7 @@ export function buildProps(
         value.type === NodeTypes.JS_CACHE_EXPRESSION ||
         ((value.type === NodeTypes.SIMPLE_EXPRESSION ||
           value.type === NodeTypes.COMPOUND_EXPRESSION) &&
-          getStaticType(value) > 0)
+          getConstantType(value, context) > 0)
       ) {
         // skip if the prop is a cached handler or has constant value
         return
@@ -330,8 +349,13 @@ export function buildProps(
       const { loc, name, value } = prop
       if (name === 'ref') {
         hasRef = true
+        // in inline mode there is no setupState object, so we can't use string
+        // keys to set the ref. Instead, we need to transform it to pass the
+        // acrtual ref instead.
+        if (!__BROWSER__ && context.inline) {
+          isStatic = false
+        }
       }
-
       // skip :is on <component>
       if (name === 'is' && tag === 'component') {
         continue
@@ -346,7 +370,7 @@ export function buildProps(
           ),
           createSimpleExpression(
             value ? value.content : '',
-            true,
+            isStatic,
             value ? value.loc : loc
           )
         )
@@ -422,10 +446,10 @@ export function buildProps(
         continue
       }
 
-      const directieTransform = context.directiveTransforms[name]
-      if (directieTransform) {
+      const directiveTransform = context.directiveTransforms[name]
+      if (directiveTransform) {
         // has built-in directive transform.
-        const { props, needRuntime } = directieTransform(prop, node, context)
+        const { props, needRuntime } = directiveTransform(prop, node, context)
         !ssr && props.forEach(analyzePatchFlag)
         properties.push(...props)
         if (needRuntime) {
@@ -536,7 +560,7 @@ function dedupeProperties(properties: Property[]): Property[] {
 }
 
 function mergeAsArray(existing: Property, incoming: Property) {
-  if (existing.value.type == NodeTypes.JS_ARRAY_EXPRESSION) {
+  if (existing.value.type === NodeTypes.JS_ARRAY_EXPRESSION) {
     existing.value.elements.push(incoming.value)
   } else {
     existing.value = createArrayExpression(
