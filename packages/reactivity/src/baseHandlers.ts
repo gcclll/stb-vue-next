@@ -223,6 +223,9 @@ export const shallowReactiveHandlers: ProxyHandler<object> = extend(
   }
 )
 
+// Props handlers are special in the sense that it should not unwrap top-level
+// refs (in order to allow refs to be explicitly passed down), but should
+// retain the reactivity of the normal readonly object.
 export const shallowReadonlyHandlers: ProxyHandler<object> = extend(
   {},
   readonlyHandlers,
