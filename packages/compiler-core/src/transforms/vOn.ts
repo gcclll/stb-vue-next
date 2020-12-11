@@ -75,7 +75,7 @@ export const transformOn: DirectiveTransform = (
     exp = undefined
   }
 
-  let isCacheable: boolean = context.cacheHandlers && !exp
+  let shouldCache: boolean = context.cacheHandlers && !exp
   if (exp) {
     const isMemberExp = isMemberExpression(exp.content)
     const isInlineStatement = !(isMemberExp || fnExpRE.test(exp.content))
@@ -96,7 +96,7 @@ export const transformOn: DirectiveTransform = (
       )
     }
 
-    if (isInlineStatement || (isCacheable && isMemberExp)) {
+    if (isInlineStatement || (shouldCache && isMemberExp)) {
       // wrap inline statement in a function expression
       // TODO
     }
@@ -111,7 +111,12 @@ export const transformOn: DirectiveTransform = (
     ]
   }
 
-  if (isCacheable) {
+  // apply extended compiler augmentor
+  if (augmentor) {
+    ret = augmentor(ret)
+  }
+
+  if (shouldCache) {
     // cache handlers so that it's always the same handler being passed down.
     // this avoids unnecessary re-renders when users use inline handlers on
     // components.

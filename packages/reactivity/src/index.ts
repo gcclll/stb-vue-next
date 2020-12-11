@@ -27,7 +27,9 @@ export {
   cleanup,
   stop,
   enableTracking,
+  pauseTracking,
   resetTracking,
+  ITERATE_KEY,
   ReactiveEffect,
   ReactiveEffectOptions,
   DebuggerEvent

@@ -3,6 +3,7 @@ import {
   AttributeNode,
   BlockCodegenNode,
   CacheExpression,
+  ConstantTypes,
   createCallExpression,
   createConditionalExpression,
   createObjectExpression,
@@ -253,9 +254,13 @@ function createChildrenCodegenNode(
   // 给每个分支加一个 `key` 属性
   const keyProperty = createObjectProperty(
     `key`,
-    createSimpleExpression(`${keyIndex}`, false, locStub, true)
+    createSimpleExpression(
+      `${keyIndex}`,
+      false,
+      locStub,
+      ConstantTypes.CAN_HOIST
+    )
   )
-
   const { children } = branch
   const firstChild = children[0]
   // 是不是需要用 fragment 将所有 children 包起来
@@ -273,9 +278,10 @@ function createChildrenCodegenNode(
         helper(FRAGMENT),
         createObjectExpression([keyProperty]),
         children,
-        `${PatchFlags.STABLE_FRAGMENT} /* ${
-          PatchFlagNames[PatchFlags.STABLE_FRAGMENT]
-        } */`,
+        PatchFlags.STABLE_FRAGMENT +
+          (__DEV__
+            ? ` /* ${PatchFlagNames[PatchFlags.STABLE_FRAGMENT]} */`
+            : ``),
         undefined,
         undefined,
         true,

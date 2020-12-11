@@ -88,7 +88,12 @@ export const transformModel: DirectiveTransform = (dir, node, context) => {
     props.push(
       createObjectProperty(
         modifiersKey,
-        createSimpleExpression(`{ ${modifiers} }`, false, dir.loc, true)
+        createSimpleExpression(
+          `{ ${modifiers} }`,
+          false,
+          dir.loc,
+          ConstantTypes.CAN_HOIST
+        )
       )
     )
   }

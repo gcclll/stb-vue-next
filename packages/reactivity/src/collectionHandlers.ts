@@ -1,4 +1,11 @@
-import { capitalize, hasOwn, isMap, isObject, toRawType } from '@vue/shared'
+import {
+  capitalize,
+  hasChanged,
+  hasOwn,
+  isMap,
+  isObject,
+  toRawType
+} from '@vue/shared'
 import { ITERATE_KEY, MAP_KEY_ITERATE_KEY, track, trigger } from './effect'
 import { TrackOpTypes, TriggerOpTypes } from './operations'
 import { ReactiveFlags, toRaw, reactive, readonly } from './reactive'
@@ -75,13 +82,13 @@ function add(this: SetTypes, value: unknown) {
   const target = toRaw(this)
   const proto = getProto(target)
   const hadKey = proto.has.call(target, value)
-  const result = target.add(value)
+  target.add(value)
   // 因为 set 是不会存在重复元素的，所以只会在没有当前 key 的情况下才会执行
   // 添加操作
   if (!hadKey) {
     trigger(target, TriggerOpTypes.ADD, value, value)
   }
-  return result
+  return this
 }
 
 function set(this: MapTypes, key: unknown, value: unknown) {
@@ -101,16 +108,16 @@ function set(this: MapTypes, key: unknown, value: unknown) {
 
   const oldValue = get.call(target, key)
   // 设值结果
-  const result = target.set(key, value)
+  target.set(key, value)
   if (!hadKey) {
     // 添加操作
     trigger(target, TriggerOpTypes.ADD, key, value)
-  } else {
+  } else if (hasChanged(value, oldValue)) {
     // 设值操作
     trigger(target, TriggerOpTypes.SET, key, value, oldValue)
   }
 
-  return result
+  return this
 }
 
 function deleteEntry(this: CollectionTypes, key: unknown) {
@@ -212,7 +219,7 @@ function createIterableMethod(
         return done
           ? { value, done }
           : {
-              value: isPair ? [wrap(value(0)), wrap(value[1])] : wrap(value),
+              value: isPair ? [wrap(value[0]), wrap(value[1])] : wrap(value),
               done
             }
       },

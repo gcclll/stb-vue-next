@@ -90,7 +90,8 @@ function createGetter(isReadonly = false, shallow = false) {
 
     // 4. target is array
     const targetIsArray = isArray(target)
-    if (targetIsArray && hasOwn(arrayInstrumentations, key)) {
+
+    if (!isReadonly && targetIsArray && hasOwn(arrayInstrumentations, key)) {
       return Reflect.get(arrayInstrumentations, key, receiver)
     }
 

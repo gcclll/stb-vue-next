@@ -242,6 +242,9 @@ export function trigger(
       case TriggerOpTypes.ADD:
         if (!isArray(target)) {
           add(depsMap.get(ITERATE_KEY))
+          if (isMap(target)) {
+            add(depsMap.get(MAP_KEY_ITERATE_KEY))
+          }
         } else if (isIntegerKey(key)) {
           // 如果是数组添加元素，将 length 依赖添加到执行队列
           add(depsMap.get('length'))

@@ -22,6 +22,9 @@ import { createCompilerError, ErrorCodes } from '../errors'
 import { WITH_CTX } from '../runtimeHelpers'
 import { NodeTransform, TransformContext } from '../transform'
 import { findDir, hasScopeRef, isStaticExp, isTemplateNode } from '../utils'
+
+const defaultFallback = createSimpleExpression(`undefined`, false)
+
 // A NodeTransform that:
 // 1. Tracks scope identifiers for scoped slots so that they don't get prefixed
 //    by transformExpression. This is only applied in non-browser builds with
