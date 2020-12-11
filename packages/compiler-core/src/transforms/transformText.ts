@@ -1,6 +1,7 @@
 import { PatchFlagNames, PatchFlags } from '@vue/shared/src'
 import {
   CallExpression,
+  CompoundExpressionNode,
   createCallExpression,
   ElementTypes,
   NodeTypes
@@ -24,7 +25,7 @@ export const transformText: NodeTransform = (node, context) => {
     // been processed.
     return () => {
       const children = node.children
-      // let currentContainer: CompoundExpressionNode | undefined = undefined
+      let currentContainer: CompoundExpressionNode | undefined = undefined
       let hasText = false
 
       // 遍历所有孩子节点，合并文本
@@ -32,7 +33,26 @@ export const transformText: NodeTransform = (node, context) => {
         const child = children[i]
         if (isText(child)) {
           hasText = true
-          // TODO 合并
+          for (let j = i + 1; j < children.length; j++) {
+            const next = children[j]
+            if (isText(next)) {
+              if (!currentContainer) {
+                currentContainer = children[i] = {
+                  type: NodeTypes.COMPOUND_EXPRESSION,
+                  loc: child.loc,
+                  children: [child]
+                }
+              }
+
+              // merge adjacent text node into current
+              currentContainer.children.push(` + `, next)
+              children.splice(j, 1)
+              j--
+            } else {
+              currentContainer = undefined
+              break
+            }
+          }
         }
       }
 

@@ -103,10 +103,22 @@ export function buildSlots(
 
   // 1. <Comp v-slot="{ prop }"/> 检查 slot 和 slotProps 应用在组件自身
   const onComponentSlot = findDir(node, 'slot', true)
-  // TODO
+  if (onComponentSlot) {
+    const { arg, exp } = onComponentSlot
+    if (arg && !isStaticExp(arg)) {
+      hasDynamicSlots = true
+    }
+    slotsProperties.push(
+      createObjectProperty(
+        arg || createSimpleExpression('default', true),
+        buildSlotFn(exp, children, loc)
+      )
+    )
+  }
 
   // 2. 遍历所有 children 检查是否存在 <template v-slot:foo="{prop}">
   let hasTemplateSlots = false
+  let hasNamedDefaultSlot = false
   const implicitDefaultChildren: TemplateChildNode[] = []
   // const seenSlotNames = new Set<string>()
 
@@ -135,7 +147,23 @@ export function buildSlots(
       // <Comp><div/></Comp> 内的 <div/> 作为默认插槽
       slotsProperties.push(buildDefaultSlotProperty(undefined, children))
     } else if (implicitDefaultChildren.length) {
-      // TODO
+      // 1. 非 <Comp v-slot="slotProps">
+      // 2. 存在 <template v-slot>
+      // 3. 且存在其他非 template 类型的节点
+      // 4. 如果有 <template v-slot:default="slotProps"> 时候视为非法
+      // 因为其他非 template 类型的节点会被视为默认插槽内容
+      if (hasNamedDefaultSlot) {
+        context.onError(
+          createCompilerError(
+            ErrorCodes.X_V_SLOT_EXTRANEOUS_DEFAULT_SLOT_CHILDREN,
+            implicitDefaultChildren[0].loc
+          )
+        )
+      } else {
+        slotsProperties.push(
+          buildDefaultSlotProperty(undefined, implicitDefaultChildren)
+        )
+      }
     }
   }
 
