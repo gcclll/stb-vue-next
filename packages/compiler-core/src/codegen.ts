@@ -34,9 +34,11 @@ import {
   TO_DISPLAY_STRING,
   WITH_DIRECTIVES,
   WITH_SCOPE_ID,
-  WITH_CTX
+  WITH_CTX,
+  RESOLVE_COMPONENT,
+  RESOLVE_DIRECTIVE
 } from './runtimeHelpers'
-import { assert, isSimpleIdentifier } from './utils'
+import { assert, isSimpleIdentifier, toValidAssetId } from './utils'
 
 const PURE_ANNOTATION = `/*#__PURE__*/`
 
@@ -199,11 +201,22 @@ export function generate(
     }
   }
 
-  // TODO ast.components, generate asset resolution statements
+  // ast.components, generate asset resolution statements
+  if (ast.components.length) {
+    genAssets(ast.components, 'component', context)
+    if (ast.directives.length || ast.temps > 0) {
+      newline()
+    }
+  }
 
   // TODO generate directives, ast.directives
 
   // TODO 临时变量 ast.temps
+
+  if (ast.components.length || ast.directives.length || ast.temps) {
+    push(`\n`)
+    newline()
+  }
 
   // 生成 VNode 树表达式
   if (!ssr) {
@@ -324,6 +337,26 @@ function genModulePreamble(
   // TODO gen hoists
   newline()
   push(`export `)
+}
+
+function genAssets(
+  assets: string[],
+  type: 'component' | 'directive',
+  { helper, push, newline }: CodegenContext
+) {
+  const resolver = helper(
+    type === 'component' ? RESOLVE_COMPONENT : RESOLVE_DIRECTIVE
+  )
+
+  for (let i = 0; i < assets.length; i++) {
+    const id = assets[i]
+    push(
+      `const ${toValidAssetId(id, type)} = ${resolver}(${JSON.stringify(id)})`
+    )
+    if (i < assets.length - 1) {
+      newline()
+    }
+  }
 }
 
 function genHoists(hoists: (JSChildNode | null)[], context: CodegenContext) {
