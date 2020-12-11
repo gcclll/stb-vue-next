@@ -1,5 +1,5 @@
 import { directive } from '@babel/types'
-import { camelize } from '@vue/shared/src'
+import { camelize } from '@vue/shared'
 import {
   CallExpression,
   createCallExpression,

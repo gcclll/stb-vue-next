@@ -1,4 +1,4 @@
-import { PatchFlagNames, PatchFlags } from '@vue/shared/src'
+import { PatchFlagNames, PatchFlags } from '@vue/shared'
 import {
   BlockCodegenNode,
   createCallExpression,
@@ -77,7 +77,7 @@ export const transformFor = createStructuralDirectiveTransform(
 
       const isStableFragment =
         forNode.source.type === NodeTypes.SIMPLE_EXPRESSION &&
-        forNode.source.isConstant
+        forNode.source.constType > 0
       const fragmentFlag = isStableFragment
         ? PatchFlags.STABLE_FRAGMENT
         : keyProp
@@ -89,7 +89,8 @@ export const transformFor = createStructuralDirectiveTransform(
         helper(FRAGMENT),
         undefined,
         renderExp,
-        `${fragmentFlag} /* ${PatchFlagNames[fragmentFlag]} */`,
+        fragmentFlag +
+          (__DEV__ ? ` /* ${PatchFlagNames[fragmentFlag]} */` : ``),
         undefined,
         undefined,
         true /* isBlock */,
@@ -149,9 +150,10 @@ export const transformFor = createStructuralDirectiveTransform(
             helper(FRAGMENT),
             keyProperty ? createObjectExpression([keyProperty]) : undefined,
             node.children,
-            `${PatchFlags.STABLE_FRAGMENT} /* ${
-              PatchFlagNames[PatchFlags.STABLE_FRAGMENT]
-            } */`,
+            PatchFlags.STABLE_FRAGMENT +
+              (__DEV__
+                ? ` /* ${PatchFlagNames[PatchFlags.STABLE_FRAGMENT]} */`
+                : ``),
             undefined,
             undefined,
             true
@@ -170,6 +172,8 @@ export const transformFor = createStructuralDirectiveTransform(
           if (childBlock.isBlock) {
             helper(OPEN_BLOCK)
             helper(CREATE_BLOCK)
+          } else {
+            helper(CREATE_VNODE)
           }
         }
 
@@ -231,7 +235,7 @@ export function processFor(
   scopes.vFor++
   if (!__BROWSER__ && context.prefixIdentifiers) {
     // scope management
-    // inject indentifiers to context
+    // inject identifiers to context
     value && addIdentifiers(value)
     key && addIdentifiers(key)
     index && addIdentifiers(index)
@@ -276,7 +280,6 @@ export function parseForExpression(
 
   // LHS in|of RHS
   const [, LHS, RHS] = inMatch
-  if (!inMatch) return
 
   const result: ForParseResult = {
     source: createAliasExpression(

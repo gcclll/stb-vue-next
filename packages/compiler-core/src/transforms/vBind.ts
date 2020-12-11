@@ -1,4 +1,4 @@
-import { camelize } from '@vue/shared/src'
+import { camelize } from '@vue/shared'
 import { createObjectProperty, createSimpleExpression, NodeTypes } from '../ast'
 import { createCompilerError, ErrorCodes } from '../errors'
 import { CAMELIZE } from '../runtimeHelpers'

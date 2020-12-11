@@ -1,4 +1,4 @@
-import { PatchFlagNames, PatchFlags } from '@vue/shared/src'
+import { PatchFlagNames, PatchFlags } from '@vue/shared'
 import {
   CallExpression,
   CompoundExpressionNode,
@@ -61,6 +61,10 @@ export const transformText: NodeTransform = (node, context) => {
       // 2. 只有一个 child 且类型必须是 ROOT 或 type, tagType 都是 ELEMENT的标签
       if (
         !hasText ||
+        // if this is a plain element with a single text child, leave it
+        // as-is since the runtime has dedicated fast path for this by directly
+        // setting textContent of the element.
+        // for component root it's always normalized anyway.
         (children.length === 1 &&
           (node.type === NodeTypes.ROOT ||
             (node.type === NodeTypes.ELEMENT &&
@@ -81,9 +85,13 @@ export const transformText: NodeTransform = (node, context) => {
           }
 
           // mark dynamic text with flag so it gets patched inside a block
-          if (!context.ssr && child.type !== NodeTypes.TEXT) {
+          if (
+            !context.ssr &&
+            getConstantType(child, context) === ConstantTypes.NOT_CONSTANT
+          ) {
             callArgs.push(
-              `${PatchFlags.TEXT} /* ${PatchFlagNames[PatchFlags.TEXT]} */`
+              PatchFlags.TEXT +
+                (__DEV__ ? ` /* ${PatchFlagNames[PatchFlags.TEXT]} */` : ``)
             )
           }
 
