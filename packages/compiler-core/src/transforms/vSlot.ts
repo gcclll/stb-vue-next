@@ -1,5 +1,8 @@
 import { SlotFlags, slotFlagsText } from '@vue/shared'
 import {
+  CallExpression,
+  ConditionalExpression,
+  createCallExpression,
   createFunctionExpression,
   createObjectExpression,
   createObjectProperty,
@@ -10,15 +13,18 @@ import {
   ExpressionNode,
   FunctionExpression,
   NodeTypes,
+  ObjectExpression,
   Property,
+  SimpleExpressionNode,
   SlotsExpression,
   SourceLocation,
   TemplateChildNode
 } from '../ast'
 import { createCompilerError, ErrorCodes } from '../errors'
-import { WITH_CTX } from '../runtimeHelpers'
+import { RENDER_LIST, WITH_CTX } from '../runtimeHelpers'
 import { NodeTransform, TransformContext } from '../transform'
 import { findDir, hasScopeRef, isStaticExp, isTemplateNode } from '../utils'
+import { createForLoopParams, parseForExpression } from './vFor'
 
 // A NodeTransform that:
 // 1. Tracks scope identifiers for scoped slots so that they don't get prefixed
@@ -83,6 +89,7 @@ export function buildSlots(
 
   const { children, loc } = node
   const slotsProperties: Property[] = []
+  const dynamicSlots: (ConditionalExpression | CallExpression)[] = []
 
   const buildDefaultSlotProperty = (
     props: ExpressionNode | undefined,
@@ -173,7 +180,29 @@ export function buildSlots(
     ) {
       // TODO v-else/if on template
     } else if ((vFor = findDir(slotElement, 'for'))) {
-      // TODO
+      hasDynamicSlots = true
+      const parseResult =
+        vFor.parseResult ||
+        parseForExpression(vFor.exp as SimpleExpressionNode, context)
+
+      if (parseResult) {
+        // Render the dynamic slots as an array and add it to the createSlot()
+        // args. The runtime knows how to handle it appropriately.
+        dynamicSlots.push(
+          createCallExpression(context.helper(RENDER_LIST), [
+            parseResult.source,
+            createFunctionExpression(
+              createForLoopParams(parseResult),
+              buildDynamicSlot(slotName, slotFunction),
+              true /* force newline */
+            )
+          ])
+        )
+      } else {
+        context.onError(
+          createCompilerError(ErrorCodes.X_V_FOR_MALFORMED_EXPRESSION, vFor.loc)
+        )
+      }
     } else {
       // 检查静态属性名是否有重复的
       if (staticSlotName) {
@@ -250,6 +279,16 @@ export function buildSlots(
   // TODO 动态插槽， v-slot:[name]="slotProps"
 
   return { slots, hasDynamicSlots }
+}
+
+function buildDynamicSlot(
+  name: ExpressionNode,
+  fn: FunctionExpression
+): ObjectExpression {
+  return createObjectExpression([
+    createObjectProperty(`name`, name),
+    createObjectProperty(`fn`, fn)
+  ])
 }
 
 function hasForwardedSlots(children: TemplateChildNode[]): boolean {
