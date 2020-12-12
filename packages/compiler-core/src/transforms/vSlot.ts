@@ -4,6 +4,7 @@ import {
   createObjectExpression,
   createObjectProperty,
   createSimpleExpression,
+  DirectiveNode,
   ElementNode,
   ElementTypes,
   ExpressionNode,
@@ -117,7 +118,7 @@ export function buildSlots(
   let hasTemplateSlots = false
   let hasNamedDefaultSlot = false
   const implicitDefaultChildren: TemplateChildNode[] = []
-  // const seenSlotNames = new Set<string>()
+  const seenSlotNames = new Set<string>()
 
   for (let i = 0; i < children.length; i++) {
     const slotElement = children[i]
@@ -143,7 +144,59 @@ export function buildSlots(
       break
     }
 
-    // TODO more
+    hasTemplateSlots = true
+    const { children: slotChildren, loc: slotLoc } = slotElement
+    const {
+      arg: slotName = createSimpleExpression(`default`, true),
+      exp: slotProps,
+      loc: dirLoc
+    } = slotDir
+
+    // check if name is dynamic
+    let staticSlotName: string | undefined
+    if (isStaticExp(slotName)) {
+      staticSlotName = slotName ? slotName.content : `default`
+    } else {
+      // dynamic slot name, v-slot:[name]="slotProps"
+      hasDynamicSlots = true
+    }
+
+    const slotFunction = buildSlotFn(slotProps, slotChildren, slotLoc)
+    // check if this slot is conditional (v-if/v-for)
+    let vIf: DirectiveNode | undefined
+    let vElse: DirectiveNode | undefined
+    let vFor: DirectiveNode | undefined
+    if ((vIf = findDir(slotElement, 'if'))) {
+      // TODO v-if on template
+    } else if (
+      (vElse = findDir(slotElement, /^else(-if)?$/, true /* allowEmpty */))
+    ) {
+      // TODO v-else/if on template
+    } else if ((vFor = findDir(slotElement, 'for'))) {
+      // TODO
+    } else {
+      // 检查静态属性名是否有重复的
+      if (staticSlotName) {
+        if (seenSlotNames.has(staticSlotName)) {
+          context.onError(
+            createCompilerError(
+              ErrorCodes.X_V_SLOT_DUPLICATE_SLOT_NAMES,
+              dirLoc
+            )
+          )
+
+          continue
+        }
+
+        seenSlotNames.add(staticSlotName)
+        if (staticSlotName === 'default') {
+          // 显式的使用了默认插槽名称
+          hasNamedDefaultSlot = true
+        }
+      }
+
+      slotsProperties.push(createObjectProperty(slotName, slotFunction))
+    }
   }
 
   if (!onComponentSlot) {

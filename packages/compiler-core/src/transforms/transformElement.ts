@@ -151,7 +151,7 @@ export const transformElement: NodeTransform = (node, context) => {
         vnodeChildren = slots // { type: 15,JS_OBJECT_EXPRESSION, properties: [...]}
         if (hasDynamicSlots) {
           // 动态插槽
-          patchFlag != PatchFlags.DYNAMIC_SLOTS
+          patchFlag |= PatchFlags.DYNAMIC_SLOTS
         }
       } else if (node.children.length === 1 && vnodeTag !== TELEPORT) {
         // 只有一个孩子节点的时候
@@ -305,7 +305,6 @@ export function buildProps(
   const dynamicPropNames: string[] = []
 
   const analyzePatchFlag = ({ key, value }: Property) => {
-    // TODO
     if (isStaticExp(key)) {
       const name = key.content
       const isEventHandler = isOn(name)
