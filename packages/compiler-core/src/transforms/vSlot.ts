@@ -25,7 +25,13 @@ import {
 import { createCompilerError, ErrorCodes } from '../errors'
 import { CREATE_SLOTS, RENDER_LIST, WITH_CTX } from '../runtimeHelpers'
 import { NodeTransform, TransformContext } from '../transform'
-import { findDir, hasScopeRef, isStaticExp, isTemplateNode } from '../utils'
+import {
+  assert,
+  findDir,
+  hasScopeRef,
+  isStaticExp,
+  isTemplateNode
+} from '../utils'
 import { createForLoopParams, parseForExpression } from './vFor'
 
 const defaultFallback = createSimpleExpression(`undefined`, false)
@@ -190,7 +196,45 @@ export function buildSlots(
     } else if (
       (vElse = findDir(slotElement, /^else(-if)?$/, true /* allowEmpty */))
     ) {
-      // TODO v-else/if on template
+      // v-else/if on slot
+      let j = i
+      let prev
+      while (j--) {
+        // 找到相邻的 v-if
+        prev = children[j]
+        if (prev.type !== NodeTypes.COMMENT) {
+          break
+        }
+      }
+
+      if (prev && isTemplateNode(prev) && findDir(prev, 'if')) {
+        // remove node
+        children.splice(i, 1)
+        i--
+        __TEST__ && assert(dynamicSlots.length > 0)
+        // attach this slot to previous conditional
+        let conditional = dynamicSlots[
+          dynamicSlots.length - 1
+        ] as ConditionalExpression
+
+        while (
+          conditional.alternate.type === NodeTypes.JS_CONDITIONAL_EXPRESSION
+        ) {
+          conditional = conditional.alternate
+        }
+
+        conditional.alternate = vElse.exp
+          ? createConditionalExpression(
+              vElse.exp,
+              buildDynamicSlot(slotName, slotFunction),
+              defaultFallback
+            )
+          : buildDynamicSlot(slotName, slotFunction)
+      } else {
+        context.onError(
+          createCompilerError(ErrorCodes.X_V_ELSE_NO_ADJACENT_IF, vElse.loc)
+        )
+      }
     } else if ((vFor = findDir(slotElement, 'for'))) {
       hasDynamicSlots = true
       const parseResult =
@@ -296,7 +340,6 @@ export function buildSlots(
     ]) as SlotsExpression
   }
 
-  console.log(slots, hasDynamicSlots, 'xxx')
   return { slots, hasDynamicSlots }
 }
 
