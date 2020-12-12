@@ -19,7 +19,8 @@ import {
   ConditionalExpression,
   FunctionExpression,
   Position,
-  locStub
+  locStub,
+  ArrayExpression
 } from './ast'
 import { CodegenOptions } from './options'
 import {
@@ -578,6 +579,9 @@ function genNode(node: CodegenNode | symbol | string, context: CodegenContext) {
     case NodeTypes.JS_OBJECT_EXPRESSION:
       genObjectExpression(node, context)
       break
+    case NodeTypes.JS_ARRAY_EXPRESSION:
+      genArrayExpression(node, context)
+      break
     case NodeTypes.JS_FUNCTION_EXPRESSION:
       genFunctionExpression(node, context)
       break
@@ -757,6 +761,10 @@ function genObjectExpression(node: ObjectExpression, context: CodegenContext) {
 
   multilines && deindent()
   push(multilines ? `}` : ` }`)
+}
+
+function genArrayExpression(node: ArrayExpression, context: CodegenContext) {
+  genNodeListAsArray(node.elements, context)
 }
 
 function genFunctionExpression(

@@ -2,7 +2,9 @@ import { SlotFlags, slotFlagsText } from '@vue/shared'
 import {
   CallExpression,
   ConditionalExpression,
+  createArrayExpression,
   createCallExpression,
+  createConditionalExpression,
   createFunctionExpression,
   createObjectExpression,
   createObjectProperty,
@@ -21,10 +23,12 @@ import {
   TemplateChildNode
 } from '../ast'
 import { createCompilerError, ErrorCodes } from '../errors'
-import { RENDER_LIST, WITH_CTX } from '../runtimeHelpers'
+import { CREATE_SLOTS, RENDER_LIST, WITH_CTX } from '../runtimeHelpers'
 import { NodeTransform, TransformContext } from '../transform'
 import { findDir, hasScopeRef, isStaticExp, isTemplateNode } from '../utils'
 import { createForLoopParams, parseForExpression } from './vFor'
+
+const defaultFallback = createSimpleExpression(`undefined`, false)
 
 // A NodeTransform that:
 // 1. Tracks scope identifiers for scoped slots so that they don't get prefixed
@@ -174,7 +178,15 @@ export function buildSlots(
     let vElse: DirectiveNode | undefined
     let vFor: DirectiveNode | undefined
     if ((vIf = findDir(slotElement, 'if'))) {
-      // TODO v-if on template
+      // v-slot with v-if
+      hasDynamicSlots = true
+      dynamicSlots.push(
+        createConditionalExpression(
+          vIf.exp!,
+          buildDynamicSlot(slotName, slotFunction),
+          defaultFallback
+        )
+      )
     } else if (
       (vElse = findDir(slotElement, /^else(-if)?$/, true /* allowEmpty */))
     ) {
@@ -276,8 +288,15 @@ export function buildSlots(
     loc
   ) as SlotsExpression
 
-  // TODO 动态插槽， v-slot:[name]="slotProps"
+  // 动态插槽， v-slot:[name]="slotProps" 或在 v-if/v-for 指令中都是为动态
+  if (dynamicSlots.length) {
+    slots = createCallExpression(context.helper(CREATE_SLOTS), [
+      slots,
+      createArrayExpression(dynamicSlots)
+    ]) as SlotsExpression
+  }
 
+  console.log(slots, hasDynamicSlots, 'xxx')
   return { slots, hasDynamicSlots }
 }
 
