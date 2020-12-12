@@ -25,6 +25,7 @@ import {
   Target,
   toRaw
 } from './reactive'
+import { isRef } from './ref'
 
 const builtInSymbols = new Set(
   Object.getOwnPropertyNames(Symbol)
@@ -116,9 +117,14 @@ function createGetter(isReadonly = false, shallow = false) {
       return res
     }
 
-    // TODO 6. res isRef
+    // 6. res isRef
+    if (isRef(res)) {
+      // ref unwrapping - does not apply for Array + integer key.
+      const shouldUnwrap = !targetIsArray || !isIntegerKey(key)
+      return shouldUnwrap ? res.value : res
+    }
 
-    // TODO 7. res is object -> reactive recursivly
+    // 7. res is object -> reactive recursivly
     if (isObject(res)) {
       // 递归 reactive 嵌套对象，feat: b2143f9
       return isReadonly ? readonly(res) : reactive(res)
@@ -139,8 +145,17 @@ function createSetter(shallow = false) {
     receiver: object
   ): boolean {
     const oldValue = (target as any)[key]
-    // TODO shallow or not, or ref ?
-    //
+    // shallow or not, or ref ?
+    if (!shallow) {
+      value = toRaw(value)
+      // 非数组，旧值是 ref 类型，但是新值不是，则将新值设置到旧值的 value 属性上
+      if (!isArray(target) && isRef(oldValue) && !isRef(value)) {
+        oldValue.value = value
+        return true
+      }
+    } else {
+      // in shallow mode, objects are set as-is regardless of reactive or not
+    }
 
     const hadKey =
       isArray(target) && isIntegerKey(key)

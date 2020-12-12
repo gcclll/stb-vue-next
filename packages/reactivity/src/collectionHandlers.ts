@@ -212,7 +212,8 @@ function createIterableMethod(
         TrackOpTypes.ITERATE,
         isKeyOnly ? MAP_KEY_ITERATE_KEY : ITERATE_KEY
       )
-
+    // return a wrapped iterator which returns observed versions of the
+    // values emitted from the real iterator
     return {
       next() {
         const { value, done } = innerIterator.next()
@@ -261,6 +262,21 @@ const mutableInstrumentations: Record<string, Function> = {
   forEach: createForEach(false, false)
 }
 
+const shallowInstrumentations: Record<string, Function> = {
+  get(this: MapTypes, key: unknown) {
+    return get(this, key, false, true)
+  },
+  get size() {
+    return size((this as unknown) as IterableCollections)
+  },
+  has,
+  add,
+  set,
+  delete: deleteEntry,
+  clear,
+  forEach: createForEach(false, true)
+}
+
 const readonlyInstrumentations: Record<string, Function> = {
   get(this: MapTypes, key: unknown) {
     return get(this, key, true)
@@ -278,27 +294,22 @@ const readonlyInstrumentations: Record<string, Function> = {
   forEach: createForEach(true, false)
 }
 
-const shallowInstrumentations: Record<string, Function> = {
-  get(this: MapTypes, key: unknown) {
-    return get(this, key, false, true)
-  },
-  get size() {
-    return size((this as unknown) as IterableCollections)
-  },
-  has,
-  add,
-  set,
-  delete: deleteEntry,
-  clear,
-  forEach: createForEach(false, true)
-}
-
 const iteratorMethods = ['keys', 'values', 'entries', Symbol.iterator]
 iteratorMethods.forEach(method => {
   mutableInstrumentations[method as string] = createIterableMethod(
     method,
     false,
     false
+  )
+  readonlyInstrumentations[method as string] = createIterableMethod(
+    method,
+    true,
+    false
+  )
+  shallowInstrumentations[method as string] = createIterableMethod(
+    method,
+    false,
+    true
   )
 })
 
