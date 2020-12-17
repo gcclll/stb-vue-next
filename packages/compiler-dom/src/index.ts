@@ -14,6 +14,7 @@ import { transformVHtml } from './transforms/vHtml'
 import { transformVText } from './transforms/vText'
 import { transformModel } from './transforms/vModel'
 import { transformOn } from './transforms/vOn'
+import { transformShow } from './transforms/vShow'
 import { parserOptions } from './parserOptions'
 import { stringifyStatic } from './transforms/stringifyStatic'
 
@@ -24,8 +25,9 @@ export const DOMNodeTransforms: NodeTransform[] = [transformStyle]
 export const DOMDirectiveTransforms: Record<string, DirectiveTransform> = {
   html: transformVHtml,
   text: transformVText,
-  model: transformModel,
-  on: transformOn
+  model: transformModel, // override compiler-core
+  on: transformOn, // override compiler-core
+  show: transformShow
 }
 
 export function compile(
