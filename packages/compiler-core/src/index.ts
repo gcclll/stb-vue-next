@@ -38,10 +38,19 @@ export { getBaseTransformPreset, TransformPreset } from './compile'
 export { transformModel } from './transforms/vModel'
 export { transformOn } from './transforms/vOn'
 export { transformBind } from './transforms/vBind'
+export { noopDirectiveTransform } from './transforms/noopDirectiveTransform'
 export { processIf } from './transforms/vIf'
 export { processFor, createForLoopParams } from './transforms/vFor'
-export { processExpression } from './transforms/transformExpression'
-export { buildSlots, SlotFnBuilder, trackSlotScopes } from './transforms/vSlot'
+export {
+  transformExpression,
+  processExpression
+} from './transforms/transformExpression'
+export {
+  buildSlots,
+  SlotFnBuilder,
+  trackVForSlotScopes,
+  trackSlotScopes
+} from './transforms/vSlot'
 export {
   transformElement,
   resolveComponentType,

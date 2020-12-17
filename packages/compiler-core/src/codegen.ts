@@ -41,6 +41,7 @@ import {
   RESOLVE_COMPONENT,
   RESOLVE_DIRECTIVE
 } from './runtimeHelpers'
+import { ImportItem } from './transform'
 import {
   advancePositionWithMutation,
   assert,
@@ -270,9 +271,20 @@ export function generate(
     }
   }
 
-  // TODO generate directives, ast.directives
-
-  // TODO 临时变量 ast.temps
+  // generate directives, ast.directives
+  if (ast.directives.length) {
+    genAssets(ast.directives, 'directive', context)
+    if (ast.temps > 0) {
+      newline()
+    }
+  }
+  // 临时变量 ast.temps
+  if (ast.temps > 0) {
+    push(`let `)
+    for (let i = 0; i < ast.temps; i++) {
+      push(`${i > 0 ? `, ` : ``}_temp${i}`)
+    }
+  }
 
   if (ast.components.length || ast.directives.length || ast.temps) {
     push(`\n`)
@@ -363,7 +375,12 @@ function genFunctionPreamble(ast: RootNode, context: CodegenContext) {
 
   // ssr helpers
   if (!__BROWSER__ && ast.ssrHelpers && ast.ssrHelpers.length) {
-    // TODO
+    // ssr guarantees prefixIdentifier: true
+    push(
+      `const { ${ast.ssrHelpers
+        .map(aliasHelper)
+        .join(', ')} } = require("@vue/server-renderer")\n`
+    )
   }
 
   genHoists(ast.hoists, context)
@@ -377,7 +394,14 @@ function genModulePreamble(
   genScopeId: boolean,
   inline?: boolean
 ) {
-  const { push, helper, newline, scopeId } = context
+  const {
+    push,
+    helper,
+    newline,
+    scopeId,
+    optimizeImports,
+    runtimeModuleName
+  } = context
 
   if (genScopeId) {
     ast.helpers.push(WITH_SCOPE_ID)
@@ -388,16 +412,43 @@ function genModulePreamble(
 
   // 为所有的 helpers 生成 import 语句
   if (ast.helpers.length) {
-    // TODO helpers
+    if (optimizeImports) {
+      // when bundled with webpack with code-split, calling an import binding
+      // as a function leads to it being wrapped with `Object(a.b)` or `(0,a.b)`,
+      // incurring both payload size increase and potential perf overhead.
+      // therefore we assign the imports to variables (which is a constant ~50b
+      // cost per-component instead of scaling with template size)
+      push(
+        `import { ${ast.helpers
+          .map(s => helperNameMap[s])
+          .join(', ')} } from ${JSON.stringify(runtimeModuleName)}\n`
+      )
+      push(
+        `\n// Binding optimization for webpack code-split\nconst ${ast.helpers
+          .map(s => `_${helperNameMap[s]} = ${helperNameMap[s]}`)
+          .join(', ')}\n`
+      )
+    } else {
+      push(
+        `import { ${ast.helpers
+          .map(s => `${helperNameMap[s]} as _${helperNameMap[s]}`)
+          .join(', ')} } from ${JSON.stringify(runtimeModuleName)}\n`
+      )
+    }
   }
 
   // 服务端渲染 helpers import 语法
   if (ast.ssrHelpers && ast.ssrHelpers.length) {
-    // TODO ssr helpers
+    push(
+      `import { ${ast.ssrHelpers
+        .map(s => `${helperNameMap[s]} as _${helperNameMap[s]}`)
+        .join(', ')} } from "@vue/server-renderer"\n`
+    )
   }
 
   if (ast.imports.length) {
-    // TODO imports
+    genImports(ast.imports, context)
+    newline()
   }
 
   if (genScopeId) {
@@ -466,6 +517,19 @@ function genHoists(hoists: (JSChildNode | null)[], context: CodegenContext) {
   }
 
   context.pure = false
+}
+
+function genImports(importsOptions: ImportItem[], context: CodegenContext) {
+  if (!importsOptions.length) {
+    return
+  }
+
+  importsOptions.forEach(imports => {
+    context.push(`import `)
+    genNode(imports.exp, context)
+    context.push(` from '${imports.path}'`)
+    context.newline()
+  })
 }
 
 function isText(n: string | CodegenNode) {
