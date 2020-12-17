@@ -20,7 +20,8 @@ import {
   FunctionExpression,
   Position,
   locStub,
-  ArrayExpression
+  ArrayExpression,
+  TemplateLiteral
 } from './ast'
 import { CodegenOptions } from './options'
 import {
@@ -655,6 +656,22 @@ function genNode(node: CodegenNode | symbol | string, context: CodegenContext) {
     case NodeTypes.JS_CACHE_EXPRESSION:
       genCacheExpression(node, context)
       break
+
+    // SSR only types
+    case NodeTypes.JS_BLOCK_STATEMENT:
+      !__BROWSER__ && genNodeList(node.body, context, true, false)
+      break
+    case NodeTypes.JS_TEMPLATE_LITERAL:
+      !__BROWSER__ && genTemplateLiteral(node, context)
+      break
+    case NodeTypes.JS_IF_STATEMENT:
+      break
+    case NodeTypes.JS_ASSIGNMENT_EXPRESSION:
+      break
+    case NodeTypes.JS_SEQUENCE_EXPRESSION:
+      break
+    case NodeTypes.JS_RETURN_STATEMENT:
+      break
   }
 }
 
@@ -944,4 +961,26 @@ function genCacheExpression(node: CacheExpression, context: CodegenContext) {
     deindent()
   }
   push(`)`)
+}
+
+// 标签模板语法
+function genTemplateLiteral(node: TemplateLiteral, context: CodegenContext) {
+  const { push, indent, deindent } = context
+  push('`')
+  const l = node.elements.length
+  const multilines = l > 3
+  for (let i = 0; i < l; i++) {
+    const e = node.elements[i]
+    if (isString(e)) {
+      push(e.replace(/(`|\$|\\)/g, '\\$1'))
+    } else {
+      push('${')
+      if (multilines) indent()
+      genNode(e, context)
+      if (multilines) deindent()
+      push('}')
+    }
+  }
+
+  push('`')
 }
