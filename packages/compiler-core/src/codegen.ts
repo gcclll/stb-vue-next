@@ -680,6 +680,18 @@ function genNode(node: CodegenNode | symbol | string, context: CodegenContext) {
     case NodeTypes.JS_RETURN_STATEMENT:
       !__BROWSER__ && genReturnStatement(node, context)
       break
+
+    /* istanbul ignore text */
+    case NodeTypes.IF_BRANCH:
+      // noop
+      break
+    default:
+      if (__DEV__) {
+        assert(false, `unhandled codegen node type: ${(node as any).type}`)
+        // make sure we exhaust all possible types
+        const exhaustiveCheck: never = node
+        return exhaustiveCheck
+      }
   }
 }
 
