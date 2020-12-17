@@ -11,6 +11,7 @@ import {
 import { extend } from '@vue/shared'
 import { transformStyle } from './transforms/transformStyle'
 import { transformVHtml } from './transforms/vHtml'
+import { transformVText } from './transforms/vText'
 import { parserOptions } from './parserOptions'
 import { stringifyStatic } from './transforms/stringifyStatic'
 
@@ -19,7 +20,8 @@ export { parserOptions }
 export const DOMNodeTransforms: NodeTransform[] = [transformStyle]
 
 export const DOMDirectiveTransforms: Record<string, DirectiveTransform> = {
-  html: transformVHtml
+  html: transformVHtml,
+  text: transformVText
 }
 
 export function compile(
