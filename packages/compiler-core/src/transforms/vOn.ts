@@ -6,13 +6,15 @@ import {
   ExpressionNode,
   NodeTypes,
   SimpleExpressionNode,
-  createCompoundExpression
+  createCompoundExpression,
+  ElementTypes
 } from '../ast'
 import { createCompilerError, ErrorCodes } from '../errors'
 import { TO_HANDLER_KEY } from '../runtimeHelpers'
 import { DirectiveTransform, DirectiveTransformResult } from '../transform'
-import { isMemberExpression } from '../utils'
+import { hasScopeRef, isMemberExpression } from '../utils'
 import { validateBrowserExpression } from '../validateExpression'
+import { processExpression } from './transformExpression'
 
 const fnExpRE = /^\s*([\w$_]+|\([^)]*?\))\s*=>|^\s*function(?:\s+[\w$]+)?\s*\(/
 
@@ -84,7 +86,42 @@ export const transformOn: DirectiveTransform = (
 
     // process the expression since it's been skipped
     if (!__BROWSER__ && context.prefixIdentifiers) {
-      // TODO
+      isInlineStatement && context.addIdentifiers(`$event`)
+      exp = dir.exp = processExpression(
+        exp,
+        context,
+        false,
+        hasMultipleStatements
+      )
+
+      isInlineStatement && context.removeIdentifiers(`$event`)
+      // with scope analysis, the function is hoistable if it has no reference
+      // to scope variables.
+      shouldCache =
+        context.cacheHandlers &&
+        // runtime constants don't need to be cached
+        // (this is analyzed by compileScript in SFC <script setup>)
+        !(exp.type === NodeTypes.SIMPLE_EXPRESSION && exp.constType > 0) &&
+        // #1541 bail if this is a member exp handler passed to a component -
+        // we need to use the original function to preserve arity,
+        // e.g. <transition> relies on checking cb.length to determine
+        // transition end handling. Inline function is ok since its arity
+        // is preserved even when cached.
+        !(isMemberExp && node.tagType === ElementTypes.COMPONENT) &&
+        // bail if the function references closure variables (v-for, v-slot)
+        // it must be passed fresh to avoid stale values.
+        !hasScopeRef(exp, context.identifiers)
+      // If the expression is optimizable and is a member expression pointing
+      // to a function, turn it into invocation (and wrap in an arrow function
+      // below) so that it always accesses the latest value when called - thus
+      // avoiding the need to be patched.
+      if (shouldCache && isMemberExp) {
+        if (exp.type === NodeTypes.SIMPLE_EXPRESSION) {
+          exp.content = `${exp.content} && ${exp.content}(...args)`
+        } else {
+          exp.children = [...exp.children, ` && `, ...exp.children, `(...args)`]
+        }
+      }
     }
 
     if (__DEV__ && __BROWSER__) {
