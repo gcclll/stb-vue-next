@@ -22,7 +22,8 @@ import {
   locStub,
   ArrayExpression,
   TemplateLiteral,
-  IfStatement
+  IfStatement,
+  AssignmentExpression
 } from './ast'
 import { CodegenOptions } from './options'
 import {
@@ -669,6 +670,7 @@ function genNode(node: CodegenNode | symbol | string, context: CodegenContext) {
       !__BROWSER__ && genIfStatement(node, context)
       break
     case NodeTypes.JS_ASSIGNMENT_EXPRESSION:
+      !__BROWSER__ && genAssignmentExpression(node, context)
       break
     case NodeTypes.JS_SEQUENCE_EXPRESSION:
       break
@@ -1010,4 +1012,13 @@ function genIfStatement(node: IfStatement, context: CodegenContext) {
       push(`}`)
     }
   }
+}
+
+function genAssignmentExpression(
+  node: AssignmentExpression,
+  context: CodegenContext
+) {
+  genNode(node.left, context)
+  context.push(` = `)
+  genNode(node.right, context)
 }
