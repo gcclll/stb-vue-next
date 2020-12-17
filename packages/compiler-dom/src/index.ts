@@ -5,10 +5,12 @@ import {
   CodegenResult,
   ParserOptions,
   RootNode,
-  NodeTransform
+  NodeTransform,
+  DirectiveTransform
 } from '@vue/compiler-core'
 import { extend } from '@vue/shared'
 import { transformStyle } from './transforms/transformStyle'
+import { transformVHtml } from './transforms/vHtml'
 import { parserOptions } from './parserOptions'
 import { stringifyStatic } from './transforms/stringifyStatic'
 
@@ -16,15 +18,23 @@ export { parserOptions }
 
 export const DOMNodeTransforms: NodeTransform[] = [transformStyle]
 
+export const DOMDirectiveTransforms: Record<string, DirectiveTransform> = {
+  html: transformVHtml
+}
+
 export function compile(
   template: string,
-  options: CompilerOptions
+  options: CompilerOptions = {}
 ): CodegenResult {
   return baseCompile(
     template,
-    extend({}, parserOptions, {
-      nodeTransforms: [...DOMNodeTransforms],
-      directiveTransforms: extend({}),
+    extend({}, parserOptions, options, {
+      nodeTransforms: [...DOMNodeTransforms, ...(options.nodeTransforms || [])],
+      directiveTransforms: extend(
+        {},
+        DOMDirectiveTransforms,
+        options.directiveTransforms || {}
+      ),
       // 静态提升 transform
       transformHoist: __BROWSER__ ? null : stringifyStatic
     })
