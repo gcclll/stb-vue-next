@@ -13,6 +13,7 @@ import { transformStyle } from './transforms/transformStyle'
 import { transformVHtml } from './transforms/vHtml'
 import { transformVText } from './transforms/vText'
 import { transformModel } from './transforms/vModel'
+import { transformOn } from './transforms/vOn'
 import { parserOptions } from './parserOptions'
 import { stringifyStatic } from './transforms/stringifyStatic'
 
@@ -23,7 +24,8 @@ export const DOMNodeTransforms: NodeTransform[] = [transformStyle]
 export const DOMDirectiveTransforms: Record<string, DirectiveTransform> = {
   html: transformVHtml,
   text: transformVText,
-  model: transformModel
+  model: transformModel,
+  on: transformOn
 }
 
 export function compile(
