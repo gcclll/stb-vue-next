@@ -34,6 +34,7 @@ import {
 } from '../transform'
 import { findDir, findProp, injectProp } from '../utils'
 import { validateBrowserExpression } from '../validateExpression'
+import { processExpression } from './transformExpression'
 
 export const transformIf = createStructuralDirectiveTransform(
   /^(if|else|else-if)$/,
@@ -107,7 +108,7 @@ export function processIf(
 
   if (!__BROWSER__ && context.prefixIdentifiers && dir.exp) {
     // dir.exp 只能是简单的表达式，因为 vIf transform 在 transformExpression 之前应用
-    // TODO
+    dir.exp = processExpression(dir.exp as SimpleExpressionNode, context)
   }
 
   if (__DEV__ && __BROWSER__ && dir.exp) {
