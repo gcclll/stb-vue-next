@@ -26,7 +26,9 @@ import {
   isSymbol,
   isReservedProp,
   PatchFlagNames,
-  PatchFlags
+  PatchFlags,
+  camelize,
+  capitalize
 } from '@vue/shared'
 import {
   findProp,
@@ -46,11 +48,13 @@ import {
   RESOLVE_DYNAMIC_COMPONENT,
   SUSPENSE,
   TELEPORT,
-  TO_HANDLERS
+  TO_HANDLERS,
+  UNREF
 } from '../runtimeHelpers'
 import { createCompilerError, ErrorCodes } from '../errors'
 import { buildSlots } from './vSlot'
 import { getConstantType } from './hoistStatic'
+import { BindingTypes } from '../options'
 
 // some directive transforms (e.g. v-model) may return a symbol for runtime
 // import, which should be used instead of a resolveDirective call.
@@ -258,18 +262,68 @@ export function resolveComponentType(
   // this is skipped in browser build since browser builds do not perform
   // binding analysis.
   if (!__BROWSER__) {
-    // TODO from setup
+    const fromSetup = resolveSetupReference(tag, context)
+    if (fromSetup) {
+      return fromSetup
+    }
   }
 
   // 4. Self referencing component (inferred from filename)
   if (!__BROWSER__ && context.selfName) {
-    // TODO
+    if (capitalize(camelize(tag)) === context.selfName) {
+      context.helper(RESOLVE_COMPONENT)
+      context.components.add(`_self`)
+      return toValidAssetId(`_self`, `component`)
+    }
   }
 
   // 5. user component(resolve)
   context.helper(RESOLVE_COMPONENT)
   context.components.add(tag)
   return toValidAssetId(tag, `component`)
+}
+
+function resolveSetupReference(name: string, context: TransformContext) {
+  const bindings = context.bindingMetadata
+  if (!bindings) {
+    return
+  }
+
+  const camelName = camelize(name)
+  const PascalName = capitalize(camelName)
+  const checkType = (type: BindingTypes) => {
+    if (bindings[name] === type) {
+      return name
+    }
+
+    if (bindings[camelName] === type) {
+      return camelName
+    }
+
+    if (bindings[PascalName] === type) {
+      return PascalName
+    }
+  }
+
+  const fromConst = checkType(BindingTypes.SETUP_CONST)
+  if (fromConst) {
+    return context.inline
+      ? // in inline mode, const setup bindings (e.g. imports) can be used as-is
+        fromConst
+      : `$setup[${JSON.stringify(fromConst)}]`
+  }
+
+  const fromMaybeRef =
+    checkType(BindingTypes.SETUP_LET) ||
+    checkType(BindingTypes.SETUP_REF) ||
+    checkType(BindingTypes.SETUP_MAYBE_REF)
+
+  if (fromMaybeRef) {
+    return context.inline
+      ? // setup scope bindings that may be refs need to be unrefed
+        `${context.helperString(UNREF)}(${fromMaybeRef})`
+      : `$setup[${JSON.stringify(fromMaybeRef)}]`
+  }
 }
 
 export type PropsExpression = ObjectExpression | CallExpression | ExpressionNode
@@ -585,12 +639,20 @@ function buildDirectiveArgs(
   const dirArgs: ArrayExpression['elements'] = []
   const runtime = directiveImportMap.get(dir)
   if (runtime) {
+    // built-in directive with runtime
     dirArgs.push(context.helperString(runtime))
   } else {
-    // inject statement for resolving directive
-    context.helper(RESOLVE_DIRECTIVE)
-    context.directives.add(dir.name)
-    dirArgs.push(toValidAssetId(dir.name, `directive`))
+    // user directive
+    // see if we have directives exposed via <script setup>
+    const fromSetup = !__BROWSER__ && resolveSetupReference(dir.name, context)
+    if (fromSetup) {
+      dirArgs.push(fromSetup)
+    } else {
+      // inject statement for resolving directive
+      context.helper(RESOLVE_DIRECTIVE)
+      context.directives.add(dir.name)
+      dirArgs.push(toValidAssetId(dir.name, `directive`))
+    }
   }
   const { loc } = dir
   if (dir.exp) dirArgs.push(dir.exp)
