@@ -681,7 +681,7 @@ function genNode(node: CodegenNode | symbol | string, context: CodegenContext) {
       !__BROWSER__ && genReturnStatement(node, context)
       break
 
-    /* istanbul ignore text */
+    /* istanbul ignore next */
     case NodeTypes.IF_BRANCH:
       // noop
       break

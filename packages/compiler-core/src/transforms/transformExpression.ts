@@ -25,6 +25,7 @@ import {
   babelParserDefaultPlugins,
   hasOwn,
   isGloballyWhitelisted,
+  isString,
   makeMap
 } from '@vue/shared'
 import { createCompilerError, ErrorCodes } from '../errors'
