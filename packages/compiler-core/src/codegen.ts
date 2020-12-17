@@ -24,7 +24,8 @@ import {
   TemplateLiteral,
   IfStatement,
   AssignmentExpression,
-  SequenceExpression
+  SequenceExpression,
+  ReturnStatement
 } from './ast'
 import { CodegenOptions } from './options'
 import {
@@ -677,6 +678,7 @@ function genNode(node: CodegenNode | symbol | string, context: CodegenContext) {
       !__BROWSER__ && genSequenceExpression(node, context)
       break
     case NodeTypes.JS_RETURN_STATEMENT:
+      !__BROWSER__ && genReturnStatement(node, context)
       break
   }
 }
@@ -1032,4 +1034,16 @@ function genSequenceExpression(
   context.push(`(`)
   genNodeList(node.expressions, context)
   context.push(`)`)
+}
+
+function genReturnStatement(
+  { returns }: ReturnStatement,
+  context: CodegenContext
+) {
+  context.push(`return `)
+  if (isArray(returns)) {
+    genNodeListAsArray(returns, context)
+  } else {
+    genNode(returns, context)
+  }
 }
