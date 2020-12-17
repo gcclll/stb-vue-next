@@ -30,7 +30,8 @@ import {
   findDir,
   hasScopeRef,
   isStaticExp,
-  isTemplateNode
+  isTemplateNode,
+  isVSlot
 } from '../utils'
 import { createForLoopParams, parseForExpression } from './vFor'
 
@@ -65,6 +66,38 @@ export const trackSlotScopes: NodeTransform = (node, context) => {
           slotProps && context.removeIdentifiers(slotProps)
         }
         context.scopes.vSlot--
+      }
+    }
+  }
+}
+
+// A NodeTransform that tracks scope identifiers for scoped slots with v-for.
+// This transform is only applied in non-browser builds with { prefixIdentifiers: true }
+export const trackVForSlotScopes: NodeTransform = (node, context) => {
+  let vFor
+  // <template v-slot="slotProps" v-for="item in items"> 情况
+  if (
+    isTemplateNode(node) &&
+    node.props.some(isVSlot) &&
+    (vFor = findDir(node, 'for'))
+  ) {
+    const result = (vFor.parseResult = parseForExpression(
+      vFor.exp as SimpleExpressionNode,
+      context
+    ))
+
+    if (result) {
+      const { value, key, index } = result
+      const { addIdentifiers, removeIdentifiers } = context
+      // 添加作用域调用 item -> _ctx.item
+      value && addIdentifiers(value)
+      key && addIdentifiers(key)
+      index && addIdentifiers(index)
+
+      return () => {
+        value && removeIdentifiers(value)
+        key && removeIdentifiers(key)
+        index && removeIdentifiers(index)
       }
     }
   }

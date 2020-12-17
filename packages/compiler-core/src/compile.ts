@@ -6,11 +6,12 @@ import { RootNode } from './ast'
 import { extend, isString } from '@vue/shared'
 import { transformIf } from './transforms/vIf'
 import { transformFor } from './transforms/vFor'
+import { transformExpression } from './transforms/transformExpression'
 import { transformSlotOutlet } from './transforms/transformSlotOutlet'
 import { transformElement } from './transforms/transformElement'
 import { transformOn } from './transforms/vOn'
 import { transformBind } from './transforms/vBind'
-import { trackSlotScopes } from './transforms/vSlot'
+import { trackSlotScopes, trackVForSlotScopes } from './transforms/vSlot'
 import { transformText } from './transforms/transformText'
 import { transformOnce } from './transforms/vOnce'
 import { transformModel } from './transforms/vModel'
@@ -30,6 +31,15 @@ export function getBaseTransformPreset(
       transformOnce,
       transformIf,
       transformFor,
+      ...(!__BROWSER__ && prefixIdentifiers
+        ? [
+            // order is impoart
+            trackVForSlotScopes,
+            transformExpression
+          ]
+        : __BROWSER__ && __DEV__
+          ? [transformExpression]
+          : []),
       transformSlotOutlet,
       transformElement,
       trackSlotScopes,
