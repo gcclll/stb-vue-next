@@ -260,7 +260,7 @@ export function generate(
     if (hasHelpers) {
       push(
         `const { ${ast.helpers
-          .map(s => `${helperNameMap[s]} : _${helperNameMap[s]}`)
+          .map(s => `${helperNameMap[s]}: _${helperNameMap[s]}`)
           .join(', ')} } = _Vue`
       )
       push(`\n`)
@@ -913,7 +913,7 @@ function genFunctionExpression(
 
   if (newline || body) {
     deindent()
-    push(`)`)
+    push(`}`)
   }
 
   if (genScopeId || isSlot) {

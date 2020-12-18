@@ -1,4 +1,20 @@
 export {
+  ref,
+  shallowRef,
+  isRef,
+  toRef,
+  toRefs,
+  unref,
+  proxyRefs,
+  customRef,
+  triggerRef,
+  Ref,
+  ToRefs,
+  UnwrapRef,
+  ShallowUnwrapRef,
+  RefUnwrapBailTypes
+} from './ref'
+export {
   reactive,
   readonly,
   isReactive,
