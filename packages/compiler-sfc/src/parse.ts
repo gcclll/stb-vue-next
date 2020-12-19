@@ -178,11 +178,23 @@ export function parse(
         }
         errors.push(createDuplicateBlockError(node, isSetup))
         break
-      case 'style': // TODO样式标签
+      case 'style': // 样式标签
+        const styleBlock = createBlock(node, source, pad) as SFCStyleBlock
+        if (styleBlock.attrs.vars) {
+          // 专门用来声明 CSS 变量的标签吗？
+          errors.push(
+            new SyntaxError(
+              `<style vars> has been replaced by a new proposal: ` +
+                `https://github.com/vuejs/rfcs/pull/231`
+            )
+          )
+        }
+        // 可以有多个 style 标签
+        descriptor.styles.push(styleBlock)
         break
       default:
-        // TODO其他标签处理，比如：自定义标签
-        descriptor.customBlocks.push({} as any)
+        // 其他标签处理，比如：自定义标签
+        descriptor.customBlocks.push(createBlock(node, source, pad))
         break
     }
   })
