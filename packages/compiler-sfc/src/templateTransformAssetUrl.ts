@@ -1,5 +1,20 @@
-import { NodeTransform } from '@vue/compiler-core'
+import path from 'path'
+import {
+  ConstantTypes,
+  createSimpleExpression,
+  ExpressionNode,
+  NodeTransform,
+  NodeTypes,
+  SourceLocation,
+  TransformContext
+} from '@vue/compiler-core'
 import { isArray } from '@vue/shared'
+import {
+  isDataUrl,
+  isExternalUrl,
+  isRelativeUrl,
+  parseUrl
+} from './templateUtils'
 
 export interface AssetURLTagConfig {
   [name: string]: string[]
@@ -68,4 +83,117 @@ export const createAssetUrlTransformWithOptions = (
  * createVNode('img', { src: _imports_0 })
  * ```
  */
-export const transformAssetUrl: NodeTransform = () => {}
+export const transformAssetUrl: NodeTransform = (
+  node,
+  context,
+  options: AssetURLOptions = defaultAssetUrlOptions
+) => {
+  if (node.type === NodeTypes.ELEMENT) {
+    if (!node.props.length) {
+      return
+    }
+
+    // 要处理的带资源地址的标签
+    const tags = options.tags || defaultAssetUrlOptions.tags
+    const attrs = tags[node.tag]
+    const wildCardAttrs = tags['*']
+    if (!attrs && !wildCardAttrs) {
+      return
+    }
+
+    const assetAttrs = (attrs || []).concat(wildCardAttrs || [])
+    node.props.forEach((attr, index) => {
+      // 不需要处理的 url 情况
+      if (
+        attr.type !== NodeTypes.ATTRIBUTE ||
+        !assetAttrs.includes(attr.name) ||
+        !attr.value ||
+        isExternalUrl(attr.value.content) ||
+        isDataUrl(attr.value.content) ||
+        attr.value.content[0] === '#' ||
+        (!options.includeAbsolute && !isRelativeUrl(attr.value.content))
+      ) {
+        return
+      }
+
+      const url = parseUrl(attr.value.content)
+      if (options.base) {
+        // explicit base - directly rewrite the url into absolute url
+        // does not apply to absolute urls or urls that start with `@`
+        // since they are aliases
+        // 如果设置了 base 地址直接加上 base 变成绝对路径即可
+        // 以 @ 开始的地址除外，它是个别名
+        if (
+          attr.value.content[0] !== '@' &&
+          isRelativeUrl(attr.value.content)
+        ) {
+          // 非别名且是相对路径的地址
+          const base = parseUrl(options.base)
+          const protocol = base.protocol || ''
+          const host = base.host ? protocol + '//' + base.host : ''
+          const basePath = base.path || '/'
+
+          // when packaged in the browser, path will be using the posix-
+          // only version provided by rollup-plugin-node-builtins.
+          attr.value.content =
+            host +
+            (path.posix || path).join(basePath, url.path + (url.hash || ''))
+        }
+
+        return
+      }
+
+      // otherwise, transform the url into an import.
+      // this assumes a bundler will resolve the import into the correct
+      // absolute url (e.g. webpack file-loader)
+      // 否则，将 url 转成 import 语句，有可能是通过 webpack 的动态引入
+      const exp = getImportsExpressionExp(url.path, url.hash, attr.loc, context)
+      node.props[index] = {
+        type: NodeTypes.DIRECTIVE,
+        name: 'bind',
+        arg: createSimpleExpression(attr.name, true, attr.loc),
+        exp,
+        modifiers: [],
+        loc: attr.loc
+      }
+    })
+  }
+}
+
+function getImportsExpressionExp(
+  path: string | null,
+  hash: string | null,
+  loc: SourceLocation,
+  context: TransformContext
+): ExpressionNode {
+  if (path) {
+    const importsArray = Array.from(context.imports)
+    const existing = importsArray.find(i => i.path === path)
+    if (existing) {
+      return existing.exp as ExpressionNode
+    }
+
+    const name = `_imports_${importsArray.length}`
+    const exp = createSimpleExpression(
+      name,
+      false,
+      loc,
+      ConstantTypes.CAN_HOIST
+    )
+    context.imports.add({ exp, path })
+    if (hash && path) {
+      return context.hoist(
+        createSimpleExpression(
+          `${name} + '${hash}'`,
+          false,
+          loc,
+          ConstantTypes.CAN_HOIST
+        )
+      )
+    } else {
+      return exp
+    }
+  } else {
+    return createSimpleExpression(`''`, false, loc, ConstantTypes.CAN_HOIST)
+  }
+}
