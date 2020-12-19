@@ -8,7 +8,7 @@ import {
   SourceLocation,
   TextModes
 } from '@vue/compiler-core'
-import { RawSourceMap } from 'source-map'
+import { RawSourceMap, SourceMapGenerator } from 'source-map'
 import { TemplateCompiler } from './compileTemplate'
 import { parseCssVars } from './cssVars'
 import { warnExperimental } from './warn'
@@ -225,7 +225,22 @@ export function parse(
   }
 
   if (sourceMap) {
-    // TODO source map
+    const genMap = (block: SFCBlock | null) => {
+      if (block && !block.src) {
+        block.map = generateSourceMap(
+          filename,
+          source,
+          block.content,
+          sourceRoot,
+          !pad || block.type === 'template' ? block.loc.start.line - 1 : 0
+        )
+      }
+    }
+
+    genMap(descriptor.template)
+    genMap(descriptor.script)
+    descriptor.styles.forEach(genMap)
+    descriptor.customBlocks.forEach(genMap)
   }
 
   // 解析 css 变量
@@ -315,7 +330,45 @@ function createBlock(
 }
 
 const splitRE = /\r?\n/g
+const emptyRE = /^(?:\/\/)?\s*$/
 const replaceRE = /./g
+
+function generateSourceMap(
+  filename: string,
+  source: string,
+  generated: string,
+  sourceRoot: string,
+  lineOffset: number
+) {
+  const map = new SourceMapGenerator({
+    file: filename.replace(/\\/g, '/'), // 路径转换
+    sourceRoot: sourceRoot.replace(/\\/g, '/')
+  })
+  map.setSourceContent(filename, source)
+  generated.split(splitRE).forEach((line, index) => {
+    if (!emptyRE.test(line)) {
+      const originalLine = index + 1 + lineOffset
+      const generatedLine = index + 1
+      for (let i = 0; i < line.length; i++) {
+        if (!/\s/.test(line[i])) {
+          // 非空格
+          map.addMapping({
+            source: filename,
+            original: {
+              line: originalLine,
+              column: i
+            },
+            generated: {
+              line: generatedLine,
+              column: i
+            }
+          })
+        }
+      }
+    }
+  })
+  return JSON.parse(map.toString())
+}
 
 function padContent(
   content: string,
