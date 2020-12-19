@@ -2,13 +2,26 @@ import {
   CodegenResult,
   CompilerError,
   CompilerOptions,
+  NodeTransform,
   ParserOptions,
   RootNode
 } from '@vue/compiler-core'
 import { RawSourceMap } from 'source-map'
 import * as CompilerDOM from '@vue/compiler-dom'
-import { AssetURLOptions, AssetURLTagConfig } from './templateTransformAssetUrl'
+import {
+  AssetURLOptions,
+  AssetURLTagConfig,
+  createAssetUrlTransformWithOptions,
+  normalizeOptions,
+  transformAssetUrl
+} from './templateTransformAssetUrl'
 import consolidate from 'consolidate'
+import { isObject } from '@vue/shared'
+import { warnOnce } from './warn'
+import {
+  createSrcsetTransformWithOptions,
+  transformSrcset
+} from './templateTransformSrcset'
 
 export interface TemplateCompiler {
   compile(template: string, options: CompilerOptions): CodegenResult
@@ -127,5 +140,93 @@ function doCompileTemplate({
   compilerOptions = {},
   transformAssetUrls
 }: SFCTemplateCompileOptions): SFCTemplateCompileResults {
-  return {} as SFCTemplateCompileResults
+  const errors: CompilerError[] = []
+
+  // 下面是收集 node transforms -> compiler-core transform 时使用
+  let nodeTransforms: NodeTransform[] = []
+  if (isObject(transformAssetUrls)) {
+    const assetOptions = normalizeOptions(transformAssetUrls)
+    nodeTransforms = [
+      createAssetUrlTransformWithOptions(assetOptions),
+      createSrcsetTransformWithOptions(assetOptions)
+    ]
+  } else if (transformAssetUrls !== false) {
+    nodeTransforms = [transformAssetUrl, transformSrcset]
+  }
+
+  if (ssr && !ssrCssVars) {
+    warnOnce(
+      `compileTemplate is called with \`ssr: true\` but no ` +
+        `corresponding \`cssVars\` option.\`.`
+    )
+  }
+
+  if (!id) {
+    warnOnce(`compileTemplate now requires the \`id\` option.\`.`)
+    id = ''
+  }
+
+  const shortId = id.replace(/^data-v-/, '')
+  const longId = `data-v-${shortId}`
+
+  let { code, ast, preamble, map } = compiler.compile(source, {
+    mode: 'module',
+    prefixIdentifiers: true,
+    hoistStatic: true,
+    cacheHandlers: true,
+    ssrCssVars:
+      ssr && ssrCssVars && ssrCssVars.length
+        ? '' /* TODO genCssVarsFromList(ssrCssVars, shortId, isProd) */
+        : '',
+    // css 局部使用，加上对应的唯一 id
+    scopeId: scoped ? longId : undefined,
+    ...compilerOptions,
+    nodeTransforms: nodeTransforms.concat(compilerOptions.nodeTransforms || []),
+    filename,
+    sourceMap: true,
+    onError: e => errors.push(e)
+  })
+
+  // inMap should be the map produced by ./parse.ts which is a simple line-only
+  // mapping. If it is present, we need to adjust the final map and errors to
+  // reflect the original line numbers.
+  if (inMap) {
+    if (map) {
+      map = mapLines(inMap, map)
+    }
+
+    if (errors.length) {
+      patchErrors(errors, source, inMap)
+    }
+  }
+
+  return { code, ast, preamble, source, errors, tips: [], map }
+}
+
+function mapLines(oldMap: RawSourceMap, newMap: RawSourceMap): RawSourceMap {
+  if (!oldMap) return newMap
+  if (!newMap) return oldMap
+
+  // TODO
+  return oldMap
+}
+
+function patchErrors(
+  errors: CompilerError[],
+  source: string,
+  inMap: RawSourceMap
+) {
+  const originalSource = inMap.sourcesContent![0]
+  const offset = originalSource.indexOf(source)
+  const lineOffset = originalSource.slice(0, offset).split(/\r?\n/).length - 1
+  errors.forEach(err => {
+    if (err.loc) {
+      err.loc.start.line += lineOffset
+      err.loc.start.offset += offset
+      if (err.loc.end !== err.loc.start) {
+        err.loc.end.line += lineOffset
+        err.loc.end.offset += offset
+      }
+    }
+  })
 }
