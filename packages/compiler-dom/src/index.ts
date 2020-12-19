@@ -5,6 +5,7 @@ import {
   CodegenResult,
   ParserOptions,
   RootNode,
+  noopDirectiveTransform,
   NodeTransform,
   DirectiveTransform
 } from '@vue/compiler-core'
@@ -28,6 +29,7 @@ export const DOMNodeTransforms: NodeTransform[] = [
 ]
 
 export const DOMDirectiveTransforms: Record<string, DirectiveTransform> = {
+  cloak: noopDirectiveTransform,
   html: transformVHtml,
   text: transformVText,
   model: transformModel, // override compiler-core
@@ -65,4 +67,7 @@ export function parse(template: string, options: ParserOptions = {}): RootNode {
   return baseParse(template, extend({}, parserOptions, options))
 }
 
+export * from '@vue/compiler-core'
+export { transformStyle } from './transforms/transformStyle'
+export { createDOMCompilerError, DOMErrorCodes } from './errors'
 export * from '@vue/compiler-core'
