@@ -246,7 +246,7 @@ export function parse(
   // 解析 css 变量
   descriptor.cssVars = parseCssVars(descriptor)
   if (descriptor.cssVars.length) {
-    warnExperimental(`v-bind() CSS variable inject`, 231)
+    warnExperimental(`v-bind() CSS variable injection`, 231)
   }
 
   const result = {
@@ -339,7 +339,7 @@ function generateSourceMap(
   generated: string,
   sourceRoot: string,
   lineOffset: number
-) {
+): RawSourceMap {
   const map = new SourceMapGenerator({
     file: filename.replace(/\\/g, '/'), // 路径转换
     sourceRoot: sourceRoot.replace(/\\/g, '/')
