@@ -151,6 +151,18 @@ export function parse(
 
     switch (node.tag) {
       case 'template': // TODO模板处理
+        if (!descriptor.template) {
+          const templateBlock = (descriptor.template = createBlock(
+            node,
+            source,
+            false
+          ) as SFCTemplateBlock)
+          // 持有自身的 ast 结构
+          templateBlock.ast = node
+        } else {
+          // 不能重复
+          errors.push(createDuplicateBlockError(node))
+        }
         break
       case 'script': // TODO脚本处理
         break
@@ -208,6 +220,58 @@ export function parse(
   return result
 }
 
+function createDuplicateBlockError(
+  node: ElementNode,
+  isScriptSetup = false
+): CompilerError {
+  const err = new SyntaxError(
+    `Single file component can contain only one <${node.tag}${
+      isScriptSetup ? ` setup` : ``
+    }> element`
+  ) as CompilerError
+  err.loc = node.loc
+  return err
+}
+
+function createBlock(
+  node: ElementNode,
+  source: string,
+  pad: SFCParseOptions['pad']
+): SFCBlock {
+  const type = node.tag
+  let { start, end } = node.loc
+  let content = ''
+  if (node.children.length) {
+    start = node.children[0].loc.start
+    end = node.children[node.children.length - 1].loc.end
+    content = source.slice(start.offset, end.offset)
+  }
+
+  const loc = {
+    source: content,
+    start,
+    end
+  }
+
+  const attrs: Record<string, string | true> = {}
+  const block: SFCBlock = {
+    type,
+    content,
+    loc,
+    attrs
+  }
+
+  // <template>, <script>, <style> 上的属性
+  node.props.forEach(p => {
+    // 只能包含静态属性
+    if (p.type === NodeTypes.ATTRIBUTE) {
+      attrs[p.name] = p.value ? p.value.content || true : true
+      // TODO 各种属性处理，比如：lang, src, module, setup, scoped
+    }
+  })
+
+  return block
+}
 function hasSrc(node: ElementNode) {
   return node.props.some(p => {
     if (p.type !== NodeTypes.ATTRIBUTE) {
