@@ -1,4 +1,8 @@
-const { baseCompile, stringifyStatic } = require('../dist/compiler-dom.cjs.js')
+const {
+  baseCompile,
+  stringifyStatic,
+  decodeHtml
+} = require('../dist/compiler-dom.cjs.js')
 
 const c = (tpl, { title, logAst = false, options = {} } = {}) => {
   const { code, ast } = baseCompile(tpl, {
@@ -60,5 +64,6 @@ for (let color in colors) {
 module.exports = {
   log,
   c,
-  stringifyStatic
+  stringifyStatic,
+  decodeHtml
 }

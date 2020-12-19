@@ -70,4 +70,6 @@ export function parse(template: string, options: ParserOptions = {}): RootNode {
 export * from '@vue/compiler-core'
 export { transformStyle } from './transforms/transformStyle'
 export { createDOMCompilerError, DOMErrorCodes } from './errors'
+export { decodeHtml } from './decodeHtml'
+export { decodeHtmlBrowser } from './decodeHtmlBrowser'
 export * from '@vue/compiler-core'

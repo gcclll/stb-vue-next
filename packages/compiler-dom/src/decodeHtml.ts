@@ -32,9 +32,10 @@ export const decodeHtml: ParserOptions['decodeEntities'] = (
 
     if (head[0] === '&') {
       // Named character reference.
+      // 以 namedChars.json 里面名字形式的符号 如：&euro; -> €
       let name = ''
       let value: string | undefined = undefined
-      // & ->
+      // 找到名字最长的那个符号名字
       if (/[0-9a-z]/i.test(rawText[1])) {
         if (!maxCRNameLength) {
           // 找到字符 json 里面名字最长的那个属性？
@@ -44,6 +45,7 @@ export const decodeHtml: ParserOptions['decodeEntities'] = (
           )
         }
 
+        // 这里是以最长单位匹配 rawText 字符串里面的特殊字符名称
         for (let length = maxCRNameLength; !value && length > 0; --length) {
           name = rawText.substr(1, length)
           value = (namedCharacterReferences as Record<string, string>)[name]
@@ -72,6 +74,7 @@ export const decodeHtml: ParserOptions['decodeEntities'] = (
       }
     } else {
       // Numeric character reference.
+      // 以 16进制形式的，如： &#x02ac
       const hex = head[0] === '&#x'
       const pattern = hex ? /^&#x([0-9a-f]+);?/ : /^&#([0-9]+);?/
       const body = pattern.exec(rawText)
