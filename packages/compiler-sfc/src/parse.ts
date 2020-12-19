@@ -83,7 +83,7 @@ export function parse(
     sourceRoot = '',
     pad = false,
     compiler = CompilerDOM
-  }: SFCParseOptions
+  }: SFCParseOptions = {}
 ): SFCParseResult {
   const sourceKey =
     source + sourceMap + filename + sourceRoot + pad + compiler.parse
@@ -164,7 +164,19 @@ export function parse(
           errors.push(createDuplicateBlockError(node))
         }
         break
-      case 'script': // TODO脚本处理
+      case 'script': // 脚本标签处理
+        const scriptBlock = createBlock(node, source, pad) as SFCScriptBlock
+        const isSetup = !!scriptBlock.attrs.setup
+        if (isSetup && !descriptor.scriptSetup) {
+          descriptor.scriptSetup = scriptBlock
+          break
+        }
+
+        if (!isSetup && !descriptor.script) {
+          descriptor.script = scriptBlock
+          break
+        }
+        errors.push(createDuplicateBlockError(node, isSetup))
         break
       case 'style': // TODO样式标签
         break
@@ -261,17 +273,53 @@ function createBlock(
     attrs
   }
 
+  if (pad) {
+    block.content = padContent(source, block, pad) + block.content
+  }
+
   // <template>, <script>, <style> 上的属性
   node.props.forEach(p => {
     // 只能包含静态属性
     if (p.type === NodeTypes.ATTRIBUTE) {
       attrs[p.name] = p.value ? p.value.content || true : true
-      // TODO 各种属性处理，比如：lang, src, module, setup, scoped
+      // 各种属性处理，比如：lang, src, module, setup, scoped
+      if (p.name === 'lang') {
+        block.lang = p.value && p.value.content
+      } else if (p.name === 'src') {
+        block.src = p.value && p.value.content
+      } else if (type === 'style') {
+        if (p.name === 'scoped') {
+          ;(block as SFCStyleBlock).scoped = true
+        } else if (p.name === 'module') {
+          ;(block as SFCStyleBlock).module = attrs[p.name]
+        }
+      } else if (type === 'script' && p.name === 'setup') {
+        ;(block as SFCScriptBlock).setup = attrs.setup
+      }
     }
   })
 
   return block
 }
+
+const splitRE = /\r?\n/g
+const replaceRE = /./g
+
+function padContent(
+  content: string,
+  block: SFCBlock,
+  pad: SFCParseOptions['pad']
+): string {
+  content = content.slice(0, block.loc.start.offset)
+  if (pad === 'space') {
+    return content.replace(replaceRE, ' ')
+  } else {
+    const offset = content.split(splitRE).length
+    const padChar = block.type === 'script' && !block.lang ? '//\n' : '\n'
+    return Array(offset).join(padChar)
+  }
+}
+
 function hasSrc(node: ElementNode) {
   return node.props.some(p => {
     if (p.type !== NodeTypes.ATTRIBUTE) {

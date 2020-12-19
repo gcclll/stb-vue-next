@@ -1,4 +1,5 @@
 // API
+export { parse } from './parse'
 export { generateCodeFrame } from '@vue/compiler-core'
 
 // Types
