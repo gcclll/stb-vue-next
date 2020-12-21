@@ -42,5 +42,30 @@ export function compileScript(
   sfc: SFCDescriptor,
   options: SFCScriptCompileOptions
 ): SFCScriptBlock {
+  // TODO 1. 先处理存在的 <script> 代码体
+  //
+  // TODO 2. 解析 <script setup>，遍历置顶的语句
+  //
+  // TODO 3. 将 ref访问转换成对 ref.value 的引用
+  //
+  // TODO 4. 释放 setup 上下文类型的运行时 props/emits 代码
+  //
+  // TODO 5. 检查用户选项(useOptions)参数，确保它没有引用 setup 下的变量
+  //
+  // TODO 6. 删除 non-script 的内容
+  //
+  // TODO 7. 分析 binding metadata
+  //
+  // TODO 8. 注入 `useCssVars` 调用
+  //
+  // TODO 9. 完成 setup() 参数签名
+  //
+  // TODO 10. 生成返回语句(return)
+  //
+  // TODO 11. 完成 default export
+  // expose: [] makes <script setup> components "closed" by default.
+  //
+  // TODO 12. 完成 Vue helpers imports
+
   return {} as SFCScriptBlock
 }
