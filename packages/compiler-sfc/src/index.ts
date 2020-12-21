@@ -14,10 +14,16 @@ export {
   SFCStyleBlock
 } from './parse'
 export {
+  TemplateCompiler,
+  SFCTemplateCompileOptions,
+  SFCTemplateCompileResults
+} from './compileTemplate'
+export {
   SFCStyleCompileOptions,
   SFCAsyncStyleCompileOptions,
   SFCStyleCompileResults
 } from './compileStyle'
+export { SFCScriptCompileOptions } from './compileScript'
 export {
   CompilerOptions,
   CompilerError,
