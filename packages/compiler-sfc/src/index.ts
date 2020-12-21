@@ -2,6 +2,7 @@
 export { parse } from './parse'
 export { compileTemplate } from './compileTemplate'
 export { compileStyle } from './compileStyle'
+export { compileScript } from './compileScript'
 export { generateCodeFrame } from '@vue/compiler-core'
 
 // Types

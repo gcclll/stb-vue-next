@@ -1,16 +1,19 @@
 import MagicString from 'magic-string'
-import { parse as _parse, ParserPlugin } from '@babel/parser'
+import { parse as _parse, ParserOptions, ParserPlugin } from '@babel/parser'
 import {
   Identifier,
+  ObjectExpression,
+  Statement,
   TSFunctionType,
   TSTypeLiteral,
   TSUnionType
 } from '@babel/types'
-import { BindingMetadata, BindingTypes } from '@vue/compiler-dom'
-import { babelParserDefaultPlugins } from '@vue/shared'
+import { BindingMetadata, BindingTypes, UNREF } from '@vue/compiler-core'
+import { babelParserDefaultPlugins, generateCodeFrame } from '@vue/shared'
 import { SFCTemplateCompileOptions } from './compileTemplate'
 import { SFCDescriptor, SFCScriptBlock } from './parse'
 import { warnExperimental, warnOnce } from './warn'
+import { RawSourceMap } from 'source-map'
 
 export interface SFCScriptCompileOptions {
   /**
@@ -98,64 +101,39 @@ export function compileScript(
     }
 
     try {
-      // TODO
+      const scriptAst = _parse(script.content, {
+        plugins,
+        sourceType: 'module'
+      }).program.body
+      const bindings = analyzeScriptBindings(scriptAst)
+      const needRewrite = cssVars.length || hasInheritAttrsFlag
+      let content = script.content
+      if (needRewrite) {
+        // TODO need rewrite
+      }
+      return {
+        ...script,
+        content,
+        bindings,
+        scriptAst
+      }
     } catch (e) {
       // silently fallback if parse fails since user may be using custom
       // babel syntax
       return script
     }
+  }
 
-    // <script> 和 <script setup> 必须是同语言类型
-    if (script && scriptLang !== scriptSetupLang) {
-      throw new Error(
-        `[@vue/compiler-sfc] <script> and <script setup> must have the same language type.`
-      )
-    }
+  // <script> 和 <script setup> 必须是同语言类型
+  if (script && scriptLang !== scriptSetupLang) {
+    throw new Error(
+      `[@vue/compiler-sfc] <script> and <script setup> must have the same language type.`
+    )
+  }
 
-    if (scriptSetup && scriptSetupLang !== 'ts') {
-      // do not process non js/ts script blocks
-      return scriptSetup
-    }
-
-    const defaultTempVar = `__default__`
-    const bindingMetadata: BindingMetadata = {}
-    const helperImports: Set<string> = new Set()
-    const userImports: Record<
-      string,
-      {
-        isType: boolean
-        imported: string
-        source: string
-      }
-    > = Object.create(null)
-    const userImportAlias: Record<string, string> = Object.create(null)
-    const setupBindings: Record<string, BindingTypes> = Object.create(null)
-    const refBindings: Record<string, BindingTypes> = Object.create(null)
-    const refIdentifiers: Set<Identifier> = new Set()
-    const enableRefSugar = options.refSugar !== false
-    let defaultExport: Node | undefined
-    let hasDefinePropsCall = false
-    let hasDefineEmitCall = false
-    let propsRuntimeDecl: Node | undefined
-    let propsTypeDecl: TSTypeLiteral | undefined
-    let propsIdentifier: string | undefined
-    let emitRuntimeDecl: Node | undefined
-    let emitTypeDecl: TSFunctionType | TSUnionType | undefined
-    let emitIdentifier: string | undefined
-    let hasAwait = false
-    let hasInlinedSsrRenderFn = false
-    // props/emits declared via types
-    const typeDeclaredProps: Record<string, PropTypeData> = {}
-    const typeDeclaredEmits: Set<string> = new Set()
-    // record declared types for runtime props type generation
-    const declaredTypes: Record<string, string[]> = {}
-
-    // magic-string state
-    const s = new MagicString(source)
-    const startOffset = scriptSetup.loc.start.offset
-    const endOffset = scriptSetup.loc.end.offset
-    const scriptStartOffset = script && script.loc.start.offset
-    const scriptEndOffset = script && script.loc.end.offset
+  if (scriptSetup && scriptSetupLang !== 'ts') {
+    // do not process non js/ts script blocks
+    return scriptSetup
   }
 
   // TODO 1. 先处理存在的 <script> 代码体
@@ -190,4 +168,42 @@ interface PropTypeData {
   key: string
   type: string[]
   required: boolean
+}
+
+/**
+ * Analyze bindings in normal `<script>`
+ * Note that `compileScriptSetup` already analyzes bindings as part of its
+ * compilation process so this should only be used on single `<script>` SFCs.
+ */
+function analyzeScriptBindings(ast: Statement[]): BindingMetadata {
+  for (const node of ast) {
+    if (
+      node.type === 'ExportDefaultDeclaration' &&
+      node.declaration.type === 'ObjectExpression'
+    ) {
+      return analyzeBindingsFromOptions(node.declaration)
+    }
+  }
+  return {}
+}
+
+function analyzeBindingsFromOptions(node: ObjectExpression): BindingMetadata {
+  const bindings: BindingMetadata = {}
+  for (const property of node.properties) {
+    if (
+      property.type === 'ObjectProperty' &&
+      !property.computed &&
+      property.key.type === 'Identifier'
+    ) {
+      // TODO
+    } else if (
+      property.type === 'ObjectMethod' &&
+      property.key.type === 'Identifier' &&
+      (property.key.name === 'setup' || property.key.name === 'data')
+    ) {
+      // TODO
+    }
+  }
+
+  return bindings
 }

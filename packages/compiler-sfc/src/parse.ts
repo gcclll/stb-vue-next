@@ -150,7 +150,7 @@ export function parse(
     }
 
     switch (node.tag) {
-      case 'template': // TODO模板处理
+      case 'template': // 模板处理
         if (!descriptor.template) {
           const templateBlock = (descriptor.template = createBlock(
             node,
