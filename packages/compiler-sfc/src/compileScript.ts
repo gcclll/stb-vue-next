@@ -228,7 +228,24 @@ function analyzeBindingsFromOptions(node: ObjectExpression): BindingMetadata {
       property.key.type === 'Identifier' &&
       (property.key.name === 'setup' || property.key.name === 'data')
     ) {
-      // TODO
+      for (const bodyItem of property.body.body) {
+        // setup() {
+        //   return {
+        //     foo: null
+        //   }
+        // }
+        if (
+          bodyItem.type === 'ReturnStatement' &&
+          bodyItem.argument &&
+          bodyItem.argument.type === 'ObjectExpression'
+        ) {
+          for (const key of getObjectExpressionKeys(bodyItem.argument)) {
+            bindings[key] = property.key.name = 'setup'
+              ? BindingTypes.SETUP_MAYBE_REF
+              : BindingTypes.DATA
+          }
+        }
+      }
     }
   }
 
