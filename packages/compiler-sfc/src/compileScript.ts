@@ -6,7 +6,9 @@ import {
   Statement,
   TSFunctionType,
   TSTypeLiteral,
-  TSUnionType
+  TSUnionType,
+  Node,
+  ArrayExpression
 } from '@babel/types'
 import { BindingMetadata, BindingTypes, UNREF } from '@vue/compiler-core'
 import { babelParserDefaultPlugins, generateCodeFrame } from '@vue/shared'
@@ -118,6 +120,7 @@ export function compileScript(
         scriptAst
       }
     } catch (e) {
+      console.log(e)
       // silently fallback if parse fails since user may be using custom
       // babel syntax
       return script
@@ -195,7 +198,31 @@ function analyzeBindingsFromOptions(node: ObjectExpression): BindingMetadata {
       !property.computed &&
       property.key.type === 'Identifier'
     ) {
-      // TODO
+      // props
+      if (property.key.name === 'props') {
+        // props: ['foo']
+        // props: { foo: ... }
+        for (const key of getObjectOrArrayExpressionKeys(property.value)) {
+          bindings[key] = BindingTypes.PROPS
+        }
+      } else if (property.key.name === 'inject') {
+        // inject: ['foo']
+        // inject: { foo: {} }
+        for (const key of getObjectOrArrayExpressionKeys(property.value)) {
+          bindings[key] = BindingTypes.OPTIONS
+        }
+      }
+      // computed & methods
+      else if (
+        property.value.type === 'ObjectExpression' &&
+        (property.key.name === 'computed' || property.key.name === 'methods')
+      ) {
+        // methods: { foo() {} }
+        // computed: { foo() {} }
+        for (const key of getObjectOrArrayExpressionKeys(property.value)) {
+          bindings[key] = BindingTypes.OPTIONS
+        }
+      }
     } else if (
       property.type === 'ObjectMethod' &&
       property.key.type === 'Identifier' &&
@@ -206,4 +233,43 @@ function analyzeBindingsFromOptions(node: ObjectExpression): BindingMetadata {
   }
 
   return bindings
+}
+
+function getObjectExpressionKeys(node: ObjectExpression): string[] {
+  const keys = []
+  for (const prop of node.properties) {
+    if (
+      (prop.type === 'ObjectProperty' || prop.type === 'ObjectMethod') &&
+      !prop.computed
+    ) {
+      if (prop.key.type === 'Identifier') {
+        keys.push(prop.key.name)
+      } else if (prop.key.type === 'StringLiteral') {
+        keys.push(prop.key.value)
+      }
+    }
+  }
+  return keys
+}
+
+function getArrayExpressionKeys(node: ArrayExpression): string[] {
+  const keys = []
+  for (const element of node.elements) {
+    if (element && element.type === 'StringLiteral') {
+      keys.push(element.value)
+    }
+  }
+  return keys
+}
+
+// 这个函数说白了就行是收集所有属性名
+function getObjectOrArrayExpressionKeys(value: Node): string[] {
+  if (value.type === 'ArrayExpression') {
+    return getArrayExpressionKeys(value)
+  }
+
+  if (value.type) {
+    return getObjectExpressionKeys(value)
+  }
+  return []
 }
