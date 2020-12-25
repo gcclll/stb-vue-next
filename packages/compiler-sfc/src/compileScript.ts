@@ -8,7 +8,9 @@ import {
   TSTypeLiteral,
   TSUnionType,
   Node,
-  ArrayExpression
+  ArrayExpression,
+  ExportSpecifier,
+  bindExpression
 } from '@babel/types'
 import { BindingMetadata, BindingTypes, UNREF } from '@vue/compiler-core'
 import { babelParserDefaultPlugins, generateCodeFrame } from '@vue/shared'
@@ -120,7 +122,6 @@ export function compileScript(
         scriptAst
       }
     } catch (e) {
-      console.log(e)
       // silently fallback if parse fails since user may be using custom
       // babel syntax
       return script
@@ -139,8 +140,137 @@ export function compileScript(
     return scriptSetup
   }
 
-  // TODO 1. 先处理存在的 <script> 代码体
+  const defaultTempVar = `__default__`
+  const userImports: Record<
+    string,
+    {
+      isType: boolean
+      imported: string
+      source: string
+    }
+  > = Object.create(null)
+  const userImportAlias: Record<string, string> = Object.create(null)
+  let defaultExport: Node | undefined
+
+  const s = new MagicString(source)
+  const scriptStartOffset = script && script.loc.start.offset
+
+  function parse(
+    input: string,
+    options: ParserOptions,
+    offset: number
+  ): Statement[] {
+    try {
+      return _parse(input, options).program.body
+    } catch (e) {
+      e.message = `[@vue/compiler-sfc] ${e.message}\n\n${
+        sfc.filename
+      }\n${generateCodeFrame(source, e.pos + offset, e.pos + offset + 1)}`
+      throw e
+    }
+  }
+
+  function registerUserImport(
+    source: string,
+    local: string,
+    imported: string | false,
+    isType: boolean
+  ) {
+    if (source === 'vue' && imported) {
+      userImportAlias[imported] = local
+    }
+    userImports[local] = {
+      isType,
+      imported: imported || 'default',
+      source
+    }
+  }
+
+  // 能到这里说明至少有一个 <script setup>
+  // 1. 先处理存在的 <script> 代码体
   // process normal <script> first if it exists
+  let scriptAst
+  if (script) {
+    console.log('handling script ... with setup')
+    // import dedupe between <script> and <script setup>
+    scriptAst = parse(
+      script.content,
+      {
+        plugins,
+        sourceType: 'module'
+      },
+      scriptStartOffset!
+    )
+
+    console.log('----- s, source, before -----')
+    console.log(s.toString())
+    for (const node of scriptAst) {
+      // import ... from '...'
+      if (node.type === 'ImportDeclaration') {
+        // record imports for dedupe
+        for (const specifier of node.specifiers) {
+          const imported =
+            specifier.type === 'ImportSpecifier' &&
+            specifier.imported.type === 'Identifier' &&
+            specifier.imported.name
+          registerUserImport(
+            node.source.value,
+            specifier.local.name,
+            imported,
+            node.importKind === 'type'
+          )
+        }
+      } else if (node.type === 'ExportDefaultDeclaration') {
+        // export default
+        defaultExport = node
+        const start = node.start! + scriptStartOffset!
+        s.overwrite(
+          start,
+          start + `export default`.length,
+          `const ${defaultTempVar} =`
+        )
+      } else if (node.type === 'ExportNamedDeclaration' && node.specifiers) {
+        const defaultSpecifier = node.specifiers.find(
+          s => s.exported.type === 'Identifier' && s.exported.name === 'default'
+        ) as ExportSpecifier
+        if (defaultSpecifier) {
+          defaultExport = node
+          // 1. remove specifier
+          if (node.specifiers.length > 1) {
+            s.remove(
+              defaultSpecifier.start! + scriptStartOffset!,
+              defaultSpecifier.end! + scriptStartOffset!
+            )
+          } else {
+            s.remove(
+              node.start! + scriptStartOffset!,
+              node.end! + scriptStartOffset!
+            )
+          }
+
+          if (node.source) {
+            // export { x as default } from './x'
+            // 重写成 rewrite to `import { x as __default } from './x'
+            // 然后添加到顶部
+            s.prepend(
+              `import { ${
+                defaultSpecifier.local.name
+              } as ${defaultTempVar} } from '${node.source.value}'\n`
+            )
+          } else {
+            // export { x as default }
+            // 重写成 `const __default__ = x` 且移到最后
+            s.append(
+              `\nconst ${defaultTempVar} = ${defaultSpecifier.local.name}\n`
+            )
+          }
+        }
+      }
+    }
+
+    console.log('----- s, source, after -----')
+    console.log(s.toString())
+  }
   // TODO 2. 解析 <script setup>，遍历置顶的语句
   //
   // TODO 3. 将 ref访问转换成对 ref.value 的引用
@@ -164,7 +294,12 @@ export function compileScript(
   //
   // TODO 12. 完成 Vue helpers imports
 
-  return {} as SFCScriptBlock
+  s.trim()
+  return {
+    ...scriptSetup,
+    bindings: {},
+    content: s.toString()
+  }
 }
 
 interface PropTypeData {
