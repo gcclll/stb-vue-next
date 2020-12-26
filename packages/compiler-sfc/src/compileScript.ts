@@ -143,6 +143,7 @@ export function compileScript(
   }
 
   const defaultTempVar = `__default__`
+  const helperImports: Set<string> = new Set()
   const userImports: Record<
     string,
     {
@@ -152,6 +153,10 @@ export function compileScript(
     }
   > = Object.create(null)
   const userImportAlias: Record<string, string> = Object.create(null)
+  const setupBindings: Record<string, BindingTypes> = Object.create(null)
+  const refBindings: Record<string, BindingTypes> = Object.create(null)
+  const refIdentifiers: Set<Identifier> = new Set()
+
   const enableRefSugar = options.refSugar !== false
   let defaultExport: Node | undefined
 
@@ -160,6 +165,11 @@ export function compileScript(
   const endOffset = scriptSetup.loc.end.offset
   const scriptStartOffset = script && script.loc.start.offset
   const scriptEndOffset = script && script.loc.end.offset
+
+  function helper(key: string): string {
+    helperImports.add(key)
+    return `_${key}`
+  }
 
   function parse(
     input: string,
@@ -211,7 +221,9 @@ export function compileScript(
     if (exp.type === 'AssignmentExpression') {
       const { left, right } = exp
       if (left.type === 'Identifier') {
-        // TODO
+        registerRefBinding(left)
+        s.prependRight(right.start! + startOffset, `${helper('ref')}(`)
+        s.appendLeft(right.end! + startOffset, ')')
       } else if (left.type === 'ObjectPattern') {
         // TODO
       } else if (left.type === 'ArrayPattern') {
@@ -225,6 +237,14 @@ export function compileScript(
     } else {
       error(`ref: statements can only contain assignment expressions.`, exp)
     }
+  }
+
+  function registerRefBinding(id: Identifier) {
+    if (id.name[0] === '$') {
+      error(`ref variable identifiers cannot start with $.`, id)
+    }
+    refBindings[id.name] = setupBindings[id.name] = BindingTypes.SETUP_REF
+    refIdentifiers.add(id)
   }
 
   // 能到这里说明至少有一个 <script setup>
@@ -341,6 +361,8 @@ export function compileScript(
       end++
     }
 
+    console.log(`---- before ----`)
+    console.log(s.toString())
     // 处理 `ref: x` 绑定，转成 refs
     if (
       node.type === 'LabeledStatement' &&
@@ -352,12 +374,21 @@ export function compileScript(
         warnExperimental(`ref: sugar`, 228)
         s.overwrite(
           node.label.start! + startOffset,
-          node.boy.start! + startOffset,
+          node.body.start! + startOffset,
           'const '
         )
         processRefExpression(node.body.expression, node)
+      } else {
+        // TODO if we end up shipping ref: sugar as an opt-in feature,
+        // need to proxy the option in vite, vue-loader and rollup-plugin-vue.
+        error(
+          `ref: sugar needs to be explicitly enabled via vite or vue-loader options.`,
+          node
+        )
       }
     }
+    console.log(`---- after ----`)
+    console.log(s.toString())
   }
   // TODO 3. 将 ref访问转换成对 ref.value 的引用
   //
