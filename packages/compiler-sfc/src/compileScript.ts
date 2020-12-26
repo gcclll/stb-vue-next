@@ -1,6 +1,8 @@
 import MagicString from 'magic-string'
 import { parse as _parse, ParserOptions, ParserPlugin } from '@babel/parser'
 import {
+  Expression,
+  LabeledStatement,
   Identifier,
   ObjectExpression,
   Statement,
@@ -150,10 +152,14 @@ export function compileScript(
     }
   > = Object.create(null)
   const userImportAlias: Record<string, string> = Object.create(null)
+  const enableRefSugar = options.refSugar !== false
   let defaultExport: Node | undefined
 
   const s = new MagicString(source)
+  const startOffset = scriptSetup.loc.start.offset
+  const endOffset = scriptSetup.loc.end.offset
   const scriptStartOffset = script && script.loc.start.offset
+  const scriptEndOffset = script && script.loc.end.offset
 
   function parse(
     input: string,
@@ -168,6 +174,20 @@ export function compileScript(
       }\n${generateCodeFrame(source, e.pos + offset, e.pos + offset + 1)}`
       throw e
     }
+  }
+
+  function error(
+    msg: string,
+    node: Node,
+    end: number = node.end! + startOffset
+  ) {
+    throw new Error(
+      `[@vue/compiler-sfc] ${msg}\n\n${sfc.filename}\n${generateCodeFrame(
+        source,
+        node.start! + startOffset,
+        end
+      )}`
+    )
   }
 
   function registerUserImport(
@@ -186,12 +206,32 @@ export function compileScript(
     }
   }
 
+  function processRefExpression(exp: Expression, statement: LabeledStatement) {
+    // 必须是赋值语句, ref: num = 1
+    if (exp.type === 'AssignmentExpression') {
+      const { left, right } = exp
+      if (left.type === 'Identifier') {
+        // TODO
+      } else if (left.type === 'ObjectPattern') {
+        // TODO
+      } else if (left.type === 'ArrayPattern') {
+        // TODO
+      }
+    } else if (exp.type === 'SequenceExpression') {
+      // 多条赋值语句情况, ref: x = 1, y = 2
+      // TODO
+    } else if (exp.type === 'Identifier') {
+      // TODO
+    } else {
+      error(`ref: statements can only contain assignment expressions.`, exp)
+    }
+  }
+
   // 能到这里说明至少有一个 <script setup>
   // 1. 先处理存在的 <script> 代码体
   // process normal <script> first if it exists
   let scriptAst
   if (script) {
-    console.log('handling script ... with setup')
     // import dedupe between <script> and <script setup>
     scriptAst = parse(
       script.content,
@@ -202,8 +242,6 @@ export function compileScript(
       scriptStartOffset!
     )
 
-    console.log('----- s, source, before -----')
-    console.log(s.toString())
     for (const node of scriptAst) {
       // import ... from '...'
       if (node.type === 'ImportDeclaration') {
@@ -267,12 +305,60 @@ export function compileScript(
         }
       }
     }
-
-    console.log('----- s, source, after -----')
-    console.log(s.toString())
   }
   // TODO 2. 解析 <script setup>，遍历置顶的语句
-  //
+  const scriptSetupAst = parse(
+    scriptSetup.content,
+    {
+      plugins: [
+        ...plugins,
+        // allow top level await but only inside <script setup>
+        'topLevelAwait'
+      ],
+      sourceType: 'module'
+    },
+    startOffset
+  )
+
+  for (const node of scriptSetupAst) {
+    const start = node.start! + startOffset
+    let end = node.end! + startOffset
+
+    // import or type declarations: move to top
+    // locate comment
+    // import 或类型声明：移到顶部
+    if (node.trailingComments && node.trailingComments.length > 0) {
+      const lastCommentNode =
+        node.trailingComments[node.trailingComments.length - 1]
+      end = lastCommentNode.end + startOffset
+    }
+
+    // locate the end of whitespace between this statement and the next
+    while (end <= source.length) {
+      if (!/\s/.test(source.charAt(end))) {
+        break
+      }
+      end++
+    }
+
+    // 处理 `ref: x` 绑定，转成 refs
+    if (
+      node.type === 'LabeledStatement' &&
+      node.label.name === 'ref' &&
+      node.body.type === 'ExpressionStatement'
+    ) {
+      // 必须要开启 ref 功能
+      if (enableRefSugar) {
+        warnExperimental(`ref: sugar`, 228)
+        s.overwrite(
+          node.label.start! + startOffset,
+          node.boy.start! + startOffset,
+          'const '
+        )
+        processRefExpression(node.body.expression, node)
+      }
+    }
+  }
   // TODO 3. 将 ref访问转换成对 ref.value 的引用
   //
   // TODO 4. 释放 setup 上下文类型的运行时 props/emits 代码
