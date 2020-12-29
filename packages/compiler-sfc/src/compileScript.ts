@@ -293,6 +293,10 @@ export function compileScript(
             processRefObjectPattern(p.value, statement)
           } else if (p.value.type === 'ArrayPattern') {
             processRefArrayPattern(p.value, statement)
+          } else if (p.value.type === 'AssignmentPattern') {
+            // { foo: bar = 1 } --> {foo: __bar = 1}
+            nameId = p.value.left as Identifier
+            s.prependRight(nameId.start! + startOffset, `__`)
           }
         }
       }
