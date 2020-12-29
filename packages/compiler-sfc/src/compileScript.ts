@@ -299,6 +299,10 @@ export function compileScript(
             s.prependRight(nameId.start! + startOffset, `__`)
           }
         }
+      } else {
+        // rest element 展开符 { ...foo } -> { ...__foo }
+        nameId = p.argument as Identifier
+        s.prependRight(nameId.start! + startOffset, `__`)
       }
     }
   }
