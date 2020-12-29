@@ -287,6 +287,9 @@ export function compileScript(
             // 重命名 { foo: bar } --> { foo: __bar }
             nameId = p.value
             s.prependRight(nameId.start! + startOffset, `__`)
+          } else if (p.value.type === 'ObjectPattern') {
+            // 嵌套对象，解构
+            processRefObjectPattern(p.value, statement)
           }
         }
       }
