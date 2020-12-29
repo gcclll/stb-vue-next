@@ -282,6 +282,12 @@ export function compileScript(
             // { foo = 1 }
             refIdentifiers.add(p.value.left as Identifier)
           }
+        } else {
+          if (p.value.type === 'Identifier') {
+            // 重命名 { foo: bar } --> { foo: __bar }
+            nameId = p.value
+            s.prependRight(nameId.start! + startOffset, `__`)
+          }
         }
       }
     }
