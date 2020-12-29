@@ -304,6 +304,16 @@ export function compileScript(
         nameId = p.argument as Identifier
         s.prependRight(nameId.start! + startOffset, `__`)
       }
+
+      if (nameId) {
+        registerRefBinding(nameId)
+        // append binding declarations after the parent statement
+        // 增加  _ref(...) 语法声明
+        s.appendLeft(
+          statement.end! + startOffset,
+          `\nconst ${nameId.name} = ${helper('ref')}(__${nameId.name});`
+        )
+      }
     }
   }
 
