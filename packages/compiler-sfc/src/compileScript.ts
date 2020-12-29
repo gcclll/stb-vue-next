@@ -13,7 +13,8 @@ import {
   ArrayExpression,
   ExportSpecifier,
   bindExpression,
-  ObjectPattern
+  ObjectPattern,
+  ArrayPattern
 } from '@babel/types'
 import { BindingMetadata, BindingTypes, UNREF } from '@vue/compiler-core'
 import { babelParserDefaultPlugins, generateCodeFrame } from '@vue/shared'
@@ -290,8 +291,42 @@ export function compileScript(
           } else if (p.value.type === 'ObjectPattern') {
             // 嵌套对象，解构
             processRefObjectPattern(p.value, statement)
+          } else if (p.value.type === 'ArrayPattern') {
+            processRefArrayPattern(p.value, statement)
           }
         }
+      }
+    }
+  }
+
+  function processRefArrayPattern(
+    pattern: ArrayPattern,
+    statement: LabeledStatement
+  ) {
+    for (const e of pattern.elements) {
+      if (!e) continue
+      let nameId: Identifier | undefined
+      if (e.type === 'Identifier') {
+        // [a] --> [__a]
+        nameId = e
+      } else if (e.type === 'AssignmentPattern') {
+        // [a = 1] --> [__a = 1]
+        nameId = e.left as Identifier
+      } else if (e.type === 'ObjectPattern') {
+        processRefObjectPattern(e, statement)
+      } else if (e.type === 'ArrayPattern') {
+        processRefArrayPattern(e, statement)
+      }
+
+      if (nameId) {
+        registerRefBinding(nameId)
+        // prefix original
+        s.prependRight(nameId.start! + startOffset, `__`)
+        // append binding declarations after the parent statement
+        s.appendLeft(
+          statement.end! + startOffset,
+          `\nconst ${nameId.name} = ${helper('ref')}(__${nameId.name});`
+        )
       }
     }
   }
