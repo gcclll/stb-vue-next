@@ -12,7 +12,8 @@ import {
   Node,
   ArrayExpression,
   ExportSpecifier,
-  bindExpression
+  bindExpression,
+  ObjectPattern
 } from '@babel/types'
 import { BindingMetadata, BindingTypes, UNREF } from '@vue/compiler-core'
 import { babelParserDefaultPlugins, generateCodeFrame } from '@vue/shared'
@@ -137,7 +138,7 @@ export function compileScript(
     )
   }
 
-  if (scriptSetup && scriptSetupLang !== 'ts') {
+  if (scriptSetupLang && scriptSetupLang !== 'ts') {
     // do not process non js/ts script blocks
     return scriptSetup
   }
@@ -225,7 +226,22 @@ export function compileScript(
         s.prependRight(right.start! + startOffset, `${helper('ref')}(`)
         s.appendLeft(right.end! + startOffset, ')')
       } else if (left.type === 'ObjectPattern') {
-        // TODO
+        // 删除括号???
+        for (let i = left.start!; i > 0; i--) {
+          const char = source[i + startOffset]
+          if (char === '(') {
+            s.remove(i + startOffset, i + startOffset + 1)
+            break
+          }
+        }
+        for (let i = left.end!; i > 0; i++) {
+          const char = source[i + startOffset]
+          if (char === ')') {
+            s.remove(i + startOffset, i + startOffset + 1)
+            break
+          }
+        }
+        processRefObjectPattern(left, statement)
       } else if (left.type === 'ArrayPattern') {
         // TODO
       }
@@ -245,6 +261,30 @@ export function compileScript(
     }
     refBindings[id.name] = setupBindings[id.name] = BindingTypes.SETUP_REF
     refIdentifiers.add(id)
+  }
+
+  function processRefObjectPattern(
+    pattern: ObjectPattern,
+    statement: LabeledStatement
+  ) {
+    // 解构语法： ref: ({ b = 1 } = { count: 0, b: 2 })
+    // 生成： const { b = 1 } = { count 0, b: 2 }
+    for (const p of pattern.properties) {
+      let nameId: Identifier | undefined
+      if (p.type === 'ObjectProperty') {
+        if (p.key.start! === p.value.start!) {
+          // 简写： { foo } -> { foo: __foo }
+          nameId = p.key as Identifier
+          s.appendLeft(nameId.end! + startOffset, `: __${nameId.name}`)
+
+          // 左边有赋值语句，说明是解构后的默认值设置
+          if (p.value.type === 'AssignmentPattern') {
+            // { foo = 1 }
+            refIdentifiers.add(p.value.left as Identifier)
+          }
+        }
+      }
+    }
   }
 
   // 能到这里说明至少有一个 <script setup>
