@@ -18,7 +18,8 @@ import {
   CallExpression,
   Declaration,
   Function as FunctionNode,
-  TSType
+  TSType,
+  ObjectProperty
 } from '@babel/types'
 import { walk } from 'estree-walker'
 import { BindingMetadata, BindingTypes, UNREF } from '@vue/compiler-core'
@@ -557,8 +558,6 @@ export function compileScript(
       end++
     }
 
-    // console.log(`---- before ----`)
-    // console.log(s.toString())
     // 处理 `ref: x` 绑定，转成 refs
     if (
       node.type === 'LabeledStatement' &&
@@ -732,10 +731,34 @@ export function compileScript(
         node
       )
     }
-    // console.log(`---- after ----`)
-    // console.log(s.toString())
   }
-  // TODO 3. 将 ref访问转换成对 ref.value 的引用
+  // 3. 将 ref访问转换成对 ref.value 的引用
+  if (enableRefSugar && Object.keys(refBindings).length) {
+    for (const node of scriptSetupAst) {
+      if (node.type !== 'ImportDeclaration') {
+        walkIdentifiers(node, (id, parent) => {
+          if (refBindings[id.name] && !refIdentifiers.has(id)) {
+            if (isStaticProperty(parent) && parent.shorthand) {
+              // let binding used in a property shorthand
+              // { foo } -> { foo: foo.value }
+              // skip for destructure patterns
+              if (
+                !(parent as any).inPattern ||
+                isInDestructureAssignment(parent, parentStack)
+              ) {
+                s.appendLeft(id.end! + startOffset, `: ${id.name}.value`)
+              }
+            } else {
+              s.appendLeft(id.end! + startOffset, '.value')
+            }
+          } else if (id.name[0] === '$' && refBindings[id.name.slice(1)]) {
+            // $xxx raw ref access variables, remove the $ prefix
+            s.remove(id.start! + startOffset, id.start! + startOffset + 1)
+          }
+        })
+      }
+    }
+  }
   //
   // TODO 4. 释放 setup 上下文类型的运行时 props/emits 代码
   //
@@ -996,6 +1019,141 @@ function inferRuntimeType(
   }
 }
 
+const parentStack: Node[] = []
+
+/**
+ * Walk an AST and find identifiers that are variable references.
+ * This is largely the same logic with `transformExpressions` in compiler-core
+ * but with some subtle differences as this needs to handle a wider range of
+ * possible syntax.
+ */
+function walkIdentifiers(
+  root: Node,
+  onIdentifier: (node: Identifier, parent: Node) => void
+) {
+  const knownIds: Record<string, number> = Object.create(null)
+  ;(walk as any)(root, {
+    enter(node: Node & { scopeIds?: Set<string> }, parent: Node | undefined) {
+      parent && parentStack.push(parent)
+      if (node.type === 'Identifier') {
+        if (!knownIds[node.name] && isRefIdentifier(node, parent!)) {
+          onIdentifier(node, parent!)
+        }
+      } else if (isFunction(node)) {
+        // walk function expressions and add its arguments to known identifiers
+        // so that we don't prefix them
+        node.params.forEach(p =>
+          (walk as any)(p, {
+            enter(child: Node, parent: Node) {
+              if (
+                child.type === 'Identifier' &&
+                // do not record as scope variable if is a destructured key
+                !isStaticPropertyKey(child, parent) &&
+                // do not record if this is a default value
+                // assignment of a destructured variable
+                !(
+                  parent &&
+                  parent.type === 'AssignmentPattern' &&
+                  parent.right === child
+                )
+              ) {
+                const { name } = child
+                if (node.scopeIds && node.scopeIds.has(name)) {
+                  return
+                }
+                if (name in knownIds) {
+                  knownIds[name]++
+                } else {
+                  knownIds[name] = 1
+                }
+                ;(node.scopeIds || (node.scopeIds = new Set())).add(name)
+              }
+            }
+          })
+        )
+      } else if (
+        node.type === 'ObjectProperty' &&
+        parent!.type === 'ObjectPattern'
+      ) {
+        // mark property in destructure pattern
+        ;(node as any).inPattern = true
+      }
+    },
+    leave(node: Node & { scopeIds?: Set<string> }, parent: Node | undefined) {
+      parent && parentStack.pop()
+      if (node.scopeIds) {
+        node.scopeIds.forEach((id: string) => {
+          knownIds[id]--
+          if (knownIds[id] === 0) {
+            delete knownIds[id]
+          }
+        })
+      }
+    }
+  })
+}
+
+function isRefIdentifier(id: Identifier, parent: Node) {
+  // declaration id
+  if (
+    (parent.type === 'VariableDeclarator' ||
+      parent.type === 'ClassDeclaration') &&
+    parent.id === id
+  ) {
+    return false
+  }
+
+  if (isFunction(parent)) {
+    // function decalration/expression id
+    if ((parent as any).id === id) {
+      return false
+    }
+    // params list
+    if (parent.params.includes(id)) {
+      return false
+    }
+  }
+
+  // property key
+  // this also covers object destructure pattern
+  if (isStaticPropertyKey(id, parent)) {
+    return false
+  }
+
+  // non-assignment array destructure pattern
+  if (
+    parent.type === 'ArrayPattern' &&
+    !isInDestructureAssignment(parent, parentStack)
+  ) {
+    return false
+  }
+
+  // member expression property
+  if (
+    (parent.type === 'MemberExpression' ||
+      parent.type === 'OptionalMemberExpression') &&
+    parent.property === id &&
+    !parent.computed
+  ) {
+    return false
+  }
+
+  // is a special keyword but parsed as identifier
+  if (id.name === 'arguments') {
+    return false
+  }
+
+  return true
+}
+
+const isStaticProperty = (node: Node): node is ObjectProperty =>
+  node &&
+  (node.type === 'ObjectProperty' || node.type === 'ObjectMethod') &&
+  !node.computed
+
+const isStaticPropertyKey = (node: Node, parent: Node) =>
+  isStaticProperty(parent) && parent.key === node
+
 function isFunction(node: Node): node is FunctionNode {
   return /Function(?:Expression|Declaration)$|Method$/.test(node.type)
 }
@@ -1035,6 +1193,28 @@ function canNeverBeRef(node: Node, userReactiveImport: string): boolean {
       }
       return false
   }
+}
+
+// 解构赋值
+function isInDestructureAssignment(parent: Node, parentStack: Node[]): boolean {
+  if (
+    parent &&
+    (parent.type === 'ObjectProperty' || parent.type === 'ArrayPattern')
+  ) {
+    let i = parentStack.length
+    while (i--) {
+      const p = parentStack[i]
+      if (p.type === 'AssignmentExpression') {
+        const root = parentStack[0]
+        // if this is a ref: destructure, it should be treated like a
+        // variable decalration!
+        return !(root.type === 'LabeledStatement' && root.label.name === 'ref')
+      } else if (p.type !== 'ObjectProperty' && !p.type.endsWith('Pattern')) {
+        break
+      }
+    }
+  }
+  return false
 }
 
 /**
