@@ -855,7 +855,7 @@ export function compileScript(
     bindingMetadata[key] = setupBindings[key]
   }
 
-  // TODO 8. 注入 `useCssVars` 调用
+  // 8. 注入 `useCssVars` 调用
   if (cssVars.length) {
     helperImports.add(CSS_VARS_HELPER)
     helperImports.add('unref')
@@ -870,7 +870,39 @@ export function compileScript(
     )
   }
   // TODO 9. 完成 setup() 参数签名
-  //
+  let args = `__props`
+  if (propsTypeDecl) {
+    args += `: ${scriptSetup.content.slice(
+      propsTypeDecl.start!,
+      propsTypeDecl.end!
+    )}`
+  }
+
+  // inject user assignment of props
+  // we use a default __props so that template expressions referencing props
+  // can use it directly
+  // 注入用户 props 赋值，默认使用 __props 以至于模板表达式里面引用的时候
+  // 可以直接使用它
+  if (propsIdentifier) {
+    s.prependRight(startOffset, `\nconst ${propsIdentifier} = __props`)
+  }
+
+  if (emitIdentifier) {
+    args +=
+      emitIdentifier === `emit` ? `, { emit }` : `, { emit: ${emitIdentifier} }`
+
+    if (emitTypeDecl) {
+      args += `: {
+        emit: (${scriptSetup.content.slice(
+          emitTypeDecl.start!,
+          emitTypeDecl.end!
+        )}),
+        slots: any,
+        attrs: any
+      }`
+    }
+  }
+
   // TODO 10. 生成返回语句(return)
   //
   // TODO 11. 完成 default export
