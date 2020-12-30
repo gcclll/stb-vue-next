@@ -28,6 +28,12 @@ import { SFCTemplateCompileOptions } from './compileTemplate'
 import { SFCDescriptor, SFCScriptBlock } from './parse'
 import { warnExperimental, warnOnce } from './warn'
 import { RawSourceMap } from 'source-map'
+import {
+  CSS_VARS_HELPER,
+  genCssVarsCode,
+  genNormalScriptCssVarsCode
+} from './cssVars'
+import { rewriteDefault } from './rewriteDefault'
 
 const DEFINE_PROPS = 'defineProps'
 const DEFINE_EMIT = 'defineEmit'
@@ -126,7 +132,20 @@ export function compileScript(
       const needRewrite = cssVars.length || hasInheritAttrsFlag
       let content = script.content
       if (needRewrite) {
-        // TODO need rewrite
+        content = rewriteDefault(content, `__default__`, plugins)
+        if (cssVars.length) {
+          content += genNormalScriptCssVarsCode(
+            cssVars,
+            bindings,
+            scopeId,
+            !!options.isProd
+          )
+        }
+
+        if (hasInheritAttrsFlag) {
+          content += `__default__.inheritAttrs = false`
+        }
+        content += `\nexport default __default__`
       }
       return {
         ...script,
@@ -837,7 +856,19 @@ export function compileScript(
   }
 
   // TODO 8. 注入 `useCssVars` 调用
-  //
+  if (cssVars.length) {
+    helperImports.add(CSS_VARS_HELPER)
+    helperImports.add('unref')
+    s.prependRight(
+      startOffset,
+      `\n${genCssVarsCode(
+        cssVars,
+        bindingMetadata,
+        scopeId,
+        !!options.isProd
+      )}\n`
+    )
+  }
   // TODO 9. 完成 setup() 参数签名
   //
   // TODO 10. 生成返回语句(return)
