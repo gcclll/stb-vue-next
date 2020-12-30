@@ -23,6 +23,9 @@ import { SFCDescriptor, SFCScriptBlock } from './parse'
 import { warnExperimental, warnOnce } from './warn'
 import { RawSourceMap } from 'source-map'
 
+const DEFINE_PROPS = 'defineProps'
+const DEFINE_EMIT = 'defineEmit'
+
 export interface SFCScriptCompileOptions {
   /**
    * Scope ID for prefixing injected CSS varialbes.
@@ -487,6 +490,61 @@ export function compileScript(
           `ref: sugar needs to be explicitly enabled via vite or vue-loader options.`,
           node
         )
+      }
+    }
+
+    if (node.type === 'ImportDeclaration') {
+      // import declarations are moved to top
+      // 将所有 import 声明移到顶部
+      s.move(start, end, 0)
+
+      // 重复引入处理
+      let removed = 0
+      let prev: Node | undefined, next: Node | undefined
+      const removeSpecifier = (node: Node) => {
+        removed++
+        s.remove(
+          prev ? prev.end! + startOffset : node.start! + startOffset,
+          next && !prev ? next.start! + startOffset : node.end! + startOffset
+        )
+      }
+
+      for (let i = 0; i < node.specifiers.length; i++) {
+        const specifier = node.specifiers[i]
+        prev = node.specifiers[i - 1]
+        next = node.specifiers[i + 1]
+        const local = specifier.local.name
+        const imported =
+          specifier.type === 'ImportSpecifier' &&
+          specifier.imported.type === 'Identifier' &&
+          specifier.imported.name
+
+        const source = node.source.value
+        const existing = userImports[local]
+        if (
+          source === 'vue' &&
+          (imported === DEFINE_PROPS || imported === DEFINE_EMIT)
+        ) {
+          removeSpecifier(specifier)
+        } else if (existing) {
+          if (existing.source === source && existing.imported === imported) {
+            // 在 <script setup> 中引用过，重复了
+            removeSpecifier(specifier)
+          } else {
+            error(`different imports aliased to same local name.`, specifier)
+          }
+        } else {
+          registerUserImport(
+            source,
+            local,
+            imported,
+            node.importKind === 'type'
+          )
+        }
+      }
+
+      if (node.specifiers.length && removed === node.specifiers.length) {
+        s.remove(node.start! + startOffset, node.end! + startOffset)
       }
     }
     console.log(`---- after ----`)
