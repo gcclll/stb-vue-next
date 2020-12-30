@@ -785,12 +785,29 @@ export function compileScript(
     extractRuntimeEmits(emitTypeDecl, typeDeclaredEmits)
   }
 
-  // TODO 5. 检查用户选项(useOptions)参数，确保它没有引用 setup 下的变量
+  // 5. 检查用户选项(useOptions)参数，确保它没有引用 setup 下的变量
   checkInvalidScopeReference(propsRuntimeDecl, DEFINE_PROPS)
   checkInvalidScopeReference(emitRuntimeDecl, DEFINE_PROPS)
 
-  // TODO 6. 删除 non-script 的内容
-  //
+  // 6. 删除 non-script 的内容
+  if (script) {
+    if (startOffset < scriptStartOffset!) {
+      // <script setup> before <script>
+      s.remove(0, startOffset)
+      s.remove(endOffset, scriptStartOffset!)
+      s.remove(scriptEndOffset!, source.length)
+    } else {
+      // <script> before <script setup>
+      s.remove(0, scriptStartOffset!)
+      s.remove(scriptEndOffset!, startOffset)
+      s.remove(endOffset, source.length)
+    }
+  } else {
+    // only <script setup>
+    s.remove(0, startOffset)
+    s.remove(endOffset, source.length)
+  }
+
   // TODO 7. 分析 binding metadata
   //
   // TODO 8. 注入 `useCssVars` 调用
