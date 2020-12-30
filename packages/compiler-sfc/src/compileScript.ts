@@ -759,8 +759,15 @@ export function compileScript(
       }
     }
   }
-  //
-  // TODO 4. 释放 setup 上下文类型的运行时 props/emits 代码
+
+  // 4. 释放 setup 上下文类型的运行时 props/emits 代码
+  if (propsTypeDecl) {
+    extractRuntimeProps(propsTypeDecl, typeDeclaredProps, declaredTypes)
+  }
+
+  if (emitTypeDecl) {
+    extractRuntimeEmits(emitTypeDecl, typeDeclaredEmits)
+  }
   //
   // TODO 5. 检查用户选项(useOptions)参数，确保它没有引用 setup 下的变量
   //
@@ -938,6 +945,25 @@ function recordType(node: Node, declaredTypes: Record<string, string[]>) {
   }
 }
 
+function extractRuntimeProps(
+  node: TSTypeLiteral,
+  props: Record<string, PropTypeData>,
+  declaredTypes: Record<string, string[]>
+) {
+  for (const m of node.members) {
+    if (m.type === 'TSPropertySignature' && m.key.type === 'Identifier') {
+      props[m.key.name] = {
+        key: m.key.name,
+        required: !m.optional,
+        type:
+          __DEV__ && m.typeAnnotation
+            ? inferRuntimeType(m.typeAnnotation.typeAnnotation, declaredTypes)
+            : [`null`]
+      }
+    }
+  }
+}
+
 function inferRuntimeType(
   node: TSType,
   declaredTypes: Record<string, string[]>
@@ -1016,6 +1042,39 @@ function inferRuntimeType(
 
     default:
       return [`null`] // no runtime check
+  }
+}
+
+function extractRuntimeEmits(
+  node: TSFunctionType | TSUnionType,
+  emits: Set<string>
+) {
+  if (node.type === 'TSUnionType') {
+    for (let t of node.types) {
+      if (t.type === 'TSParenthesizedType') t = t.typeAnnotation
+      if (t.type === 'TSFunctionType') {
+        extractRuntimeEmits(t, emits)
+      }
+    }
+    return
+  }
+
+  const eventName = node.parameters[0]
+  if (
+    eventName.type === 'Identifier' &&
+    eventName.typeAnnotation &&
+    eventName.typeAnnotation.type === 'TSTypeAnnotation'
+  ) {
+    const typeNode = eventName.typeAnnotation.typeAnnotation
+    if (typeNode.type === 'TSLiteralType') {
+      emits.add(String(typeNode.literal.value))
+    } else if (typeNode.type === 'TSUnionType') {
+      for (const t of typeNode.types) {
+        if (t.type === 'TSLiteralType') {
+          emits.add(String(t.literal.value))
+        }
+      }
+    }
   }
 }
 
