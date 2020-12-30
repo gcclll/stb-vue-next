@@ -24,7 +24,7 @@ import {
 import { walk } from 'estree-walker'
 import { BindingMetadata, BindingTypes, UNREF } from '@vue/compiler-core'
 import { babelParserDefaultPlugins, generateCodeFrame } from '@vue/shared'
-import { SFCTemplateCompileOptions } from './compileTemplate'
+import { compileTemplate, SFCTemplateCompileOptions } from './compileTemplate'
 import { SFCDescriptor, SFCScriptBlock } from './parse'
 import { warnExperimental, warnOnce } from './warn'
 import { RawSourceMap } from 'source-map'
@@ -904,7 +904,79 @@ export function compileScript(
   }
 
   // TODO 10. 生成返回语句(return)
-  //
+  let returned
+  if (options.inlineTemplate) {
+    if (sfc.template && !sfc.template.src) {
+      if (options.templateOptions && options.templateOptions.ssr) {
+        hasInlinedSsrRenderFn = true
+      }
+      // inline render function mode - we are going to compile the template and
+      // inline it right here
+      const { code, ast, preamble, tips, errors } = compileTemplate({
+        filename,
+        source: sfc.template.content,
+        inMap: sfc.template.map,
+        ...options.templateOptions,
+        id: scopeId,
+        scoped: sfc.styles.some(s => s.scoped),
+        isProd: options.isProd,
+        ssrCssVars: sfc.cssVars,
+        compilerOptions: {
+          ...(options.templateOptions &&
+            options.templateOptions.compilerOptions),
+          inline: true,
+          isTS,
+          bindingMetadata
+        }
+      })
+
+      if (tips.length) {
+        tips.forEach(warnOnce)
+      }
+      const err = errors[0]
+      if (typeof err === 'string') {
+        throw new Error(err)
+      } else if (err) {
+        if (err.loc) {
+          err.message +=
+            `\n\n` +
+            sfc.filename +
+            '\n' +
+            generateCodeFrame(
+              source,
+              err.loc.start.offset,
+              err.loc.end.offset
+            ) +
+            `\n`
+        }
+        throw err
+      }
+
+      if (preamble) {
+        s.prepend(preamble)
+      }
+
+      // avoid duplicated unref import
+      // as this may get injected by the render function preamble OR the
+      // css vars codegen
+      if (ast && ast.helpers.includes(UNREF)) {
+        helperImports.delete('unref')
+      }
+      returned = code
+    } else {
+      returned = `() => {}`
+    }
+  } else {
+    // return bindings from setup
+    const allBindings: Record<string, any> = { ...setupBindings }
+    for (const key in userImports) {
+      if (!userImports[key].isType) {
+        allBindings[key] = true
+      }
+    }
+    returned = `{ ${Object.keys(allBindings).join(', ')} }`
+  }
+  s.appendRight(endOffset, `\nreturn ${returned}\n}\n\n`)
   // TODO 11. 完成 default export
   // expose: [] makes <script setup> components "closed" by default.
   //
