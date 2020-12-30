@@ -14,8 +14,13 @@ import {
   ExportSpecifier,
   bindExpression,
   ObjectPattern,
-  ArrayPattern
+  ArrayPattern,
+  CallExpression,
+  Declaration,
+  Function as FunctionNode,
+  TSType
 } from '@babel/types'
+import { walk } from 'estree-walker'
 import { BindingMetadata, BindingTypes, UNREF } from '@vue/compiler-core'
 import { babelParserDefaultPlugins, generateCodeFrame } from '@vue/shared'
 import { SFCTemplateCompileOptions } from './compileTemplate'
@@ -148,6 +153,7 @@ export function compileScript(
   }
 
   const defaultTempVar = `__default__`
+  const bindingMetadata: BindingMetadata = {}
   const helperImports: Set<string> = new Set()
   const userImports: Record<
     string,
@@ -161,10 +167,25 @@ export function compileScript(
   const setupBindings: Record<string, BindingTypes> = Object.create(null)
   const refBindings: Record<string, BindingTypes> = Object.create(null)
   const refIdentifiers: Set<Identifier> = new Set()
-
   const enableRefSugar = options.refSugar !== false
   let defaultExport: Node | undefined
+  let hasDefinePropsCall = false
+  let hasDefineEmitCall = false
+  let propsRuntimeDecl: Node | undefined
+  let propsTypeDecl: TSTypeLiteral | undefined
+  let propsIdentifier: string | undefined
+  let emitRuntimeDecl: Node | undefined
+  let emitTypeDecl: TSFunctionType | TSUnionType | undefined
+  let emitIdentifier: string | undefined
+  let hasAwait = false
+  let hasInlinedSsrRenderFn = false
+  // props/emits declared via types
+  const typeDeclaredProps: Record<string, PropTypeData> = {}
+  const typeDeclaredEmits: Set<string> = new Set()
+  // record declared types for runtime props type generation
+  const declaredTypes: Record<string, string[]> = {}
 
+  // magic-string state
   const s = new MagicString(source)
   const startOffset = scriptSetup.loc.start.offset
   const endOffset = scriptSetup.loc.end.offset
@@ -219,6 +240,72 @@ export function compileScript(
       imported: imported || 'default',
       source
     }
+  }
+
+  function processDefineProps(node: Node): boolean {
+    if (isCallOf(node, DEFINE_PROPS)) {
+      if (hasDefinePropsCall) {
+        error(`duplicate ${DEFINE_PROPS}() call`, node)
+      }
+
+      hasDefinePropsCall = true
+      propsRuntimeDecl = node.arguments[0]
+      // context call has type parameters - infer runtime types from it
+      if (node.typeParameters) {
+        if (propsRuntimeDecl) {
+          error(
+            `${DEFINE_PROPS}() cannot accept both type and non-type arguments ` +
+              `at the same time. Use one or the other.`,
+            node
+          )
+        }
+        const typeArg = node.typeParameters.params[0]
+        if (typeArg.type === 'TSTypeLiteral') {
+          propsTypeDecl = typeArg
+        } else {
+          error(
+            `type argument passed to ${DEFINE_PROPS}() must be a literal type.`,
+            typeArg
+          )
+        }
+      }
+      return true
+    }
+    return false
+  }
+
+  function processDefineEmit(node: Node): boolean {
+    if (isCallOf(node, DEFINE_EMIT)) {
+      if (hasDefineEmitCall) {
+        error(`duplicate ${DEFINE_EMIT}() call`, node)
+      }
+      hasDefineEmitCall = true
+      emitRuntimeDecl = node.arguments[0]
+      if (node.typeParameters) {
+        if (emitRuntimeDecl) {
+          error(
+            `${DEFINE_EMIT}() cannot accept both type and non-type arguments ` +
+              `at the same time. Use one or the other.`,
+            node
+          )
+        }
+        const typeArg = node.typeParameters.params[0]
+        if (
+          typeArg.type === 'TSFunctionType' ||
+          typeArg.type === 'TSUnionType'
+        ) {
+          emitTypeDecl = typeArg
+        } else {
+          error(
+            `type argument passed to ${DEFINE_EMIT}() must be a function type ` +
+              `or a union of function types.`,
+            typeArg
+          )
+        }
+      }
+      return true
+    }
+    return false
   }
 
   function processRefExpression(exp: Expression, statement: LabeledStatement) {
@@ -334,6 +421,9 @@ export function compileScript(
       } else if (e.type === 'AssignmentPattern') {
         // [a = 1] --> [__a = 1]
         nameId = e.left as Identifier
+      } else if (e.type === 'RestElement') {
+        // [...a] --> [...__a]
+        nameId = e.argument as Identifier
       } else if (e.type === 'ObjectPattern') {
         processRefObjectPattern(e, statement)
       } else if (e.type === 'ArrayPattern') {
@@ -432,7 +522,7 @@ export function compileScript(
       }
     }
   }
-  // TODO 2. 解析 <script setup>，遍历置顶的语句
+  // 2. 解析 <script setup>，遍历置顶的语句
   const scriptSetupAst = parse(
     scriptSetup.content,
     {
@@ -467,8 +557,8 @@ export function compileScript(
       end++
     }
 
-    console.log(`---- before ----`)
-    console.log(s.toString())
+    // console.log(`---- before ----`)
+    // console.log(s.toString())
     // 处理 `ref: x` 绑定，转成 refs
     if (
       node.type === 'LabeledStatement' &&
@@ -548,8 +638,102 @@ export function compileScript(
         s.remove(node.start! + startOffset, node.end! + startOffset)
       }
     }
-    console.log(`---- after ----`)
-    console.log(s.toString())
+
+    // 处理 defineProps 和 defineEmit 调用
+    if (
+      node.type === 'ExpressionStatement' &&
+      (processDefineProps(node.expression) ||
+        processDefineEmit(node.expression))
+    ) {
+      s.remove(node.start! + startOffset, node.end! + startOffset)
+    }
+
+    if (node.type === 'VariableDeclaration' && !node.declare) {
+      for (const decl of node.declarations) {
+        if (decl.init) {
+          const isDefineProps = processDefineProps(decl.init)
+          if (isDefineProps) {
+            propsIdentifier = scriptSetup.content.slice(
+              decl.id.start!,
+              decl.id.end!
+            )
+          }
+
+          const isDefineEmit = processDefineEmit(decl.init)
+          if (isDefineEmit) {
+            emitIdentifier = scriptSetup.content.slice(
+              decl.id.start!,
+              decl.id.end!
+            )
+          }
+
+          if (isDefineProps || isDefineEmit) {
+            if (node.declarations.length === 1) {
+              s.remove(node.start! + startOffset, node.end! + startOffset)
+            } else {
+              s.remove(decl.start! + startOffset, decl.end! + startOffset)
+            }
+          }
+        }
+      }
+    }
+
+    // walk decalrations to record declared bindings
+    if (
+      (node.type === 'VariableDeclaration' ||
+        node.type === 'FunctionDeclaration' ||
+        node.type === 'ClassDeclaration') &&
+      !node.declare
+    ) {
+      walkDeclaration(node, setupBindings, userImportAlias)
+    }
+
+    // Type declarations
+    if (node.type === 'VariableDeclaration' && node.declare) {
+      s.remove(start, end)
+    }
+
+    // move all type declarations to outer scope
+    if (
+      node.type.startsWith('TS') ||
+      (node.type === 'ExportNamedDeclaration' && node.exportKind === 'type')
+    ) {
+      recordType(node, declaredTypes)
+      s.move(start, end, 0)
+    }
+
+    // walk statements & named exports / variable declarations for top level
+    // await
+    if (
+      (node.type === 'VariableDeclaration' && !node.declare) ||
+      node.type.endsWith('Statement')
+    ) {
+      ;(walk as any)(node, {
+        enter(node: Node) {
+          if (isFunction(node)) {
+            this.skip()
+          }
+          if (node.type === 'AwaitExpression') {
+            hasAwait = true
+          }
+        }
+      })
+    }
+
+    if (
+      (node.type === 'ExportNamedDeclaration' && node.exportKind !== 'type') ||
+      node.type === 'ExportAllDeclaration' ||
+      node.type === 'ExportDefaultDeclaration'
+    ) {
+      error(
+        `<script setup> cannot contain ES module exports. ` +
+          `If you are using a previous version of <script setup>, please ` +
+          `consult the updated RFC at https://github.com/vuejs/rfcs/pull/227.`,
+        node
+      )
+    }
+    // console.log(`---- after ----`)
+    // console.log(s.toString())
   }
   // TODO 3. 将 ref访问转换成对 ref.value 的引用
   //
@@ -575,8 +759,140 @@ export function compileScript(
   s.trim()
   return {
     ...scriptSetup,
-    bindings: {},
-    content: s.toString()
+    bindings: bindingMetadata,
+    content: s.toString(),
+    map: (s.generateMap({
+      source: filename,
+      hires: true,
+      includeContent: true
+    }) as unknown) as RawSourceMap,
+    scriptAst,
+    scriptSetupAst
+  }
+}
+
+function walkDeclaration(
+  node: Declaration,
+  bindings: Record<string, BindingTypes>,
+  userImportAlias: Record<string, string>
+) {
+  if (node.type === 'VariableDeclaration') {
+    const isConst = node.kind === 'const'
+    // export const foo = ...
+    for (const { id, init } of node.declarations) {
+      const isDefineCall = !!(
+        isConst &&
+        (isCallOf(init, DEFINE_PROPS) || isCallOf(init, DEFINE_EMIT))
+      )
+      if (id.type === 'Identifier') {
+        let bindingType
+        if (
+          // if a declaration is a const literal, we can mark it so that
+          // the generated render fn code doesn't need to unref() it
+          isDefineCall ||
+          (isConst &&
+            canNeverBeRef(init!, userImportAlias['reactive'] || 'reactive'))
+        ) {
+          bindingType = BindingTypes.SETUP_CONST
+        } else if (isConst) {
+          if (isCallOf(init, userImportAlias['ref'] || 'ref')) {
+            bindingType = BindingTypes.SETUP_REF
+          } else {
+            bindingType = BindingTypes.SETUP_MAYBE_REF
+          }
+        } else {
+          bindingType = BindingTypes.SETUP_LET
+        }
+        bindings[id.name] = bindingType
+      } else if (id.type === 'ObjectPattern') {
+        walkObjectPattern(id, bindings, isConst, isDefineCall)
+      } else if (id.type === 'ArrayPattern') {
+        walkArrayPattern(id, bindings, isConst, isDefineCall)
+      }
+    }
+  } else if (
+    node.type === 'FunctionDeclaration' ||
+    node.type === 'ClassDeclaration'
+  ) {
+    // export function foo() {} / export class Foo {}
+    // export declarations must be named.
+    bindings[node.id!.name] = BindingTypes.SETUP_CONST
+  }
+}
+
+function walkObjectPattern(
+  node: ObjectPattern,
+  bindings: Record<string, BindingTypes>,
+  isConst: boolean,
+  isDefineCall = false
+) {
+  for (const p of node.properties) {
+    if (p.type === 'ObjectProperty') {
+      // key can only be Identifier in ObjectPattern
+      if (p.key.type === 'Identifier') {
+        if (p.key === p.value) {
+          // const { x } = ...
+          bindings[p.key.name] = isDefineCall
+            ? BindingTypes.SETUP_CONST
+            : isConst
+              ? BindingTypes.SETUP_MAYBE_REF
+              : BindingTypes.SETUP_LET
+        } else {
+          walkPattern(p.value, bindings, isConst, isDefineCall)
+        }
+      }
+    } else {
+      // ...rest
+      // argument can only be identifer when destructuring
+      bindings[(p.argument as Identifier).name] = isConst
+        ? BindingTypes.SETUP_CONST
+        : BindingTypes.SETUP_LET
+    }
+  }
+}
+
+function walkArrayPattern(
+  node: ArrayPattern,
+  bindings: Record<string, BindingTypes>,
+  isConst: boolean,
+  isDefineCall = false
+) {
+  for (const e of node.elements) {
+    e && walkPattern(e, bindings, isConst, isDefineCall)
+  }
+}
+
+function walkPattern(
+  node: Node,
+  bindings: Record<string, BindingTypes>,
+  isConst: boolean,
+  isDefineCall = false
+) {
+  if (node.type === 'Identifier') {
+    bindings[node.name] = isDefineCall
+      ? BindingTypes.SETUP_CONST
+      : isConst
+        ? BindingTypes.SETUP_MAYBE_REF
+        : BindingTypes.SETUP_LET
+  } else if (node.type === 'RestElement') {
+    // argument can only be identifer when destructuring
+    bindings[(node.argument as Identifier).name] = isConst
+      ? BindingTypes.SETUP_CONST
+      : BindingTypes.SETUP_LET
+  } else if (node.type === 'ObjectPattern') {
+    walkObjectPattern(node, bindings, isConst)
+  } else if (node.type === 'ArrayPattern') {
+    walkArrayPattern(node, bindings, isConst)
+  } else if (node.type === 'AssignmentPattern') {
+    if (node.left.type === 'Identifier') {
+      bindings[node.left.name] = isDefineCall
+        ? BindingTypes.SETUP_CONST
+        : isConst
+          ? BindingTypes.SETUP_MAYBE_REF
+          : BindingTypes.SETUP_LET
+    } else {
+      walkPattern(node.left, bindings, isConst)
+    }
   }
 }
 
@@ -584,6 +900,141 @@ interface PropTypeData {
   key: string
   type: string[]
   required: boolean
+}
+
+function recordType(node: Node, declaredTypes: Record<string, string[]>) {
+  if (node.type === 'TSInterfaceDeclaration') {
+    declaredTypes[node.id.name] = [`Object`]
+  } else if (node.type === 'TSTypeAliasDeclaration') {
+    declaredTypes[node.id.name] = inferRuntimeType(
+      node.typeAnnotation,
+      declaredTypes
+    )
+  } else if (node.type === 'ExportNamedDeclaration' && node.declaration) {
+    recordType(node.declaration, declaredTypes)
+  }
+}
+
+function inferRuntimeType(
+  node: TSType,
+  declaredTypes: Record<string, string[]>
+): string[] {
+  switch (node.type) {
+    case 'TSStringKeyword':
+      return ['String']
+    case 'TSNumberKeyword':
+      return ['Number']
+    case 'TSBooleanKeyword':
+      return ['Boolean']
+    case 'TSObjectKeyword':
+      return ['Object']
+    case 'TSTypeLiteral':
+      // TODO (nice to have) generate runtime property validation
+      return ['Object']
+    case 'TSFunctionType':
+      return ['Function']
+    case 'TSArrayType':
+    case 'TSTupleType':
+      // TODO (nice to have) generate runtime element type/length checks
+      return ['Array']
+
+    case 'TSLiteralType':
+      switch (node.literal.type) {
+        case 'StringLiteral':
+          return ['String']
+        case 'BooleanLiteral':
+          return ['Boolean']
+        case 'NumericLiteral':
+        case 'BigIntLiteral':
+          return ['Number']
+        default:
+          return [`null`]
+      }
+
+    case 'TSTypeReference':
+      if (node.typeName.type === 'Identifier') {
+        if (declaredTypes[node.typeName.name]) {
+          return declaredTypes[node.typeName.name]
+        }
+        switch (node.typeName.name) {
+          case 'Array':
+          case 'Function':
+          case 'Object':
+          case 'Set':
+          case 'Map':
+          case 'WeakSet':
+          case 'WeakMap':
+            return [node.typeName.name]
+          case 'Record':
+          case 'Partial':
+          case 'Readonly':
+          case 'Pick':
+          case 'Omit':
+          case 'Exclude':
+          case 'Extract':
+          case 'Required':
+          case 'InstanceType':
+            return ['Object']
+        }
+      }
+      return [`null`]
+
+    case 'TSUnionType':
+      return [
+        ...new Set(
+          [].concat(node.types.map(t =>
+            inferRuntimeType(t, declaredTypes)
+          ) as any)
+        )
+      ]
+
+    case 'TSIntersectionType':
+      return ['Object']
+
+    default:
+      return [`null`] // no runtime check
+  }
+}
+
+function isFunction(node: Node): node is FunctionNode {
+  return /Function(?:Expression|Declaration)$|Method$/.test(node.type)
+}
+
+function isCallOf(node: Node | null, name: string): node is CallExpression {
+  return !!(
+    node &&
+    node.type === 'CallExpression' &&
+    node.callee.type === 'Identifier' &&
+    node.callee.name === name
+  )
+}
+
+function canNeverBeRef(node: Node, userReactiveImport: string): boolean {
+  if (isCallOf(node, userReactiveImport)) {
+    return true
+  }
+  switch (node.type) {
+    case 'UnaryExpression':
+    case 'BinaryExpression':
+    case 'ArrayExpression':
+    case 'ObjectExpression':
+    case 'FunctionExpression':
+    case 'ArrowFunctionExpression':
+    case 'UpdateExpression':
+    case 'ClassExpression':
+    case 'TaggedTemplateExpression':
+      return true
+    case 'SequenceExpression':
+      return canNeverBeRef(
+        node.expressions[node.expressions.length - 1],
+        userReactiveImport
+      )
+    default:
+      if (node.type.endsWith('Literal')) {
+        return true
+      }
+      return false
+  }
 }
 
 /**
