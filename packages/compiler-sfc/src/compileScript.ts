@@ -809,7 +809,33 @@ export function compileScript(
   }
 
   // TODO 7. 分析 binding metadata
-  //
+  if (scriptAst) {
+    Object.assign(bindingMetadata, analyzeScriptBindings(scriptAst))
+  }
+
+  if (propsRuntimeDecl) {
+    for (const key of getObjectOrArrayExpressionKeys(propsRuntimeDecl)) {
+      bindingMetadata[key] = BindingTypes.PROPS
+    }
+  }
+
+  for (const key in typeDeclaredProps) {
+    bindingMetadata[key] = BindingTypes.PROPS
+  }
+
+  for (const [key, { isType, imported, source }] of Object.entries(
+    userImports
+  )) {
+    if (isType) continue
+    bindingMetadata[key] =
+      (imported === 'default' && source.endsWith('.vue')) || source === 'vue'
+        ? BindingTypes.SETUP_CONST
+        : BindingTypes.SETUP_MAYBE_REF
+  }
+  for (const key in setupBindings) {
+    bindingMetadata[key] = setupBindings[key]
+  }
+
   // TODO 8. 注入 `useCssVars` 调用
   //
   // TODO 9. 完成 setup() 参数签名
