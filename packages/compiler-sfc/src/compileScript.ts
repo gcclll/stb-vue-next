@@ -309,6 +309,22 @@ export function compileScript(
     return false
   }
 
+  function checkInvalidScopeReference(node: Node | undefined, method: string) {
+    if (!node) return
+    walkIdentifiers(node, id => {
+      if (setupBindings[id.name]) {
+        error(
+          `\`${method}()\` in <script setup> cannot reference locally ` +
+            `declared variables because it will be hoisted outside of the ` +
+            `setup() function. If your component options requires initialization ` +
+            `in the module scope, use a separate normal <script> to export ` +
+            `the options instead.`,
+          id
+        )
+      }
+    })
+  }
+
   function processRefExpression(exp: Expression, statement: LabeledStatement) {
     // 必须是赋值语句, ref: num = 1
     if (exp.type === 'AssignmentExpression') {
@@ -768,9 +784,11 @@ export function compileScript(
   if (emitTypeDecl) {
     extractRuntimeEmits(emitTypeDecl, typeDeclaredEmits)
   }
-  //
+
   // TODO 5. 检查用户选项(useOptions)参数，确保它没有引用 setup 下的变量
-  //
+  checkInvalidScopeReference(propsRuntimeDecl, DEFINE_PROPS)
+  checkInvalidScopeReference(emitRuntimeDecl, DEFINE_PROPS)
+
   // TODO 6. 删除 non-script 的内容
   //
   // TODO 7. 分析 binding metadata
