@@ -247,13 +247,14 @@ export function compileScript(
         }
         processRefObjectPattern(left, statement)
       } else if (left.type === 'ArrayPattern') {
-        // TODO
+        processRefArrayPattern(left, statement)
       }
     } else if (exp.type === 'SequenceExpression') {
       // 多条赋值语句情况, ref: x = 1, y = 2
-      // TODO
+      exp.expressions.forEach(e => processRefExpression(e, statement))
     } else if (exp.type === 'Identifier') {
-      // TODO
+      registerRefBinding(exp)
+      s.appendLeft(exp.end! + startOffset, ` = ${helper('ref')}()`)
     } else {
       error(`ref: statements can only contain assignment expressions.`, exp)
     }
