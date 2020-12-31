@@ -1030,7 +1030,14 @@ export function compileScript(
       s.appendRight(endOffset, `}`)
     }
   }
-  // TODO 12. 完成 Vue helpers imports
+  // 12. 完成 Vue helpers imports
+  if (helperImports.size > 0) {
+    s.prepend(
+      `import { ${[...helperImports]
+        .map(h => `${h} as _${h}`)
+        .join(', ')} } from 'vue'\n`
+    )
+  }
 
   s.trim()
   return {
