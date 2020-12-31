@@ -4,7 +4,19 @@ export { compileTemplate } from './compileTemplate'
 export { compileStyle, compileStyleAsync } from './compileStyle'
 export { compileScript } from './compileScript'
 export { rewriteDefault } from './rewriteDefault'
-export { generateCodeFrame } from '@vue/compiler-core'
+export {
+  generateCodeFrame,
+  generate,
+  baseParse,
+  transform,
+  transformElement,
+  transformBind
+} from '@vue/compiler-core'
+export {
+  transformSrcset,
+  createSrcsetTransformWithOptions
+} from './templateTransformSrcset'
+export { AssetURLOptions, normalizeOptions } from './templateTransformAssetUrl'
 
 // Types
 export {

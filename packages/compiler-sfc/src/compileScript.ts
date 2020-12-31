@@ -869,7 +869,7 @@ export function compileScript(
       )}\n`
     )
   }
-  // TODO 9. 完成 setup() 参数签名
+  // 9. 完成 setup() 参数签名
   let args = `__props`
   if (propsTypeDecl) {
     args += `: ${scriptSetup.content.slice(
@@ -903,7 +903,7 @@ export function compileScript(
     }
   }
 
-  // TODO 10. 生成返回语句(return)
+  // 10. 生成返回语句(return)
   let returned
   if (options.inlineTemplate) {
     if (sfc.template && !sfc.template.src) {
