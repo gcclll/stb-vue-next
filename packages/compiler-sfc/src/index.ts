@@ -1,8 +1,9 @@
 // API
 export { parse } from './parse'
 export { compileTemplate } from './compileTemplate'
-export { compileStyle } from './compileStyle'
+export { compileStyle, compileStyleAsync } from './compileStyle'
 export { compileScript } from './compileScript'
+export { rewriteDefault } from './rewriteDefault'
 export { generateCodeFrame } from '@vue/compiler-core'
 
 // Types
