@@ -979,19 +979,27 @@ export function compileScript(
   s.appendRight(endOffset, `\nreturn ${returned}\n}\n\n`)
   // 11. 完成 default export
   // expose: [] makes <script setup> components "closed" by default.
-  let runtimeOptions = `\n expose: [],`
+  let runtimeOptions = `\n  expose: [],`
   if (hasInheritAttrsFlag) {
-    runtimeOptions += `\n inheritAttrs: false,`
+    runtimeOptions += `\n  inheritAttrs: false,`
   }
   if (hasInlinedSsrRenderFn) {
-    runtimeOptions += `\n __ssrInlineRender: true,`
+    runtimeOptions += `\n  __ssrInlineRender: true,`
   }
   if (propsRuntimeDecl) {
-    runtimeOptions += `\n props: ${scriptSetup.content
+    runtimeOptions += `\n  props: ${scriptSetup.content
       .slice(propsRuntimeDecl.start!, propsRuntimeDecl.end!)
       .trim()}`
   } else if (propsTypeDecl) {
     runtimeOptions += genRuntimeProps(typeDeclaredProps)
+  }
+
+  if (emitRuntimeDecl) {
+    runtimeOptions += `\n  emits: ${scriptSetup.content
+      .slice(emitRuntimeDecl.start!, emitRuntimeDecl.end!)
+      .trim()},`
+  } else if (emitTypeDecl) {
+    runtimeOptions += genRuntimeEmits(typeDeclaredEmits)
   }
   if (isTS) {
     // for TS, make sure the exported type is still valid type with
@@ -1360,6 +1368,14 @@ function extractRuntimeEmits(
       }
     }
   }
+}
+
+function genRuntimeEmits(emits: Set<string>) {
+  return emits.size
+    ? `\n  emits: [${Array.from(emits)
+        .map(p => JSON.stringify(p))
+        .join(', ')}] as unknown as undefined,`
+    : ``
 }
 
 const parentStack: Node[] = []
