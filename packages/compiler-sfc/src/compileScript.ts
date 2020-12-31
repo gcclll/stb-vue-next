@@ -989,7 +989,7 @@ export function compileScript(
   if (propsRuntimeDecl) {
     runtimeOptions += `\n  props: ${scriptSetup.content
       .slice(propsRuntimeDecl.start!, propsRuntimeDecl.end!)
-      .trim()}`
+      .trim()},`
   } else if (propsTypeDecl) {
     runtimeOptions += genRuntimeProps(typeDeclaredProps)
   }
@@ -1622,11 +1622,13 @@ function analyzeBindingsFromOptions(node: ObjectExpression): BindingMetadata {
       ) {
         // methods: { foo() {} }
         // computed: { foo() {} }
-        for (const key of getObjectOrArrayExpressionKeys(property.value)) {
+        for (const key of getObjectExpressionKeys(property.value)) {
           bindings[key] = BindingTypes.OPTIONS
         }
       }
-    } else if (
+    }
+    // setup & data
+    else if (
       property.type === 'ObjectMethod' &&
       property.key.type === 'Identifier' &&
       (property.key.name === 'setup' || property.key.name === 'data')
@@ -1643,9 +1645,10 @@ function analyzeBindingsFromOptions(node: ObjectExpression): BindingMetadata {
           bodyItem.argument.type === 'ObjectExpression'
         ) {
           for (const key of getObjectExpressionKeys(bodyItem.argument)) {
-            bindings[key] = property.key.name = 'setup'
-              ? BindingTypes.SETUP_MAYBE_REF
-              : BindingTypes.DATA
+            bindings[key] =
+              property.key.name === 'setup'
+                ? BindingTypes.SETUP_MAYBE_REF
+                : BindingTypes.DATA
           }
         }
       }
@@ -1688,7 +1691,7 @@ function getObjectOrArrayExpressionKeys(value: Node): string[] {
     return getArrayExpressionKeys(value)
   }
 
-  if (value.type) {
+  if (value.type === 'ObjectExpression') {
     return getObjectExpressionKeys(value)
   }
   return []
