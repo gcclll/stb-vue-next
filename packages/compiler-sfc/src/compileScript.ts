@@ -977,9 +977,59 @@ export function compileScript(
     returned = `{ ${Object.keys(allBindings).join(', ')} }`
   }
   s.appendRight(endOffset, `\nreturn ${returned}\n}\n\n`)
-  // TODO 11. 完成 default export
+  // 11. 完成 default export
   // expose: [] makes <script setup> components "closed" by default.
-  //
+  let runtimeOptions = `\n expose: [],`
+  if (hasInheritAttrsFlag) {
+    runtimeOptions += `\n inheritAttrs: false,`
+  }
+  if (hasInlinedSsrRenderFn) {
+    runtimeOptions += `\n __ssrInlineRender: true,`
+  }
+  if (propsRuntimeDecl) {
+    runtimeOptions += `\n props: ${scriptSetup.content
+      .slice(propsRuntimeDecl.start!, propsRuntimeDecl.end!)
+      .trim()}`
+  } else if (propsTypeDecl) {
+    runtimeOptions += genRuntimeProps(typeDeclaredProps)
+  }
+  if (isTS) {
+    // for TS, make sure the exported type is still valid type with
+    // correct props information
+    // we have to use object spread for types to be merged properly
+    // user's TS setting should compile it down to proper targets
+    const def = defaultExport ? `\n  ...${defaultTempVar},` : ``
+    // wrap setup code with function.
+    // export the content of <script setup> as a named export, `setup`.
+    // this allows `import { setup } from '*.vue'` for testing purposes.
+    s.prependLeft(
+      startOffset,
+      `\nexport default ${helper(
+        `defineComponent`
+      )}({${def}${runtimeOptions}\n  ${
+        hasAwait ? `async ` : ``
+      }setup(${args}) {\n`
+    )
+    s.appendRight(endOffset, `})`)
+  } else {
+    if (defaultExport) {
+      // can't rely on spread operator in non ts mode
+      s.prependLeft(
+        startOffset,
+        `\n${hasAwait ? `async ` : ``}function setup(${args}) {\n`
+      )
+      s.append(
+        `\nexport default /*#__PURE__*/ Object.assign(${defaultTempVar}, {${runtimeOptions}\n  setup\n})\n`
+      )
+    } else {
+      s.prependLeft(
+        startOffset,
+        `\nexport default {${runtimeOptions}\n  ` +
+          `${hasAwait ? `async ` : ``}setup(${args}) {\n`
+      )
+      s.appendRight(endOffset, `}`)
+    }
+  }
   // TODO 12. 完成 Vue helpers imports
 
   s.trim()
@@ -1239,6 +1289,37 @@ function inferRuntimeType(
     default:
       return [`null`] // no runtime check
   }
+}
+
+function genRuntimeProps(props: Record<string, PropTypeData>) {
+  const keys = Object.keys(props)
+  if (!keys.length) {
+    return ``
+  }
+
+  if (!__DEV__) {
+    // production: generate array version only
+    return `\n  props: [\n    ${keys
+      .map(k => JSON.stringify(k))
+      .join(',\n    ')}\n  ] as unknown as undefined,`
+  }
+
+  return `\n  props: {\n    ${keys
+    .map(key => {
+      const { type, required } = props[key]
+      return `${key}: { type: ${toRuntimeTypeString(
+        type
+      )}, required: ${required} }`
+    })
+    .join(',\n    ')}\n  } as unknown as undefined,`
+}
+
+function toRuntimeTypeString(types: string[]) {
+  return types.some(t => t === 'null')
+    ? `null`
+    : types.length > 1
+      ? `[${types.join(', ')}]`
+      : types[0]
 }
 
 function extractRuntimeEmits(
