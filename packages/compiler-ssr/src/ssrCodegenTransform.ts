@@ -3,9 +3,11 @@ import {
   CallExpression,
   CompilerOptions,
   createBlockStatement,
+  createCallExpression,
   createCompoundExpression,
   createRoot,
   createSimpleExpression,
+  createTemplateLiteral,
   createTransformContext,
   IfStatement,
   isText,
@@ -15,7 +17,7 @@ import {
   TemplateChildNode,
   TemplateLiteral
 } from '@vue/compiler-dom'
-import { escapeHtml } from '@vue/shared'
+import { escapeHtml, isString } from '@vue/shared'
 import { ssrHelpers } from './runtimeHelpers'
 
 // Because SSR codegen output is completely different from client-side output
@@ -83,7 +85,21 @@ function createSSRTransformContext(
       return name
     },
     pushStringPart(part: TemplateLiteral['elements'][0]) {
-      // TODO
+      if (!currentString) {
+        const currentCall = createCallExpression(`_push`)
+        body.push(currentCall)
+        currentString = createTemplateLiteral([])
+        currentCall.arguments.push(currentString)
+      }
+
+      const bufferedElements = currentString.elements
+      const lastItem = bufferedElements[bufferedElements.length - 1]
+      // 合并文本节点
+      if (isString(part) && isString(lastItem)) {
+        bufferedElements[bufferedElements.length - 1] += part
+      } else {
+        bufferedElements.push(part)
+      }
     },
     pushStatement(statement: IfStatement | CallExpression) {
       // close current string
