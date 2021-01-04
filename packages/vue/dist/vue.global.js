@@ -100,6 +100,36 @@ var Vue = (function(exports, runtimeDom) {
     return ret
   }
 
+  // These tag configs are shared between compiler-dom and runtime-dom, so they
+  // https://developer.mozilla.org/en-US/docs/Web/HTML/Element
+  const HTML_TAGS =
+    'html,body,base,head,link,meta,style,title,address,article,aside,footer,' +
+    'header,h1,h2,h3,h4,h5,h6,hgroup,nav,section,div,dd,dl,dt,figcaption,' +
+    'figure,picture,hr,img,li,main,ol,p,pre,ul,a,b,abbr,bdi,bdo,br,cite,code,' +
+    'data,dfn,em,i,kbd,mark,q,rp,rt,rtc,ruby,s,samp,small,span,strong,sub,sup,' +
+    'time,u,var,wbr,area,audio,map,track,video,embed,object,param,source,' +
+    'canvas,script,noscript,del,ins,caption,col,colgroup,table,thead,tbody,td,' +
+    'th,tr,button,datalist,fieldset,form,input,label,legend,meter,optgroup,' +
+    'option,output,progress,select,textarea,details,dialog,menu,' +
+    'summary,template,blockquote,iframe,tfoot'
+  // https://developer.mozilla.org/en-US/docs/Web/SVG/Element
+  const SVG_TAGS =
+    'svg,animate,animateMotion,animateTransform,circle,clipPath,color-profile,' +
+    'defs,desc,discard,ellipse,feBlend,feColorMatrix,feComponentTransfer,' +
+    'feComposite,feConvolveMatrix,feDiffuseLighting,feDisplacementMap,' +
+    'feDistanceLight,feDropShadow,feFlood,feFuncA,feFuncB,feFuncG,feFuncR,' +
+    'feGaussianBlur,feImage,feMerge,feMergeNode,feMorphology,feOffset,' +
+    'fePointLight,feSpecularLighting,feSpotLight,feTile,feTurbulence,filter,' +
+    'foreignObject,g,hatch,hatchpath,image,line,linearGradient,marker,mask,' +
+    'mesh,meshgradient,meshpatch,meshrow,metadata,mpath,path,pattern,' +
+    'polygon,polyline,radialGradient,rect,set,solidcolor,stop,switch,symbol,' +
+    'text,textPath,title,tspan,unknown,use,view'
+  const VOID_TAGS =
+    'area,base,br,col,embed,hr,img,input,link,meta,param,source,track,wbr'
+  const isHTMLTag = /*#__PURE__*/ makeMap(HTML_TAGS)
+  const isSVGTag = /*#__PURE__*/ makeMap(SVG_TAGS)
+  const isVoidTag = /*#__PURE__*/ makeMap(VOID_TAGS)
+
   const EMPTY_OBJ = Object.freeze({})
   const EMPTY_ARR = Object.freeze([])
   const NOOP = () => {}
@@ -4411,6 +4441,8 @@ var Vue = (function(exports, runtimeDom) {
     )
   }
 
+  const noopDirectiveTransform = () => ({ props: [] })
+
   // Parse inline CSS strings for static style attributes into an object.
   // This is a NodeTransform since it works on the static `style` attribute and
   // converts it into a dynamic equivalent:
@@ -4799,7 +4831,88 @@ var Vue = (function(exports, runtimeDom) {
     )
   }
 
-  const parserOptions = {}
+  /* eslint-disable no-restricted-globals */
+  let decoder
+  function decodeHtmlBrowser(raw) {
+    ;(decoder || (decoder = document.createElement('div'))).innerHTML = raw
+    return decoder.textContent
+  }
+
+  const isRawTextContainer = /*#__PURE__*/ makeMap(
+    'style,iframe,script,noscript',
+    true
+  )
+  const parserOptions = {
+    isVoidTag,
+    isNativeTag: tag => isHTMLTag(tag) || isSVGTag(tag),
+    isPreTag: tag => tag === 'pre',
+    decodeEntities: decodeHtmlBrowser,
+    isBuiltInComponent: tag => {
+      if (isBuiltInType(tag, `Transition`)) {
+        return TRANSITION
+      } else if (isBuiltInType(tag, `TransitionGroup`)) {
+        return TRANSITION_GROUP
+      }
+    },
+    // https://html.spec.whatwg.org/multipage/parsing.html#tree-construction-dispatcher
+    getNamespace(tag, parent) {
+      let ns = parent ? parent.ns : 0 /* HTML */
+      if (parent && ns === 2 /* MATH_ML */) {
+        if (parent.tag === 'annotation-xml') {
+          if (tag === 'svg') {
+            return 1 /* SVG */
+          }
+          if (
+            parent.props.some(
+              a =>
+                a.type === 6 /* ATTRIBUTE */ &&
+                a.name === 'encoding' &&
+                a.value != null &&
+                (a.value.content === 'text/html' ||
+                  a.value.content === 'application/xhtml+xml')
+            )
+          ) {
+            ns = 0 /* HTML */
+          }
+        } else if (
+          /^m(?:[ions]|text)$/.test(parent.tag) &&
+          tag !== 'mglyph' &&
+          tag !== 'malignmark'
+        ) {
+          ns = 0 /* HTML */
+        }
+      } else if (parent && ns === 1 /* SVG */) {
+        if (
+          parent.tag === 'foreignObject' ||
+          parent.tag === 'desc' ||
+          parent.tag === 'title'
+        ) {
+          ns = 0 /* HTML */
+        }
+      }
+      if (ns === 0 /* HTML */) {
+        if (tag === 'svg') {
+          return 1 /* SVG */
+        }
+        if (tag === 'math') {
+          return 2 /* MATH_ML */
+        }
+      }
+      return ns
+    },
+    // https://html.spec.whatwg.org/multipage/parsing.html#parsing-html-fragments
+    getTextMode({ tag, ns }) {
+      if (ns === 0 /* HTML */) {
+        if (tag === 'textarea' || tag === 'title') {
+          return 1 /* RCDATA */
+        }
+        if (isRawTextContainer(tag)) {
+          return 2 /* RAWTEXT */
+        }
+      }
+      return 0 /* DATA */
+    }
+  }
 
   const ignoreSideEffectTags = (node, context) => {
     if (
@@ -4816,6 +4929,7 @@ var Vue = (function(exports, runtimeDom) {
 
   const DOMNodeTransforms = [transformStyle, ...[warnTransitionChildren]]
   const DOMDirectiveTransforms = {
+    cloak: noopDirectiveTransform,
     html: transformVHtml,
     text: transformVText,
     model: transformModel$1,

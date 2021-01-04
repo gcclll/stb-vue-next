@@ -7,6 +7,7 @@ import {
   transformBind,
   generate
 } from '@vue/compiler-dom'
+import { ssrCodegenTransform } from './ssrCodegenTransform'
 
 export function compile(
   template: string,
@@ -47,6 +48,7 @@ export function compile(
   // TODO traverse the template AST and convert into SSR codegen AST
   // by replacing ast.codegenNode.
   // 将 compiler-core 阶段生成的 codegenNode 转换成 SSR codegen AST
+  ssrCodegenTransform(ast, options)
 
   return generate(ast, options)
 }
