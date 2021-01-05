@@ -7,6 +7,7 @@ import {
   transformBind,
   generate
 } from '@vue/compiler-dom'
+import { ssrTransformElement } from './transforms/ssrTransformElement'
 import { ssrCodegenTransform } from './ssrCodegenTransform'
 
 export function compile(
@@ -35,6 +36,7 @@ export function compile(
     nodeTransforms: [
       // TODO ... ssr transforms
 
+      ssrTransformElement,
       ...(options.nodeTransforms || []) // user transforms
     ],
     directiveTransforms: {

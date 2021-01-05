@@ -9,6 +9,7 @@ import {
   createSimpleExpression,
   createTemplateLiteral,
   createTransformContext,
+  ElementTypes,
   IfStatement,
   isText,
   NodeTypes,
@@ -19,6 +20,7 @@ import {
 } from '@vue/compiler-dom'
 import { escapeHtml, isString } from '@vue/shared'
 import { ssrHelpers, SSR_INTERPOLATE } from './runtimeHelpers'
+import { ssrProcessElement } from './transforms/ssrTransformElement'
 
 // Because SSR codegen output is completely different from client-side output
 // (e.g. multiple elements can be concatenated into a single template literal
@@ -136,6 +138,13 @@ export function processChildren(
   for (let i = 0; i < children.length; i++) {
     const child = children[i]
     switch (child.type) {
+      case NodeTypes.ELEMENT:
+        switch (child.tagType) {
+          case ElementTypes.ELEMENT:
+            ssrProcessElement(child, context)
+            break
+        }
+        break
       case NodeTypes.TEXT:
         context.pushStringPart(escapeHtml(child.content))
         break
