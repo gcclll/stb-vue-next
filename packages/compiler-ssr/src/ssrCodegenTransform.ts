@@ -18,7 +18,7 @@ import {
   TemplateLiteral
 } from '@vue/compiler-dom'
 import { escapeHtml, isString } from '@vue/shared'
-import { ssrHelpers } from './runtimeHelpers'
+import { ssrHelpers, SSR_INTERPOLATE } from './runtimeHelpers'
 
 // Because SSR codegen output is completely different from client-side output
 // (e.g. multiple elements can be concatenated into a single template literal
@@ -138,6 +138,11 @@ export function processChildren(
     switch (child.type) {
       case NodeTypes.TEXT:
         context.pushStringPart(escapeHtml(child.content))
+        break
+      case NodeTypes.INTERPOLATION:
+        context.pushStringPart(
+          createCallExpression(context.helper(SSR_INTERPOLATE), [child.content])
+        )
         break
     }
   }
