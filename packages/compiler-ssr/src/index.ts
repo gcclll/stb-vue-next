@@ -14,6 +14,7 @@ import {
 } from '@vue/compiler-dom'
 import { ssrTransformElement } from './transforms/ssrTransformElement'
 import { ssrCodegenTransform } from './ssrCodegenTransform'
+import { ssrInjectFallthroughAttrs } from './transforms/ssrInjectFallthroughAttrs'
 
 export function compile(
   template: string,
@@ -43,6 +44,7 @@ export function compile(
 
       trackVForSlotScopes,
       transformExpression,
+      ssrInjectFallthroughAttrs,
       ssrTransformElement,
       trackSlotScopes,
       transformStyle,
