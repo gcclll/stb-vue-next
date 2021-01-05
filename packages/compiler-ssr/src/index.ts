@@ -5,7 +5,12 @@ import {
   CompilerOptions,
   transform,
   transformBind,
-  generate
+  generate,
+  transformExpression,
+  trackVForSlotScopes,
+  trackSlotScopes,
+  transformStyle,
+  noopDirectiveTransform
 } from '@vue/compiler-dom'
 import { ssrTransformElement } from './transforms/ssrTransformElement'
 import { ssrCodegenTransform } from './ssrCodegenTransform'
@@ -36,13 +41,20 @@ export function compile(
     nodeTransforms: [
       // TODO ... ssr transforms
 
+      trackVForSlotScopes,
+      transformExpression,
       ssrTransformElement,
+      trackSlotScopes,
+      transformStyle,
       ...(options.nodeTransforms || []) // user transforms
     ],
     directiveTransforms: {
       // 复用 compiler-core 的 v-bind
       bind: transformBind,
-      // TODO ... more ssr directive transforms
+      // ssr 中下面三个指令不处理
+      on: noopDirectiveTransform,
+      cloak: noopDirectiveTransform,
+      once: noopDirectiveTransform,
       ...(options.directiveTransforms || {}) // user transforms
     }
   })

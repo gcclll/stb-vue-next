@@ -6,7 +6,8 @@ import {
   NodeTransform,
   NodeTypes,
   PlainElementNode,
-  TemplateLiteral
+  TemplateLiteral,
+  createSimpleExpression
 } from '@vue/compiler-dom'
 
 // for directives with children overwrite (e.g. v-html & v-text), we need to
