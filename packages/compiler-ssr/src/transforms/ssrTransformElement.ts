@@ -7,8 +7,12 @@ import {
   NodeTypes,
   PlainElementNode,
   TemplateLiteral,
-  createSimpleExpression
+  createSimpleExpression,
+  hasDynamicKeyVBind,
+  buildProps,
+  createCallExpression
 } from '@vue/compiler-dom'
+import { SSR_RENDER_ATTRS } from '../runtimeHelpers'
 
 // for directives with children overwrite (e.g. v-html & v-text), we need to
 // store the raw children so that they can be added in the 2nd pass.
@@ -29,9 +33,35 @@ export const ssrTransformElement: NodeTransform = (node, context) => {
     const openTag: TemplateLiteral['elements'] = [`<${node.tag}`]
 
     // some tags need to be passed to runtime for special checks
-    // TODO 需要运行时做特殊处理
-
+    // 需要运行时做特殊处理
+    const needTagForRuntime =
+      node.tag === 'textarea' || node.tag.indexOf('-') > 0
     // 1. TODO v-bind
+    // v-bind="obj" or v-bind:[key] can potentially overwrite other static
+    // attrs and can affect final rendering result, so when they are present
+    // we need to bail out to full `renderAttrs`
+    const hasDynamicVBind = hasDynamicKeyVBind(node)
+    if (hasDynamicVBind) {
+      const { props } = buildProps(node, context, node.props, true /* ssr */)
+      if (props) {
+        const propsExp = createCallExpression(
+          context.helper(SSR_RENDER_ATTRS),
+          [props]
+        )
+
+        if (node.tag === 'textarea') {
+          // TODO
+        } else if (node.tag === 'input') {
+          // TODO
+        }
+
+        if (needTagForRuntime) {
+          propsExp.arguments.push(`"${node.tag}"`)
+        }
+
+        openTag.push(propsExp)
+      }
+    }
     // 2. TODO class 处理(静态/动态)
     // 3. TODO style 处理
     // 4. TODO node.props 处理
