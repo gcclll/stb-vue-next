@@ -159,6 +159,10 @@ export function processChildren(
         break
     }
   }
+
+  if (asFragment) {
+    context.pushStringPart(`<!--]-->`)
+  }
 }
 
 export function processChildrenAsStatement(
