@@ -101,8 +101,8 @@ export const ssrTransformElement: NodeTransform = (node, context) => {
       // special cases with children override
       if (prop.type === NodeTypes.DIRECTIVE) {
         // 指令处理
-        if (false /* v-html */) {
-          // TODO
+        if (prop.name === 'html' && prop.exp /* v-html */) {
+          rawChildrenMap.set(node, prop.exp)
         } else if (false /* v-text */) {
           // TODO
         } else if (false /* v-slot */) {
