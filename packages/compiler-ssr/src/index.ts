@@ -18,6 +18,7 @@ import { ssrInjectFallthroughAttrs } from './transforms/ssrInjectFallthroughAttr
 import { ssrTransformModel } from './transforms/ssrVModel'
 import { ssrTransformShow } from './transforms/ssrVShow'
 import { ssrTransformIf } from './transforms/ssrVIf'
+import { ssrTransformFor } from './transforms/ssrVFor'
 
 export function compile(
   template: string,
@@ -45,6 +46,7 @@ export function compile(
     nodeTransforms: [
       // TODO ... ssr transforms
       ssrTransformIf,
+      ssrTransformFor,
 
       trackVForSlotScopes,
       transformExpression,

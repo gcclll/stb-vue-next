@@ -21,6 +21,7 @@ import {
 import { escapeHtml, isString } from '@vue/shared'
 import { ssrHelpers, SSR_INTERPOLATE } from './runtimeHelpers'
 import { ssrProcessElement } from './transforms/ssrTransformElement'
+import { ssrProcessFor } from './transforms/ssrVFor'
 import { ssrProcessIf } from './transforms/ssrVIf'
 
 // Because SSR codegen output is completely different from client-side output
@@ -156,6 +157,9 @@ export function processChildren(
         break
       case NodeTypes.IF:
         ssrProcessIf(child, context, disableNestedFragments)
+        break
+      case NodeTypes.FOR:
+        ssrProcessFor(child, context, disableNestedFragments)
         break
     }
   }
