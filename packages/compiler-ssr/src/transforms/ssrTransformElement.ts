@@ -103,8 +103,8 @@ export const ssrTransformElement: NodeTransform = (node, context) => {
         // 指令处理
         if (prop.name === 'html' && prop.exp /* v-html */) {
           rawChildrenMap.set(node, prop.exp)
-        } else if (false /* v-text */) {
-          // TODO
+        } else if (prop.name === 'text' && prop.exp /* v-text */) {
+          node.children = [createInterpolation(prop.exp, prop.loc)]
         } else if (false /* v-slot */) {
           // TODO
         } else if (false /* textarea with value */) {
