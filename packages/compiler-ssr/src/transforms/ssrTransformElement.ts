@@ -32,9 +32,12 @@ import {
   TextNode,
   InterpolationNode,
   createAssignmentExpression,
-  createConditionalExpression
+  createConditionalExpression,
+  createSequenceExpression,
+  MERGE_PROPS
 } from '@vue/compiler-dom'
 import {
+  SSR_GET_DYNAMIC_MODEL_PROPS,
   SSR_INTERPOLATE,
   SSR_RENDER_ATTR,
   SSR_RENDER_ATTRS,
@@ -120,7 +123,30 @@ export const ssrTransformElement: NodeTransform = (node, context) => {
             )
           }
         } else if (node.tag === 'input') {
-          // TODO
+          // <input v-bind="obj" v-model>
+          // we need to determine the props to render for the dynamic v-model
+          // and merge it with the v-bind expression.
+          const vModel = findVModel(node)
+          if (vModel) {
+            // 1. 保存 props 到临时变量
+            const tempId = `_temp${context.temps++}`
+            const tempExp = createSimpleExpression(tempId, false)
+            propsExp.arguments = [
+              createSequenceExpression([
+                createAssignmentExpression(tempExp, props),
+                createCallExpression(context.helper(MERGE_PROPS), [
+                  tempExp,
+                  createCallExpression(
+                    context.helper(SSR_GET_DYNAMIC_MODEL_PROPS),
+                    [
+                      tempExp, // existing props
+                      vModel.exp! // model
+                    ]
+                  )
+                ])
+              ])
+            ]
+          }
         }
 
         if (needTagForRuntime) {
@@ -139,7 +165,7 @@ export const ssrTransformElement: NodeTransform = (node, context) => {
     // 所有 style 会被 transformStyle 合并成动态的，这里主要是确保有没合并
     let dynamicStyleBinding: CallExpression | undefined = undefined
 
-    // 4. TODO node.props 处理
+    // 4. node.props 处理
 
     for (let i = 0; i < node.props.length; i++) {
       const prop = node.props[i]
@@ -229,7 +255,15 @@ export const ssrTransformElement: NodeTransform = (node, context) => {
                       : propsToAttrMap[attrName] || attrName.toLowerCase()
 
                   if (isBooleanAttr(attrName)) {
-                    // TODO boolean 类型属性
+                    // boolean 类型属性
+                    openTag.push(
+                      createConditionalExpression(
+                        value,
+                        createSimpleExpression(' ' + attrName, true),
+                        createSimpleExpression('', true),
+                        false /* no newline */
+                      )
+                    )
                   } else if (isSSRSafeAttrName(attrName)) {
                     // 安全属性，不包含 ["'<>] 的名字
                     openTag.push(
@@ -331,6 +365,12 @@ function removeStaticBinding(
   if (i > -1) {
     tag.splice(i, 1)
   }
+}
+
+function findVModel(node: PlainElementNode): DirectiveNode | undefined {
+  return node.props.find(
+    p => p.type === NodeTypes.DIRECTIVE && p.name === 'model' && p.exp
+  ) as DirectiveNode | undefined
 }
 
 export function ssrProcessElement(
