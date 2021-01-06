@@ -1,5 +1,6 @@
 import {
   createCallExpression,
+  createConditionalExpression,
   createDOMCompilerError,
   createObjectProperty,
   createSimpleExpression,
@@ -14,7 +15,11 @@ import {
   transformModel
 } from '@vue/compiler-dom'
 import { DirectiveTransformResult } from 'packages/compiler-core/src/transform'
-import { SSR_LOOSE_EQUAL, SSR_RENDER_DYNAMIC_MODEL } from '../runtimeHelpers'
+import {
+  SSR_LOOSE_CONTAIN,
+  SSR_LOOSE_EQUAL,
+  SSR_RENDER_DYNAMIC_MODEL
+} from '../runtimeHelpers'
 
 export const ssrTransformModel: DirectiveTransform = (dir, node, context) => {
   const model = dir.exp!
@@ -84,6 +89,19 @@ export const ssrTransformModel: DirectiveTransform = (dir, node, context) => {
                   )
                 ]
               } else {
+                res.props = [
+                  createObjectProperty(
+                    `checked`,
+                    createConditionalExpression(
+                      createCallExpression(`Array.isArray`, [model]),
+                      createCallExpression(context.helper(SSR_LOOSE_CONTAIN), [
+                        model,
+                        value
+                      ]),
+                      model
+                    )
+                  )
+                ]
               }
               break
           }
