@@ -104,6 +104,19 @@ export const ssrTransformModel: DirectiveTransform = (dir, node, context) => {
                 ]
               }
               break
+
+            case 'file':
+              context.onError(
+                createDOMCompilerError(
+                  DOMErrorCodes.X_V_MODEL_ON_FILE_INPUT_ELEMENT,
+                  dir.loc
+                )
+              )
+              break
+            default:
+              checkDuplicatedValue()
+              res.props = defaultProps
+              break
           }
         }
       } else if (hasDynamicKeyVBind(node)) {
