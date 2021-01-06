@@ -105,8 +105,10 @@ export const ssrTransformElement: NodeTransform = (node, context) => {
           rawChildrenMap.set(node, prop.exp)
         } else if (prop.name === 'text' && prop.exp /* v-text */) {
           node.children = [createInterpolation(prop.exp, prop.loc)]
-        } else if (false /* v-slot */) {
-          // TODO
+        } else if (prop.name === 'slot' /* v-slot */) {
+          context.onError(
+            createCompilerError(ErrorCodes.X_V_SLOT_MISPLACED, prop.loc)
+          )
         } else if (false /* textarea with value */) {
           // TODO
         } else {
