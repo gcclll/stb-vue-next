@@ -16,6 +16,7 @@ import { ssrTransformElement } from './transforms/ssrTransformElement'
 import { ssrCodegenTransform } from './ssrCodegenTransform'
 import { ssrInjectFallthroughAttrs } from './transforms/ssrInjectFallthroughAttrs'
 import { ssrTransformModel } from './transforms/ssrVModel'
+import { ssrTransformShow } from './transforms/ssrVShow'
 
 export function compile(
   template: string,
@@ -56,6 +57,7 @@ export function compile(
       bind: transformBind,
       // model and show has dedicated SSR handling
       model: ssrTransformModel,
+      show: ssrTransformShow,
       // ssr 中下面三个指令不处理
       on: noopDirectiveTransform,
       cloak: noopDirectiveTransform,
