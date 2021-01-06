@@ -1,14 +1,20 @@
 import {
+  createCallExpression,
   createDOMCompilerError,
   createObjectProperty,
+  createSimpleExpression,
   DirectiveTransform,
   DOMErrorCodes,
   ElementTypes,
+  ExpressionNode,
   findProp,
   hasDynamicKeyVBind,
+  NodeTypes,
+  PlainElementNode,
   transformModel
 } from '@vue/compiler-dom'
 import { DirectiveTransformResult } from 'packages/compiler-core/src/transform'
+import { SSR_LOOSE_EQUAL, SSR_RENDER_DYNAMIC_MODEL } from '../runtimeHelpers'
 
 export const ssrTransformModel: DirectiveTransform = (dir, node, context) => {
   const model = dir.exp!
@@ -35,6 +41,32 @@ export const ssrTransformModel: DirectiveTransform = (dir, node, context) => {
     if (node.tag === 'input') {
       const type = findProp(node, 'type')
       if (type) {
+        const value = findValueBinding(node)
+        if (type.type === NodeTypes.DIRECTIVE) {
+          // 动态类型
+          res.ssrTagParts = [
+            createCallExpression(context.helper(SSR_RENDER_DYNAMIC_MODEL), [
+              type.exp!,
+              model,
+              value
+            ])
+          ]
+        } else if (type.value) {
+          // 静态类型
+          switch (type.value.content) {
+            case 'radio':
+              res.props = [
+                createObjectProperty(
+                  `checked`,
+                  createCallExpression(context.helper(SSR_LOOSE_EQUAL), [
+                    model,
+                    value
+                  ])
+                )
+              ]
+              break
+          }
+        }
       } else if (hasDynamicKeyVBind(node)) {
         // 动态类型 -> 动态 v-bind
         // NOOP, 在 ssrTransformElement 中处理，需要重写整个 props 表达式
@@ -61,4 +93,13 @@ export const ssrTransformModel: DirectiveTransform = (dir, node, context) => {
     // component v-model
     return transformModel(dir, node, context)
   }
+}
+
+function findValueBinding(node: PlainElementNode): ExpressionNode {
+  const valueBinding = findProp(node, 'value')
+  return valueBinding
+    ? valueBinding.type === NodeTypes.DIRECTIVE
+      ? valueBinding.exp!
+      : createSimpleExpression(valueBinding.value!.content, true)
+    : createSimpleExpression(`null`, false)
 }
