@@ -26,7 +26,8 @@ import {
 import {
   SSR_RENDER_ATTRS,
   SSR_RENDER_CLASS,
-  SSR_RENDER_DYNAMIC_ATTR
+  SSR_RENDER_DYNAMIC_ATTR,
+  SSR_RENDER_STYLE
 } from '../runtimeHelpers'
 import { createSSRCompilerError, SSRErrorCodes } from '../error'
 
@@ -78,10 +79,15 @@ export const ssrTransformElement: NodeTransform = (node, context) => {
         openTag.push(propsExp)
       }
     }
-    // 2. TODO class 处理(静态/动态)
+    // 2. class 处理(静态/动态)
     let dynamicClassBinding: CallExpression | undefined = undefined
     let staticClassBinding: string | undefined = undefined
-    // 3. TODO style 处理
+    // 3. style 处理
+    // all style bindings are converted to dynamic by transformStyle.
+    // but we need to make sure to merge them.
+    // 所有 style 会被 transformStyle 合并成动态的，这里主要是确保有没合并
+    let dynamicStyleBinding: CallExpression | undefined = undefined
+
     // 4. TODO node.props 处理
     // 5. TODO 动态+静态 class 同时存在情况，合并成动态
 
@@ -144,7 +150,20 @@ export const ssrTransformElement: NodeTransform = (node, context) => {
                     `"`
                   )
                 } else if (attrName === 'style') {
-                  // TODO :style
+                  // :style
+                  if (dynamicStyleBinding) {
+                    // 已经有 style 合并
+                    mergeCall(dynamicStyleBinding, value)
+                  } else {
+                    openTag.push(
+                      ` style="`,
+                      (dynamicStyleBinding = createCallExpression(
+                        context.helper(SSR_RENDER_STYLE),
+                        [value]
+                      )),
+                      `"`
+                    )
+                  }
                 } else {
                   // TODO other directive
                 }
