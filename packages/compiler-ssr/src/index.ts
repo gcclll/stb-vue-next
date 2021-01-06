@@ -15,6 +15,7 @@ import {
 import { ssrTransformElement } from './transforms/ssrTransformElement'
 import { ssrCodegenTransform } from './ssrCodegenTransform'
 import { ssrInjectFallthroughAttrs } from './transforms/ssrInjectFallthroughAttrs'
+import { ssrTransformModel } from './transforms/ssrVModel'
 
 export function compile(
   template: string,
@@ -53,6 +54,8 @@ export function compile(
     directiveTransforms: {
       // 复用 compiler-core 的 v-bind
       bind: transformBind,
+      // model and show has dedicated SSR handling
+      model: ssrTransformModel,
       // ssr 中下面三个指令不处理
       on: noopDirectiveTransform,
       cloak: noopDirectiveTransform,
