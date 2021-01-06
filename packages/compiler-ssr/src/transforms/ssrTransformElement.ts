@@ -21,9 +21,15 @@ import {
   JSChildNode,
   ExpressionNode,
   ArrayExpression,
-  createArrayExpression
+  createArrayExpression,
+  isBindKey,
+  TextNode,
+  InterpolationNode,
+  createAssignmentExpression,
+  createConditionalExpression
 } from '@vue/compiler-dom'
 import {
+  SSR_INTERPOLATE,
   SSR_RENDER_ATTRS,
   SSR_RENDER_CLASS,
   SSR_RENDER_DYNAMIC_ATTR,
@@ -109,8 +115,13 @@ export const ssrTransformElement: NodeTransform = (node, context) => {
           context.onError(
             createCompilerError(ErrorCodes.X_V_SLOT_MISPLACED, prop.loc)
           )
-        } else if (false /* textarea with value */) {
-          // TODO
+        } else if (
+          isTextareaWithValue(node, prop) &&
+          prop.exp /* textarea with value */
+        ) {
+          if (!hasDynamicVBind) {
+            node.children = [createInterpolation(prop.exp, prop.loc)]
+          }
         } else {
           // 指令 transforms
           const directiveTransform = context.directiveTransforms[prop.name]
@@ -177,7 +188,8 @@ export const ssrTransformElement: NodeTransform = (node, context) => {
         }
       } else {
         if (node.tag === 'textarea' && prop.name === 'value' && prop.value) {
-          // TODO 特殊情况：value on <textarea>
+          // 特殊情况：value on <textarea>
+          rawChildrenMap.set(node, escapeHtml(prop.value.content))
         } else if (!hasDynamicVBind) {
           if (prop.name === 'key' || prop.name === 'ref') {
             continue
@@ -220,6 +232,17 @@ function isTrueFalseValue(prop: DirectiveNode | AttributeNode) {
   } else {
     return prop.name === 'true-value' || prop.name === 'false.value'
   }
+}
+
+function isTextareaWithValue(
+  node: PlainElementNode,
+  prop: DirectiveNode
+): boolean {
+  return !!(
+    node.tag === 'textarea' &&
+    prop.name === 'bind' &&
+    isBindKey(prop.arg, 'value')
+  )
 }
 
 function mergeCall(call: CallExpression, arg: string | JSChildNode) {
