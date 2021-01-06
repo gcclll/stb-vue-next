@@ -1,5 +1,5 @@
 import { processChildren, SSRTransformContext } from '../ssrCodegenTransform'
-import { NO } from '@vue/shared'
+import { escapeHtml, NO } from '@vue/shared'
 import {
   createTemplateLiteral,
   ElementTypes,
@@ -10,9 +10,20 @@ import {
   createSimpleExpression,
   hasDynamicKeyVBind,
   buildProps,
-  createCallExpression
+  createCallExpression,
+  CallExpression,
+  DirectiveNode,
+  AttributeNode,
+  isStaticExp,
+  createInterpolation,
+  createCompilerError,
+  ErrorCodes
 } from '@vue/compiler-dom'
-import { SSR_RENDER_ATTRS } from '../runtimeHelpers'
+import {
+  SSR_RENDER_ATTRS,
+  SSR_RENDER_CLASS,
+  SSR_RENDER_DYNAMIC_ATTR
+} from '../runtimeHelpers'
 
 // for directives with children overwrite (e.g. v-html & v-text), we need to
 // store the raw children so that they can be added in the 2nd pass.
@@ -63,15 +74,64 @@ export const ssrTransformElement: NodeTransform = (node, context) => {
       }
     }
     // 2. TODO class 处理(静态/动态)
+    let dynamicClassBinding: CallExpression | undefined = undefined
+    let staticClassBinding: string | undefined = undefined
     // 3. TODO style 处理
     // 4. TODO node.props 处理
     // 5. TODO 动态+静态 class 同时存在情况，合并成动态
+
+    for (let i = 0; i < node.props.length; i++) {
+      const prop = node.props[i]
+      // 忽略 input 上的 true 值或 false 值
+      if (node.tag === 'input' && isTrueFalseValue(prop)) {
+        continue
+      }
+
+      // special cases with children override
+      if (prop.type === NodeTypes.DIRECTIVE) {
+        // TODO 指令处理
+      } else {
+        if (node.tag === 'textarea' && prop.name === 'value' && prop.value) {
+          // TODO 特殊情况：value on <textarea>
+        } else if (!hasDynamicVBind) {
+          if (prop.name === 'key' || prop.name === 'ref') {
+            continue
+          }
+
+          // static prop
+          if (prop.name === 'class' && prop.value) {
+            staticClassBinding = JSON.stringify(prop.value.content)
+          }
+          openTag.push(
+            ` ${prop.name}` +
+              (prop.value ? `="${escapeHtml(prop.value.content)}"` : ``)
+          )
+        }
+      }
+    }
+
+    // TODO 静态动态同时存在时，合并到动态 class
+    if (dynamicClassBinding && staticClassBinding) {
+    }
 
     if (context.scopeId) {
       openTag.push(` ${context.scopeId}`)
     }
 
     node.ssrCodegenNode = createTemplateLiteral(openTag)
+  }
+}
+
+function isTrueFalseValue(prop: DirectiveNode | AttributeNode) {
+  if (prop.type === NodeTypes.DIRECTIVE) {
+    return (
+      prop.name === 'bind' &&
+      prop.arg &&
+      isStaticExp(prop.arg) &&
+      (prop.arg.content === 'true-value' || prop.arg.content === 'false-value')
+    )
+  } else {
+    return prop.name === 'true-value' || prop.name === 'false.value'
   }
 }
 
