@@ -1,5 +1,11 @@
 import { processChildren, SSRTransformContext } from '../ssrCodegenTransform'
-import { escapeHtml, NO } from '@vue/shared'
+import {
+  escapeHtml,
+  isBooleanAttr,
+  isSSRSafeAttrName,
+  NO,
+  propsToAttrMap
+} from '@vue/shared'
 import {
   createTemplateLiteral,
   ElementTypes,
@@ -30,6 +36,7 @@ import {
 } from '@vue/compiler-dom'
 import {
   SSR_INTERPOLATE,
+  SSR_RENDER_ATTR,
   SSR_RENDER_ATTRS,
   SSR_RENDER_CLASS,
   SSR_RENDER_DYNAMIC_ATTR,
@@ -133,7 +140,6 @@ export const ssrTransformElement: NodeTransform = (node, context) => {
     let dynamicStyleBinding: CallExpression | undefined = undefined
 
     // 4. TODO node.props 处理
-    // 5. TODO 动态+静态 class 同时存在情况，合并成动态
 
     for (let i = 0; i < node.props.length; i++) {
       const prop = node.props[i]
@@ -216,7 +222,30 @@ export const ssrTransformElement: NodeTransform = (node, context) => {
                     )
                   }
                 } else {
-                  // TODO other directive
+                  // my-comp
+                  attrName =
+                    node.tag.indexOf('-') > 0
+                      ? attrName // 保留自定义元素上的原始名称
+                      : propsToAttrMap[attrName] || attrName.toLowerCase()
+
+                  if (isBooleanAttr(attrName)) {
+                    // TODO boolean 类型属性
+                  } else if (isSSRSafeAttrName(attrName)) {
+                    // 安全属性，不包含 ["'<>] 的名字
+                    openTag.push(
+                      createCallExpression(context.helper(SSR_RENDER_ATTR), [
+                        key,
+                        value
+                      ])
+                    )
+                  } else {
+                    context.onError(
+                      createSSRCompilerError(
+                        SSRErrorCodes.X_SSR_UNSAFE_ATTR_NAME,
+                        key.loc
+                      )
+                    )
+                  }
                 }
               } else {
                 // 动态 Key 属性 v-bind:[key]
@@ -245,7 +274,7 @@ export const ssrTransformElement: NodeTransform = (node, context) => {
       }
     }
 
-    // TODO 静态动态同时存在时，合并到动态 class
+    // 5. 动态+静态 class 同时存在情况，合并成动态
     if (dynamicClassBinding && staticClassBinding) {
       mergeCall(dynamicClassBinding, staticClassBinding)
       removeStaticBinding(openTag, 'class')
