@@ -21,6 +21,7 @@ import {
 import { escapeHtml, isString } from '@vue/shared'
 import { createSSRCompilerError, SSRErrorCodes } from './error'
 import { ssrHelpers, SSR_INTERPOLATE } from './runtimeHelpers'
+import { ssrProcessComponent } from './transforms/ssrTransformComponent'
 import { ssrProcessElement } from './transforms/ssrTransformElement'
 import { ssrProcessFor } from './transforms/ssrVFor'
 import { ssrProcessIf } from './transforms/ssrVIf'
@@ -146,6 +147,22 @@ export function processChildren(
           case ElementTypes.ELEMENT:
             ssrProcessElement(child, context)
             break
+          case ElementTypes.COMPONENT:
+            ssrProcessComponent(child, context)
+            break
+          case ElementTypes.TEMPLATE:
+            // TODO
+            break
+          default:
+            context.onError(
+              createSSRCompilerError(
+                SSRErrorCodes.X_SSR_INVALID_AST_NODE,
+                (child as any).loc
+              )
+            )
+            // make sure we exhaust all possible types
+            const exhaustiveCheck: never = child
+            return exhaustiveCheck
         }
         break
       case NodeTypes.TEXT:

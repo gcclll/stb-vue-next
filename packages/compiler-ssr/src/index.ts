@@ -19,6 +19,7 @@ import { ssrTransformModel } from './transforms/ssrVModel'
 import { ssrTransformShow } from './transforms/ssrVShow'
 import { ssrTransformIf } from './transforms/ssrVIf'
 import { ssrTransformFor } from './transforms/ssrVFor'
+import { ssrTransformComponent } from './transforms/ssrTransformComponent'
 
 export function compile(
   template: string,
@@ -52,6 +53,7 @@ export function compile(
       transformExpression,
       ssrInjectFallthroughAttrs,
       ssrTransformElement,
+      ssrTransformComponent,
       trackSlotScopes,
       transformStyle,
       ...(options.nodeTransforms || []) // user transforms
