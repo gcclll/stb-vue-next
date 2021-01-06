@@ -2,6 +2,7 @@ import {
   createCallExpression,
   createConditionalExpression,
   createDOMCompilerError,
+  createInterpolation,
   createObjectProperty,
   createSimpleExpression,
   DirectiveTransform,
@@ -128,6 +129,8 @@ export const ssrTransformModel: DirectiveTransform = (dir, node, context) => {
         res.props = defaultProps
       }
     } else if (node.tag === 'textarea') {
+      checkDuplicatedValue()
+      node.children = [createInterpolation(model, model.loc)]
     } else if (node.tag === 'select') {
       // NOOP
       // select relies on client-side directive to set initial selected state.
