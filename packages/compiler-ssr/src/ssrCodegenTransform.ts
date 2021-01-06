@@ -19,6 +19,7 @@ import {
   TemplateLiteral
 } from '@vue/compiler-dom'
 import { escapeHtml, isString } from '@vue/shared'
+import { createSSRCompilerError, SSRErrorCodes } from './error'
 import { ssrHelpers, SSR_INTERPOLATE } from './runtimeHelpers'
 import { ssrProcessElement } from './transforms/ssrTransformElement'
 import { ssrProcessFor } from './transforms/ssrVFor'
@@ -150,6 +151,11 @@ export function processChildren(
       case NodeTypes.TEXT:
         context.pushStringPart(escapeHtml(child.content))
         break
+      case NodeTypes.COMMENT:
+        // no need to escape comment here because the AST can only
+        // contain valid comments.
+        context.pushStringPart(`<!--${child.content}-->`)
+        break
       case NodeTypes.INTERPOLATION:
         context.pushStringPart(
           createCallExpression(context.helper(SSR_INTERPOLATE), [child.content])
@@ -161,6 +167,25 @@ export function processChildren(
       case NodeTypes.FOR:
         ssrProcessFor(child, context, disableNestedFragments)
         break
+      case NodeTypes.IF_BRANCH:
+        // noop - 在 ssrProcessIf 中就被处理了
+        break
+      case NodeTypes.TEXT_CALL:
+      case NodeTypes.COMPOUND_EXPRESSION:
+        // noop - 这两个类型永不会在 ssr 下出现，因为 ~transformText~
+        // 在 ssr compile 中不会被使用
+        break
+      default:
+        context.onError(
+          createSSRCompilerError(
+            SSRErrorCodes.X_SSR_INVALID_AST_NODE,
+            (child as any).loc
+          )
+        )
+
+        // make sure we exhaust all possible types
+        const exhaustiveCheck: never = child
+        return exhaustiveCheck
     }
   }
 
