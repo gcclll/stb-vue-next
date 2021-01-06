@@ -17,13 +17,18 @@ import {
   isStaticExp,
   createInterpolation,
   createCompilerError,
-  ErrorCodes
+  ErrorCodes,
+  JSChildNode,
+  ExpressionNode,
+  ArrayExpression,
+  createArrayExpression
 } from '@vue/compiler-dom'
 import {
   SSR_RENDER_ATTRS,
   SSR_RENDER_CLASS,
   SSR_RENDER_DYNAMIC_ATTR
 } from '../runtimeHelpers'
+import { createSSRCompilerError, SSRErrorCodes } from '../error'
 
 // for directives with children overwrite (e.g. v-html & v-text), we need to
 // store the raw children so that they can be added in the 2nd pass.
@@ -89,7 +94,66 @@ export const ssrTransformElement: NodeTransform = (node, context) => {
 
       // special cases with children override
       if (prop.type === NodeTypes.DIRECTIVE) {
-        // TODO 指令处理
+        // 指令处理
+        if (false /* v-html */) {
+          // TODO
+        } else if (false /* v-text */) {
+          // TODO
+        } else if (false /* v-slot */) {
+          // TODO
+        } else if (false /* textarea with value */) {
+          // TODO
+        } else {
+          // 指令 transforms
+          const directiveTransform = context.directiveTransforms[prop.name]
+          if (!directiveTransform) {
+            // 自定义指令必须提供 transform
+            context.onError(
+              createSSRCompilerError(
+                SSRErrorCodes.X_SSR_CUSTOM_DIRECTIVE_NO_TRANSFORM,
+                prop.loc
+              )
+            )
+          } else if (!hasDynamicVBind) {
+            // 非动态参数（v-bind:[key]）的指令
+            const { props, ssrTagParts } = directiveTransform(
+              prop,
+              node,
+              context
+            )
+            if (ssrTagParts) {
+              openTag.push(...ssrTagParts)
+            }
+
+            for (let j = 0; j < props.length; j++) {
+              const { key, value } = props[j]
+              if (isStaticExp(key)) {
+                let attrName = key.content
+                // 静态 key attr
+                if (attrName === 'key' || attrName === 'ref') {
+                  continue
+                }
+
+                if (attrName === 'class') {
+                  openTag.push(
+                    ` class="`,
+                    (dynamicClassBinding = createCallExpression(
+                      context.helper(SSR_RENDER_CLASS),
+                      [value]
+                    )),
+                    `"`
+                  )
+                } else if (attrName === 'style') {
+                  // TODO :style
+                } else {
+                  // TODO other directive
+                }
+              } else {
+                // 动态 Key 属性 v-bind:[key]
+              }
+            }
+          }
+        }
       } else {
         if (node.tag === 'textarea' && prop.name === 'value' && prop.value) {
           // TODO 特殊情况：value on <textarea>
@@ -112,6 +176,8 @@ export const ssrTransformElement: NodeTransform = (node, context) => {
 
     // TODO 静态动态同时存在时，合并到动态 class
     if (dynamicClassBinding && staticClassBinding) {
+      mergeCall(dynamicClassBinding, staticClassBinding)
+      removeStaticBinding(openTag, 'class')
     }
 
     if (context.scopeId) {
@@ -132,6 +198,27 @@ function isTrueFalseValue(prop: DirectiveNode | AttributeNode) {
     )
   } else {
     return prop.name === 'true-value' || prop.name === 'false.value'
+  }
+}
+
+function mergeCall(call: CallExpression, arg: string | JSChildNode) {
+  const existing = call.arguments[0] as ExpressionNode | ArrayExpression
+  if (existing.type === NodeTypes.JS_ARRAY_EXPRESSION) {
+    existing.elements.push(arg)
+  } else {
+    call.arguments[0] = createArrayExpression([existing, arg])
+  }
+}
+
+function removeStaticBinding(
+  tag: TemplateLiteral['elements'],
+  binding: string
+) {
+  const regExp = new RegExp(`^ ${binding}=".+"$`)
+  const i = tag.findIndex(e => typeof e === 'string' && regExp.test(e))
+
+  if (i > -1) {
+    tag.splice(i, 1)
   }
 }
 
