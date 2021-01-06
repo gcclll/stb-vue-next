@@ -17,6 +17,7 @@ import { ssrCodegenTransform } from './ssrCodegenTransform'
 import { ssrInjectFallthroughAttrs } from './transforms/ssrInjectFallthroughAttrs'
 import { ssrTransformModel } from './transforms/ssrVModel'
 import { ssrTransformShow } from './transforms/ssrVShow'
+import { ssrTransformIf } from './transforms/ssrVIf'
 
 export function compile(
   template: string,
@@ -43,6 +44,7 @@ export function compile(
     ...options,
     nodeTransforms: [
       // TODO ... ssr transforms
+      ssrTransformIf,
 
       trackVForSlotScopes,
       transformExpression,
@@ -66,7 +68,7 @@ export function compile(
     }
   })
 
-  // TODO traverse the template AST and convert into SSR codegen AST
+  // traverse the template AST and convert into SSR codegen AST
   // by replacing ast.codegenNode.
   // 将 compiler-core 阶段生成的 codegenNode 转换成 SSR codegen AST
   ssrCodegenTransform(ast, options)

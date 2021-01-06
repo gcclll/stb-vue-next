@@ -21,6 +21,7 @@ import {
 import { escapeHtml, isString } from '@vue/shared'
 import { ssrHelpers, SSR_INTERPOLATE } from './runtimeHelpers'
 import { ssrProcessElement } from './transforms/ssrTransformElement'
+import { ssrProcessIf } from './transforms/ssrVIf'
 
 // Because SSR codegen output is completely different from client-side output
 // (e.g. multiple elements can be concatenated into a single template literal
@@ -153,6 +154,20 @@ export function processChildren(
           createCallExpression(context.helper(SSR_INTERPOLATE), [child.content])
         )
         break
+      case NodeTypes.IF:
+        ssrProcessIf(child, context, disableNestedFragments)
+        break
     }
   }
+}
+
+export function processChildrenAsStatement(
+  children: TemplateChildNode[],
+  parentContext: SSRTransformContext,
+  asFragment = false,
+  withSlotScopeId = parentContext.withSlotScopeId
+): BlockStatement {
+  const childContext = createChildContext(parentContext, withSlotScopeId)
+  processChildren(children, childContext, asFragment)
+  return createBlockStatement(childContext.body)
 }
