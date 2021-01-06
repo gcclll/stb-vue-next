@@ -73,7 +73,45 @@ export const ssrTransformElement: NodeTransform = (node, context) => {
         )
 
         if (node.tag === 'textarea') {
-          // TODO
+          const existingText = node.children[0] as
+            | TextNode
+            | InterpolationNode
+            | undefined
+          // If interpolation, this is dynamic <textarea> content, potentially
+          // injected by v-model and takes higher priority than v-bind value
+          // v-model 的优先级高于 v-bind value
+          if (!existingText || existingText.type !== NodeTypes.INTERPOLATION) {
+            // <textarea> with dynamic v-bind. We don't know if the final props
+            // will contain .value, so we will have to do something special:
+            // assign the merged props to a temp variable, and check whether
+            // it contains value (if yes, render is as children).
+            // 当 textarea 包含动态参数时，我们并不能确定最后的结果是否包含 .value
+            // 因此我们将不得不做些特殊处理来应对：
+            // 将已合并的 props 保存成一个临时变量，然后检查它是否包含 value 属性(如果
+            // 包含，则将它当做 children 来渲染)
+            const tempId = `_temp${context.temps++}`
+            propsExp.arguments = [
+              createAssignmentExpression(
+                createSimpleExpression(tempId, false),
+                props
+              )
+            ]
+
+            rawChildrenMap.set(
+              node,
+              createCallExpression(context.helper(SSR_INTERPOLATE), [
+                createConditionalExpression(
+                  createSimpleExpression(`"value" in ${tempId}`, false),
+                  createSimpleExpression(`${tempId}.value`, false),
+                  createSimpleExpression(
+                    existingText ? existingText.content : ``,
+                    true
+                  ),
+                  false
+                )
+              ])
+            )
+          }
         } else if (node.tag === 'input') {
           // TODO
         }
