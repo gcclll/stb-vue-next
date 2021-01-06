@@ -69,7 +69,7 @@ export const ssrTransformElement: NodeTransform = (node, context) => {
     // 需要运行时做特殊处理
     const needTagForRuntime =
       node.tag === 'textarea' || node.tag.indexOf('-') > 0
-    // 1. TODO v-bind
+    // 1. v-bind
     // v-bind="obj" or v-bind:[key] can potentially overwrite other static
     // attrs and can affect final rendering result, so when they are present
     // we need to bail out to full `renderAttrs`
@@ -282,7 +282,19 @@ export const ssrTransformElement: NodeTransform = (node, context) => {
                   }
                 }
               } else {
-                // 动态 Key 属性 v-bind:[key]
+                // dynamic key attr
+                // this branch is only encountered for custom directive
+                // transforms that returns properties with dynamic keys
+                const args: CallExpression['arguments'] = [key, value]
+                if (needTagForRuntime) {
+                  args.push(`"${node.tag}"`)
+                }
+                openTag.push(
+                  createCallExpression(
+                    context.helper(SSR_RENDER_DYNAMIC_ATTR),
+                    args
+                  )
+                )
               }
             }
           }
