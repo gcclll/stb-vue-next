@@ -343,7 +343,7 @@ function isTrueFalseValue(prop: DirectiveNode | AttributeNode) {
       (prop.arg.content === 'true-value' || prop.arg.content === 'false-value')
     )
   } else {
-    return prop.name === 'true-value' || prop.name === 'false.value'
+    return prop.name === 'true-value' || prop.name === 'false-value'
   }
 }
 

@@ -47,6 +47,7 @@ import {
   ssrTransformSuspense
 } from './ssrTransformSuspense'
 import { ssrProcessTeleport } from './ssrTransformTeleport'
+import { ssrProcessTransitionGroup } from './ssrTransformTransitionGroup'
 
 // We need to construct the slot functions in the 1st pass to ensure proper
 // scope tracking, but the children of each slot cannot be processed until
@@ -188,7 +189,7 @@ export function ssrProcessComponent(
     } else if (component === SUSPENSE) {
       return ssrProcessSuspense(node, context)
     } else if (component === TRANSITION_GROUP) {
-      // TODO
+      return ssrProcessTransitionGroup(node, context)
     } else {
       // real fall-through (e.g. KeepAlive): just render its children.
       processChildren(node.children, context)
