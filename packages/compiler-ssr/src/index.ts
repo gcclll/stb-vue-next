@@ -24,6 +24,7 @@ import {
   ssrTransformComponent
 } from './transforms/ssrTransformComponent'
 import { ssrTransformSlotOutlet } from './transforms/ssrTransformSlotOutlet'
+import { ssrInjectCssVars } from './transforms/ssrInjectCssVars'
 
 export function compile(
   template: string,
@@ -50,14 +51,13 @@ export function compile(
   transform(ast, {
     ...options,
     nodeTransforms: [
-      // TODO ... ssr transforms
       ssrTransformIf,
       ssrTransformFor,
-
       trackVForSlotScopes,
       transformExpression,
       ssrTransformSlotOutlet,
       ssrInjectFallthroughAttrs,
+      ssrInjectCssVars,
       ssrTransformElement,
       ssrTransformComponent,
       trackSlotScopes,
