@@ -46,6 +46,7 @@ import {
   ssrProcessSuspense,
   ssrTransformSuspense
 } from './ssrTransformSuspense'
+import { ssrProcessTeleport } from './ssrTransformTeleport'
 
 // We need to construct the slot functions in the 1st pass to ensure proper
 // scope tracking, but the children of each slot cannot be processed until
@@ -183,9 +184,9 @@ export function ssrProcessComponent(
   if (!node.ssrCodegenNode) {
     // this is a built-in component that fell-through.
     if (component === TELEPORT) {
-      // TODO
+      return ssrProcessTeleport(node, context)
     } else if (component === SUSPENSE) {
-      ssrProcessSuspense(node, context)
+      return ssrProcessSuspense(node, context)
     } else if (component === TRANSITION_GROUP) {
       // TODO
     } else {
