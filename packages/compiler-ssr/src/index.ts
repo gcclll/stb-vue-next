@@ -19,7 +19,10 @@ import { ssrTransformModel } from './transforms/ssrVModel'
 import { ssrTransformShow } from './transforms/ssrVShow'
 import { ssrTransformIf } from './transforms/ssrVIf'
 import { ssrTransformFor } from './transforms/ssrVFor'
-import { ssrTransformComponent } from './transforms/ssrTransformComponent'
+import {
+  rawOptionsMap,
+  ssrTransformComponent
+} from './transforms/ssrTransformComponent'
 
 export function compile(
   template: string,
@@ -39,8 +42,9 @@ export function compile(
   }
 
   const ast = baseParse(template, options)
-  // TODO Save raw options for AST. This is needed when performing sub-transforms
+  // Save raw options for AST. This is needed when performing sub-transforms
   // on slot vnode branches.
+  rawOptionsMap.set(ast, options)
 
   transform(ast, {
     ...options,

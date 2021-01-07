@@ -8,7 +8,10 @@ import {
   ComponentNode,
   createFunctionExpression,
   createCallExpression,
+  createTransformContext,
   createReturnStatement,
+  traverseNode,
+  createRoot,
   DOMDirectiveTransforms,
   DOMNodeTransforms,
   locStub,
@@ -106,7 +109,7 @@ export const ssrTransformComponent: NodeTransform = (node, context) => {
     // for later use.
     if (clonedNode.children.length) {
       buildSlots(clonedNode, context, (props, children) => {
-        vnodeBranches.push(createVNodeSlotBranch(props, childgen, context))
+        vnodeBranches.push(createVNodeSlotBranch(props, children, context))
         return createFunctionExpression(undefined)
       })
     }
@@ -143,6 +146,7 @@ export const ssrTransformComponent: NodeTransform = (node, context) => {
       ? buildSlots(node, context, buildSSRSlotFn).slots
       : `null`
 
+    console.log(slots, 'xx')
     if (typeof component !== 'string') {
       // dynamic component that resolved to a `resolveDynamicComponent` call
       // expression - since the resolved result may be a plain element (string)
@@ -286,7 +290,26 @@ function subTransform(
   options: TransformOptions,
   parentContext: TransformContext
 ) {
-  // TODO
+  const childRoot = createRoot([node])
+  const childContext = createTransformContext(childRoot, options)
+  // this sub transform is for vnode fallback branch so it should be handled
+  // like normal render functions
+  childContext.ssr = false
+
+  // inherit parent scope analysis state
+  childContext.scopes = { ...parentContext.scopes }
+  childContext.identifiers = { ...parentContext.identifiers }
+
+  //traverse
+  traverseNode(childRoot, childContext)
+  // merge helpers/components/directives/imports into parent context
+  ;(['helpers', 'components', 'directives', 'imports'] as const).forEach(
+    key => {
+      childContext[key].forEach((value: any) => {
+        ;(parentContext[key] as any).add(value)
+      })
+    }
+  )
 }
 
 function clone(v: any): any {
