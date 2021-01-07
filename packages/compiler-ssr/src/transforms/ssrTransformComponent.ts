@@ -42,6 +42,10 @@ import {
 } from '../ssrCodegenTransform'
 import { isArray, isObject, isSymbol } from '@vue/shared'
 import { SSR_RENDER_COMPONENT, SSR_RENDER_VNODE } from '../runtimeHelpers'
+import {
+  ssrProcessSuspense,
+  ssrTransformSuspense
+} from './ssrTransformSuspense'
 
 // We need to construct the slot functions in the 1st pass to ensure proper
 // scope tracking, but the children of each slot cannot be processed until
@@ -89,7 +93,7 @@ export const ssrTransformComponent: NodeTransform = (node, context) => {
 
   if (isSymbol(component)) {
     if (component === SUSPENSE) {
-      // TODO transform suspense
+      return ssrTransformSuspense(node, context)
     }
     return // built-in component: fallthrough
   }
@@ -146,7 +150,6 @@ export const ssrTransformComponent: NodeTransform = (node, context) => {
       ? buildSlots(node, context, buildSSRSlotFn).slots
       : `null`
 
-    console.log(slots, 'xx')
     if (typeof component !== 'string') {
       // dynamic component that resolved to a `resolveDynamicComponent` call
       // expression - since the resolved result may be a plain element (string)
@@ -182,7 +185,7 @@ export function ssrProcessComponent(
     if (component === TELEPORT) {
       // TODO
     } else if (component === SUSPENSE) {
-      // TODO
+      ssrProcessSuspense(node, context)
     } else if (component === TRANSITION_GROUP) {
       // TODO
     } else {
