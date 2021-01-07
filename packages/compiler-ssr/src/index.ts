@@ -23,6 +23,7 @@ import {
   rawOptionsMap,
   ssrTransformComponent
 } from './transforms/ssrTransformComponent'
+import { ssrTransformSlotOutlet } from './transforms/ssrTransformSlotOutlet'
 
 export function compile(
   template: string,
@@ -55,6 +56,7 @@ export function compile(
 
       trackVForSlotScopes,
       transformExpression,
+      ssrTransformSlotOutlet,
       ssrInjectFallthroughAttrs,
       ssrTransformElement,
       ssrTransformComponent,

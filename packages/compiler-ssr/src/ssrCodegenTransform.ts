@@ -21,6 +21,7 @@ import {
 import { escapeHtml, isString } from '@vue/shared'
 import { createSSRCompilerError, SSRErrorCodes } from './error'
 import { ssrHelpers, SSR_INTERPOLATE } from './runtimeHelpers'
+import { ssrProcessSlotOutlet } from './transforms/ssrTransformSlotOutlet'
 import { ssrProcessComponent } from './transforms/ssrTransformComponent'
 import { ssrProcessElement } from './transforms/ssrTransformElement'
 import { ssrProcessFor } from './transforms/ssrVFor'
@@ -149,6 +150,9 @@ export function processChildren(
             break
           case ElementTypes.COMPONENT:
             ssrProcessComponent(child, context)
+            break
+          case ElementTypes.SLOT:
+            ssrProcessSlotOutlet(child, context)
             break
           case ElementTypes.TEMPLATE:
             // TODO
