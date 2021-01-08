@@ -6,7 +6,14 @@ import { ComponentOptions } from './componentOptions'
 import { Suspense, SuspenseProps } from './components/Suspense'
 import { Teleport, TeleportProps } from './components/Teleport'
 import { RawSlots } from './componentSlots'
-import { Fragment, VNode, VNodeArrayChildren, VNodeProps } from './vnode'
+import {
+  createVNode,
+  Fragment,
+  isVNode,
+  VNode,
+  VNodeArrayChildren,
+  VNodeProps
+} from './vnode'
 
 // `h` is a more user-friendly version of `createVNode` that allows omitting the
 // props when possible. It is intended for manually written render functions.
@@ -149,6 +156,26 @@ export function h<P>(
 
 // Actual implementation
 export function h(type: any, propsOrChildgen?: any, children?: any): VNode {
-  // TODO
-  return {} as VNode
+  const l = arguments.length
+  if (l === 2) {
+    if (isObject(propsOrChildgen) && !isArray(propsOrChildgen)) {
+      // 没有 props 的 单节点(single vnode)
+      if (isVNode(propsOrChildgen)) {
+        return createVNode(type, null, [propsOrChildgen])
+      }
+      // 有 props 没有 children
+      return createVNode(type, propsOrChildgen)
+    } else {
+      // omit props
+      return createVNode(type, null, propsOrChildgen)
+    }
+  } else {
+    // 从第三个参数开始全当做孩子节点处理
+    if (l > 3) {
+      children = Array.prototype.slice.call(arguments, 2)
+    } else if (l === 3 && isVNode(children)) {
+      children = [children]
+    }
+    return createVNode(type, propsOrChildgen, children)
+  }
 }

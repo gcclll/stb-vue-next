@@ -1,4 +1,9 @@
-import { Component, ComponentInternalInstance } from './component'
+import {
+  ClassComponent,
+  Component,
+  ComponentInternalInstance,
+  Data
+} from './component'
 import { TeleportImpl } from './components/Teleport'
 import { SuspenseBoundary, SuspenseImpl } from './components/Suspense'
 import { ReactiveFlags, Ref } from '@vue/reactivity'
@@ -7,6 +12,8 @@ import { RendererNode, RendererElement } from './renderer'
 import { DirectiveBinding } from './directives'
 import { TransitionHooks } from './components/BaseTransition'
 import { AppContext } from './apiCreateApp'
+import { currentRenderingInstance } from './componentRenderUtils'
+import { NULL_DYNAMIC_COMPONENT } from './helpers/resolveAssets'
 
 export const Fragment = (Symbol(__DEV__ ? 'Fragment' : undefined) as any) as {
   __isFragment: true
@@ -127,4 +134,50 @@ export interface VNode<
 
   // application root node only
   appContext: AppContext | null
+}
+
+export function isVNode(value: any): value is VNode {
+  return value ? value.__v_isVNode === true : false
+}
+
+let vnodeArgsTransformer:
+  | ((
+      args: Parameters<typeof _createVNode>,
+      instance: ComponentInternalInstance | null
+    ) => Parameters<typeof _createVNode>)
+  | undefined
+
+/**
+ * Internal API for registering an arguments transform for createVNode
+ * used for creating stubs in the test-utils
+ * It is *internal* but needs to be exposed for test-utils to pick up proper
+ * typings
+ */
+export function transformVNodeArgs(transformer?: typeof vnodeArgsTransformer) {
+  vnodeArgsTransformer = transformer
+}
+
+const createVNodeWithArgsTransform = (
+  ...args: Parameters<typeof _createVNode>
+): VNode => {
+  return _createVNode(
+    ...(vnodeArgsTransformer
+      ? vnodeArgsTransformer(args, currentRenderingInstance)
+      : args)
+  )
+}
+
+export const createVNode = (__DEV__
+  ? createVNodeWithArgsTransform
+  : _createVNode) as typeof _createVNode
+
+function _createVNode(
+  type: VNodeTypes | ClassComponent | typeof NULL_DYNAMIC_COMPONENT,
+  props: (Data & VNodeProps) | null = null,
+  children: unknown = null,
+  patchFlag: number = 0,
+  dynamicProps: string[] | null = null,
+  isBlockNode = false
+): VNode {
+  return {} as VNode
 }
