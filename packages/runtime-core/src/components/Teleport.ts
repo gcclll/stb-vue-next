@@ -1,5 +1,5 @@
 import { RendererElement, RendererNode } from '../renderer'
-import { VNode } from '../vnode'
+import { VNode, VNodeProps } from '../vnode'
 
 export type TeleportVNode = VNode<RendererNode, RendererElement, TeleportProps>
 
@@ -21,4 +21,9 @@ export const enum TeleportMoveTypes {
 interface TeleportTargetElement extends Element {
   // last teleport target
   _lpa?: Node | null
+}
+
+export const Teleport = (TeleportImpl as any) as {
+  __isTeleport: true
+  new (): { $props: VNodeProps & TeleportProps }
 }

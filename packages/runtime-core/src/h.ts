@@ -1,4 +1,12 @@
 import { isObject, isArray } from '@vue/shared'
+import { DefineComponent } from './apiDefineComponent'
+import { Component, ConcreteComponent, FunctionalComponent } from './component'
+import { EmitsOptions } from './componentEmits'
+import { ComponentOptions } from './componentOptions'
+import { Suspense, SuspenseProps } from './components/Suspense'
+import { Teleport, TeleportProps } from './components/Teleport'
+import { RawSlots } from './componentSlots'
+import { Fragment, VNode, VNodeArrayChildren, VNodeProps } from './vnode'
 
 // `h` is a more user-friendly version of `createVNode` that allows omitting the
 // props when possible. It is intended for manually written render functions.
@@ -138,3 +146,9 @@ export function h<P>(
   props?: (RawProps & P) | ({} extends P ? null : never),
   children?: RawChildren | RawSlots
 ): VNode
+
+// Actual implementation
+export function h(type: any, propsOrChildgen?: any, children?: any): VNode {
+  // TODO
+  return {} as VNode
+}

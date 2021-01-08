@@ -5,7 +5,7 @@ import {
   RendererNode,
   SetupRenderEffectFn
 } from '../renderer'
-import { VNode } from '../vnode'
+import { VNode, VNodeProps } from '../vnode'
 
 export interface SuspenseProps {
   onResolve?: () => void
@@ -19,6 +19,14 @@ export interface SuspenseProps {
 // directly into the renderer.
 export const SuspenseImpl = {
   // TODO
+}
+
+// Force-casted public typing for h and TSX props inference
+export const Suspense = ((__FEATURE_SUSPENSE__
+  ? SuspenseImpl
+  : null) as any) as {
+  __isSuspense: true
+  new (): { $props: VNodeProps & SuspenseProps }
 }
 
 export interface SuspenseBoundary {
