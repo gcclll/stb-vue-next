@@ -20,7 +20,13 @@ import { AppContext } from './apiCreateApp'
 import { currentRenderingInstance } from './componentRenderUtils'
 import { NULL_DYNAMIC_COMPONENT } from './helpers/resolveAssets'
 import { warn } from './warning'
-import { isFunction, isObject, isString, ShapeFlags } from '@vue/shared'
+import {
+  isArray,
+  isFunction,
+  isObject,
+  isString,
+  ShapeFlags
+} from '@vue/shared'
 
 export const Fragment = (Symbol(__DEV__ ? 'Fragment' : undefined) as any) as {
   __isFragment: true
@@ -266,12 +272,20 @@ function _createVNode(
   return vnode
 }
 
+/**
+ * @private
+ */
+export function createTextVNode(text: string = ' ', flag: number = 0): VNode {
+  return createVNode(Text, null, text, flag)
+}
+
 export function normalizeChildren(vnode: VNode, children: unknown) {
   let type = 0
+  const { shapeFlag } = vnode
   if (children == null) {
     children = null
-  } else if (false /*array*/) {
-    // TODO
+  } else if (isArray(children)) {
+    type = ShapeFlags.ARRAY_CHILDREN
   } else if (false /*object*/) {
     // TODO
   } else if (isFunction(children)) {
@@ -279,7 +293,14 @@ export function normalizeChildren(vnode: VNode, children: unknown) {
     children = { default: children, _ctx: currentRenderingInstance }
     type = ShapeFlags.SLOTS_CHILDREN
   } else {
-    // TODO 普通类型
+    children = String(children)
+    // force teleport children to array so it can be moved around
+    if (shapeFlag & ShapeFlags.TELEPORT) {
+      type = ShapeFlags.ARRAY_CHILDREN
+      children = [createTextVNode(children as string)]
+    } else {
+      type = ShapeFlags.TEXT_CHILDREN
+    }
   }
 
   vnode.children = children as VNodeNormalizedChildren
