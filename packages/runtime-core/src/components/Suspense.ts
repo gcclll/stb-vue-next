@@ -14,6 +14,8 @@ export interface SuspenseProps {
   timeout?: string | number
 }
 
+export const isSuspense = (type: any): boolean => type.__isSuspense
+
 // Suspense exposes a component-like API, and is treated like a component
 // in the compiler, but internally it's a special built-in type that hooks
 // directly into the renderer.

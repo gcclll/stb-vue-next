@@ -1,5 +1,6 @@
 import { CompilerOptions } from '@vue/compiler-dom/src'
 import { ReactiveEffect } from '@vue/reactivity'
+import { isFunction } from '@vue/shared/src'
 import { AppContext } from './apiCreateApp'
 import { EmitFn, EmitsOptions, ObjectEmitsOptions } from './componentEmits'
 import {
@@ -361,3 +362,26 @@ type CompileFunction = (
   template: string | object,
   options?: CompilerOptions
 ) => InternalRenderFunction
+
+const classifyRE = /(?:^|[-_])(\w)/g
+const classify = (str: string): string =>
+  str.replace(classifyRE, c => c.toUpperCase()).replace(/[-_]/g, '')
+
+export function getComponentName(
+  Component: ConcreteComponent
+): string | undefined {
+  return isFunction(Component)
+    ? Component.displayName || Component.name
+    : Component.name
+}
+
+/* istanbul ignore next */
+export function formatComponentName(
+  instance: ComponentInternalInstance | null,
+  Component: ConcreteComponent,
+  isRoot = false
+): string {
+  let name = getComponentName(Component)
+  // TODO
+  return name ? classify(name) : isRoot ? `App` : `Anonymous`
+}

@@ -4,9 +4,14 @@ import {
   ComponentInternalInstance,
   Data
 } from './component'
-import { TeleportImpl } from './components/Teleport'
-import { SuspenseBoundary, SuspenseImpl } from './components/Suspense'
-import { ReactiveFlags, Ref } from '@vue/reactivity'
+import { TeleportImpl, isTeleport } from './components/Teleport'
+import {
+  SuspenseBoundary,
+  SuspenseImpl,
+  isSuspense
+} from './components/Suspense'
+import { isRef, ReactiveFlags, Ref } from '@vue/reactivity'
+import { currentScopeId } from './helpers/scopeId'
 import { RawSlots } from './componentSlots'
 import { RendererNode, RendererElement } from './renderer'
 import { DirectiveBinding } from './directives'
@@ -14,6 +19,8 @@ import { TransitionHooks } from './components/BaseTransition'
 import { AppContext } from './apiCreateApp'
 import { currentRenderingInstance } from './componentRenderUtils'
 import { NULL_DYNAMIC_COMPONENT } from './helpers/resolveAssets'
+import { warn } from './warning'
+import { isFunction, isObject, isString, ShapeFlags } from '@vue/shared'
 
 export const Fragment = (Symbol(__DEV__ ? 'Fragment' : undefined) as any) as {
   __isFragment: true
@@ -167,6 +174,17 @@ const createVNodeWithArgsTransform = (
   )
 }
 
+const normalizeKey = ({ key }: VNodeProps): VNode['key'] =>
+  key != null ? key : null
+
+const normalizeRef = ({ ref }: VNodeProps): VNodeNormalizedRefAtom | null => {
+  return (ref != null
+    ? isString(ref) || isRef(ref) || isFunction(ref)
+      ? { i: currentRenderingInstance, r: ref }
+      : ref
+    : null) as any
+}
+
 export const createVNode = (__DEV__
   ? createVNodeWithArgsTransform
   : _createVNode) as typeof _createVNode
@@ -179,5 +197,70 @@ function _createVNode(
   dynamicProps: string[] | null = null,
   isBlockNode = false
 ): VNode {
-  return {} as VNode
+  // 无效的 tag 类型
+  if (!type || type === NULL_DYNAMIC_COMPONENT) {
+    if (__DEV__ && !type) {
+      warn(`Invalid vnode type when creating vnode: ${type}.`)
+    }
+    type = Comment
+  }
+
+  // 1. TODO type is vnode
+
+  // 2. TODO class component
+
+  // 3. TODO props 处理
+
+  // encode the vnode type information into a bitmap
+  const shapeFlag = isString(type)
+    ? ShapeFlags.ELEMENT
+    : __FEATURE_SUSPENSE__ && isSuspense(type)
+      ? ShapeFlags.SUSPENSE
+      : isTeleport(type)
+        ? ShapeFlags.TELEPORT
+        : isObject(type)
+          ? ShapeFlags.STATEFUL_COMPONENT
+          : isFunction(type)
+            ? ShapeFlags.FUNCTIONAL_COMPONENT
+            : 0
+
+  // 4. TODO warn STATEFUL_COMPONENT
+
+  // 构建 vnode 对象
+  const vnode: VNode = {
+    __v_isVNode: true,
+    [ReactiveFlags.SKIP]: true /*不用做响应式处理*/,
+    type,
+    props,
+    key: props && normalizeKey(props),
+    ref: props && normalizeRef(props),
+    scopeId: currentScopeId,
+    children: null,
+    component: null,
+    suspense: null,
+    ssContent: null,
+    ssFallback: null,
+    dirs: null,
+    transition: null,
+    el: null,
+    anchor: null,
+    target: null,
+    targetAnchor: null,
+    staticCount: 0,
+    shapeFlag,
+    patchFlag,
+    dynamicProps,
+    dynamicChildren: null,
+    appContext: null
+  }
+
+  // 5. TODO 检查 key, 不能是 NaN
+
+  // 6. TODO normalize children
+
+  // 7. TODO normalize suspense children
+
+  // 8. TODO currentBlock
+
+  return vnode
 }

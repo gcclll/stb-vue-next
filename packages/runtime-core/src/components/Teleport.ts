@@ -8,6 +8,8 @@ export interface TeleportProps {
   disabled?: boolean
 }
 
+export const isTeleport = (type: any): boolean => type.__isTeleport
+
 export const TeleportImpl = {
   // TODO
 }

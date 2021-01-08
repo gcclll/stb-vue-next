@@ -20,7 +20,7 @@ import {
 } from './componentPublicInstance'
 import { Directive } from './directives'
 import { UnionToIntersection } from './helpers/typeUtils'
-import { warn } from './hmr'
+import { warn } from './warning'
 import { VNodeChild } from './vnode'
 
 /**
