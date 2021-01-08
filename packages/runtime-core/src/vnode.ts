@@ -256,11 +256,32 @@ function _createVNode(
 
   // 5. TODO 检查 key, 不能是 NaN
 
-  // 6. TODO normalize children
+  // 6. normalize children
+  normalizeChildren(vnode, children)
 
   // 7. TODO normalize suspense children
 
   // 8. TODO currentBlock
 
   return vnode
+}
+
+export function normalizeChildren(vnode: VNode, children: unknown) {
+  let type = 0
+  if (children == null) {
+    children = null
+  } else if (false /*array*/) {
+    // TODO
+  } else if (false /*object*/) {
+    // TODO
+  } else if (isFunction(children)) {
+    // 如果是函数当做 slot children ?
+    children = { default: children, _ctx: currentRenderingInstance }
+    type = ShapeFlags.SLOTS_CHILDREN
+  } else {
+    // TODO 普通类型
+  }
+
+  vnode.children = children as VNodeNormalizedChildren
+  vnode.shapeFlag |= type
 }
