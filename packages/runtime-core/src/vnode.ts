@@ -25,8 +25,11 @@ import {
   isFunction,
   isObject,
   isString,
-  ShapeFlags
+  PatchFlags,
+  ShapeFlags,
+  SlotFlags
 } from '@vue/shared'
+import { setCompiledSlotRendering } from './helpers/renderSlot'
 
 export const Fragment = (Symbol(__DEV__ ? 'Fragment' : undefined) as any) as {
   __isFragment: true
@@ -180,6 +183,8 @@ const createVNodeWithArgsTransform = (
   )
 }
 
+export const InternalObjectKey = `__vInternal`
+
 const normalizeKey = ({ key }: VNodeProps): VNode['key'] =>
   key != null ? key : null
 
@@ -286,8 +291,39 @@ export function normalizeChildren(vnode: VNode, children: unknown) {
     children = null
   } else if (isArray(children)) {
     type = ShapeFlags.ARRAY_CHILDREN
-  } else if (false /*object*/) {
-    // TODO
+  } else if (isObject(children)) {
+    // & 操作，这里等于是检测是 ELEMENT 还是 TELEPORT
+    // 因为 ShapeFlags 内的值是通过左移位得到的
+    if (shapeFlag & ShapeFlags.ELEMENT || shapeFlag & ShapeFlags.TELEPORT) {
+      // Normalize slot to plain children for plain element and Teleport
+      const slot = (children as any).default
+      if (slot) {
+        // _c marker is added by withCtx() indicating this is a compiled slot
+        slot._c && setCompiledSlotRendering(1)
+        normalizeChildren(vnode, slot())
+        slot._c && setCompiledSlotRendering(-1)
+      }
+      return
+    } else {
+      type = ShapeFlags.SLOTS_CHILDREN
+      const slotFlag = (children as RawSlots)._
+      if (!slotFlag && !(InternalObjectKey in children!)) {
+        // if slots are not normalized, attach context instance
+        // (compiled / normalized slots already have context)
+        ;(children as RawSlots)._ctx = currentRenderingInstance
+      } else if (slotFlag === SlotFlags.FORWARDED && currentRenderingInstance) {
+        // a child component receives forwarded slots from the parent.
+        // its slot type is determined by its parent's slot type.
+        if (
+          currentRenderingInstance.vnode.patchFlag & PatchFlags.DYNAMIC_SLOTS
+        ) {
+          ;(children as RawSlots)._ = SlotFlags.DYNAMIC
+          vnode.patchFlag |= PatchFlags.DYNAMIC_SLOTS
+        } else {
+          ;(children as RawSlots)._ = SlotFlags.STABLE
+        }
+      }
+    }
   } else if (isFunction(children)) {
     // 如果是函数当做 slot children ?
     children = { default: children, _ctx: currentRenderingInstance }
