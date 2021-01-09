@@ -10,7 +10,7 @@ import {
   SuspenseImpl,
   isSuspense
 } from './components/Suspense'
-import { isRef, ReactiveFlags, Ref } from '@vue/reactivity'
+import { isProxy, isRef, ReactiveFlags, Ref } from '@vue/reactivity'
 import { currentScopeId } from './helpers/scopeId'
 import { RawSlots } from './componentSlots'
 import { RendererNode, RendererElement } from './renderer'
@@ -21,10 +21,13 @@ import { currentRenderingInstance } from './componentRenderUtils'
 import { NULL_DYNAMIC_COMPONENT } from './helpers/resolveAssets'
 import { warn } from './warning'
 import {
+  extend,
   isArray,
   isFunction,
   isObject,
   isString,
+  normalizeClass,
+  normalizeStyle,
   PatchFlags,
   ShapeFlags,
   SlotFlags
@@ -220,7 +223,36 @@ function _createVNode(
 
   // 2. TODO class component
 
-  // 3. TODO props 处理
+  // 3. props 处理, class & style normalization
+  if (props) {
+    // for reactive or proxy objects, we need to clone it to enable mutation.
+    if (isProxy(props) || InternalObjectKey in props) {
+      props = extend({}, props)
+    }
+    let { class: klass, style } = props
+    if (klass && !isString(klass)) {
+      // 1. string -> klass
+      // 'foo' -> 'foo'
+      // 2. array -> '' + arr.join(' ')
+      // ['foo', 'bar'] -> 'foo bar'
+      // 3. object -> '' + value ? ' value' : ''
+      // { foo: true, bar: false, baz: true } -> 'foo baz'
+      props.class = normalizeClass(klass)
+    }
+
+    if (isObject(style)) {
+      // reactive state objects need to be cloned since they are likely to be
+      // mutated
+      if (isProxy(style) && !isArray(style)) {
+        style = extend({}, style)
+      }
+      // 1. array -> object
+      // [{ color: 'red' }, 'font-size:10px;height:100px;'] ->
+      // { color: 'red', 'font-size': '10px', height: '100px' }
+      // 2. object -> object 原样返回
+      props.style = normalizeStyle(style)
+    }
+  }
 
   // encode the vnode type information into a bitmap
   const shapeFlag = isString(type)
