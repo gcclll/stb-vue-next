@@ -1,11 +1,15 @@
+import { isArray, isFunction, ShapeFlags } from '@vue/shared'
 import { ComponentInternalInstance } from '../component'
+import { filterSingleRoot } from '../componentRenderUtils'
+import { Slots } from '../componentSlots'
 import {
   MoveType,
   RendererElement,
   RendererNode,
   SetupRenderEffectFn
 } from '../renderer'
-import { VNode, VNodeProps } from '../vnode'
+import { normalizeVNode, VNode, VNodeChild, VNodeProps } from '../vnode'
+import { warn } from '../warning'
 
 export interface SuspenseProps {
   onResolve?: () => void
@@ -61,4 +65,42 @@ export interface SuspenseBoundary {
     setupRenderEffect: SetupRenderEffectFn
   ): void
   unmount(parentSuspense: SuspenseBoundary | null, doRemove?: boolean): void
+}
+
+export function normalizeSuspenseChildren(
+  vnode: VNode
+): {
+  content: VNode
+  fallback: VNode
+} {
+  const { shapeFlag, children } = vnode
+  let content: VNode, fallback: VNode
+
+  if (shapeFlag & ShapeFlags.SLOTS_CHILDREN) {
+    content = normalizeSuspenseSlot((children as Slots).default)
+    fallback = normalizeSuspenseSlot((children as Slots).fallback)
+  } else {
+    content = normalizeSuspenseSlot(children as VNodeChild)
+    fallback = normalizeVNode(null)
+  }
+
+  return {
+    content,
+    fallback
+  }
+}
+
+function normalizeSuspenseSlot(s: any) {
+  if (isFunction(s)) {
+    s = s()
+  }
+  if (isArray(s)) {
+    // ROOT 必须是单节点 <div>...</div>
+    const singleChild = filterSingleRoot(s)
+    if (__DEV__ && !singleChild) {
+      warn(`<Suspense> slots expect a single root node.`)
+    }
+    s = singleChild
+  }
+  return normalizeVNode(s)
 }

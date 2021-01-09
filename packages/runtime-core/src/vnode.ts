@@ -9,7 +9,8 @@ import { TeleportImpl, isTeleport } from './components/Teleport'
 import {
   SuspenseBoundary,
   SuspenseImpl,
-  isSuspense
+  isSuspense,
+  normalizeSuspenseChildren
 } from './components/Suspense'
 import { isProxy, isRef, ReactiveFlags, Ref, toRaw } from '@vue/reactivity'
 import { currentScopeId } from './helpers/scopeId'
@@ -331,7 +332,12 @@ function _createVNode(
   // 6. normalize children
   normalizeChildren(vnode, children)
 
-  // 7. TODO normalize suspense children
+  // 7. normalize suspense children
+  if (__FEATURE_SUSPENSE__ && shapeFlag & ShapeFlags.SUSPENSE) {
+    const { content, fallback } = normalizeSuspenseChildren(vnode)
+    vnode.ssContent = content
+    vnode.ssFallback = fallback
+  }
 
   // 8. TODO currentBlock
 
@@ -404,6 +410,24 @@ export function cloneVNode<T, U>(
  */
 export function createTextVNode(text: string = ' ', flag: number = 0): VNode {
   return createVNode(Text, null, text, flag)
+}
+
+export function normalizeVNode(child: VNodeChild): VNode {
+  if (child == null || typeof child === 'boolean') {
+    // empty placeholder
+    return createVNode(Comment)
+  } else if (isArray(child)) {
+    // fragment
+    return createVNode(Fragment, null, child)
+  } else if (typeof child === 'object') {
+    // already vnode, this should be the most common since compiled templates
+    // always produce all-vnode children arrays
+    // 这是最常用的情况，因为使用模板的时候最后生成的 children 是数组
+    return child.el === null ? child : cloneVNode(child)
+  } else {
+    // strings and numbers
+    return createVNode(Text, null, String(child))
+  }
 }
 
 export function normalizeChildren(vnode: VNode, children: unknown) {
