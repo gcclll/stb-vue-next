@@ -167,12 +167,91 @@ export interface VNode<
 export const blockStack: (VNode[] | null)[] = []
 let currentBlock: VNode[] | null = null
 
+/**
+ * Open a block.
+ * This must be called before `createBlock`. It cannot be part of `createBlock`
+ * because the children of the block are evaluated before `createBlock` itself
+ * is called. The generated code typically looks like this:
+ *
+ * ```js
+ * function render() {
+ *   return (openBlock(),createBlock('div', null, [...]))
+ * }
+ * ```
+ * disableTracking is true when creating a v-for fragment block, since a v-for
+ * fragment always diffs its children.
+ *
+ * @private
+ */
+export function openBlock(disableTracking = false) {
+  blockStack.push((currentBlock = disableTracking ? null : []))
+}
+
+export function closeBlock() {
+  blockStack.pop()
+  currentBlock = blockStack[blockStack.length - 1] || null
+}
+
 // Whether we should be tracking dynamic child nodes inside a block.
 // Only tracks when this value is > 0
 // We are not using a simple boolean because this value may need to be
 // incremented/decremented by nested usage of v-once (see below)
 // 是否应该 tracking block 内动态的孩子节点
 let shouldTrack = 1
+
+/**
+ * Block tracking sometimes needs to be disabled, for example during the
+ * creation of a tree that needs to be cached by v-once. The compiler generates
+ * code like this:
+ *
+ * ``` js
+ * _cache[1] || (
+ *   setBlockTracking(-1),
+ *   _cache[1] = createVNode(...),
+ *   setBlockTracking(1),
+ *   _cache[1]
+ * )
+ * ```
+ *
+ * @private
+ */
+export function setBlockTracking(value: number) {
+  shouldTrack += value
+}
+
+/**
+ * Create a block root vnode. Takes the same exact arguments as `createVNode`.
+ * A block root keeps track of dynamic nodes within the block in the
+ * `dynamicChildren` array.
+ *
+ * @private
+ */
+export function createBlock(
+  type: VNodeTypes | ClassComponent,
+  props?: Record<string, any> | null,
+  children?: any,
+  patchFlag?: number,
+  dynamicProps?: string[]
+): VNode {
+  const vnode = createVNode(
+    type,
+    props,
+    children,
+    patchFlag,
+    dynamicProps,
+    true /* isBlock: prevent a block from tracking itself */
+  )
+  // save current block children on the block vnode
+  vnode.dynamicChildren = currentBlock || (EMPTY_ARR as any)
+  // close block
+  closeBlock()
+  // a block is always going to be patched, so track it as a child of its
+  // parent block
+  if (shouldTrack > 0 && currentBlock) {
+    currentBlock.push(vnode)
+  }
+  return vnode
+}
 
 export function isVNode(value: any): value is VNode {
   return value ? value.__v_isVNode === true : false
