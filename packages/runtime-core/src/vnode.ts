@@ -23,6 +23,7 @@ import { currentRenderingInstance } from './componentRenderUtils'
 import { NULL_DYNAMIC_COMPONENT } from './helpers/resolveAssets'
 import { warn } from './warning'
 import {
+  EMPTY_ARR,
   extend,
   isArray,
   isFunction,
