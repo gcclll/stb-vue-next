@@ -2,7 +2,8 @@ import {
   ClassComponent,
   Component,
   ComponentInternalInstance,
-  Data
+  Data,
+  isClassComponent
 } from './component'
 import { TeleportImpl, isTeleport } from './components/Teleport'
 import {
@@ -10,7 +11,7 @@ import {
   SuspenseImpl,
   isSuspense
 } from './components/Suspense'
-import { isProxy, isRef, ReactiveFlags, Ref } from '@vue/reactivity'
+import { isProxy, isRef, ReactiveFlags, Ref, toRaw } from '@vue/reactivity'
 import { currentScopeId } from './helpers/scopeId'
 import { RawSlots } from './componentSlots'
 import { RendererNode, RendererElement } from './renderer'
@@ -221,7 +222,10 @@ function _createVNode(
 
   // 1. TODO type is vnode
 
-  // 2. TODO class component
+  // 2. class component
+  if (isClassComponent(type)) {
+    type = type.__vccOpts
+  }
 
   // 3. props 处理, class & style normalization
   if (props) {
@@ -267,7 +271,18 @@ function _createVNode(
             ? ShapeFlags.FUNCTIONAL_COMPONENT
             : 0
 
-  // 4. TODO warn STATEFUL_COMPONENT
+  // 4. warn STATEFUL_COMPONENT
+  if (__DEV__ && shapeFlag & ShapeFlags.STATEFUL_COMPONENT && isProxy(type)) {
+    type = toRaw(type)
+    warn(
+      `Vue received a Component which was made a reactive object. This can ` +
+        `lead to unnecessary performance overhead, and should be avoided by ` +
+        `marking the component with \`markRaw\` or using \`shallowRef\` ` +
+        `instead of \`ref\`.`,
+      `\nComponent that was made reactive: `,
+      type
+    )
+  }
 
   // 构建 vnode 对象
   const vnode: VNode = {
@@ -297,7 +312,10 @@ function _createVNode(
     appContext: null
   }
 
-  // 5. TODO 检查 key, 不能是 NaN
+  // 5. 检查 key, 不能是 NaN
+  if (__DEV__ && vnode.key !== vnode.key) {
+    warn(`VNode created with invalid key (NaN). VNode type:`, vnode.type)
+  }
 
   // 6. normalize children
   normalizeChildren(vnode, children)
