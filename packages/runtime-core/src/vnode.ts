@@ -158,6 +158,22 @@ export interface VNode<
   appContext: AppContext | null
 }
 
+// Since v-if and v-for are the two possible ways node structure can dynamically
+// change, once we consider v-if branches and each v-for fragment a block, we
+// can divide a template into nested blocks, and within each block the node
+// structure would be stable. This allows us to skip most children diffing
+// and only worry about the dynamic nodes (indicated by patch flags).
+// 针对 v-if, v-for 动态性做的由于，减少对静态节点的 diff ，只需要关心动态节点即可
+export const blockStack: (VNode[] | null)[] = []
+let currentBlock: VNode[] | null = null
+
+// Whether we should be tracking dynamic child nodes inside a block.
+// Only tracks when this value is > 0
+// We are not using a simple boolean because this value may need to be
+// incremented/decremented by nested usage of v-once (see below)
+// 是否应该 tracking block 内动态的孩子节点
+let shouldTrack = 1
+
 export function isVNode(value: any): value is VNode {
   return value ? value.__v_isVNode === true : false
 }
@@ -339,7 +355,24 @@ function _createVNode(
     vnode.ssFallback = fallback
   }
 
-  // 8. TODO currentBlock
+  // 8. currentBlock
+  if (
+    shouldTrack > 0 &&
+    // 避免 block 节点 tracking 自己
+    !isBlockNode &&
+    // has current parent block
+    currentBlock &&
+    // presence of a patch flag indicates this node needs patching on updates.
+    // component nodes also should always be patched, because even if the
+    // component doesn't need to update, it needs to persist the instance on to
+    // the next vnode so that it can be properly unmounted later.
+    (patchFlag > 0 || shapeFlag & ShapeFlags.COMPONENT) &&
+    // the EVENTS flag is only for hydration and if it is the only flag, the
+    // vnode should not be considered dynamic due to handler caching.
+    patchFlag !== PatchFlags.HYDRATE_EVENTS
+  ) {
+    currentBlock.push(vnode)
+  }
 
   return vnode
 }
