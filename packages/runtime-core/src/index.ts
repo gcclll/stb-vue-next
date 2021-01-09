@@ -170,6 +170,7 @@ export {
 
 // For compiler generated code
 // should sync with '@vue/compiler-core/src/runtimeConstants.ts'
+export { createTextVNode } from './vnode'
 
 export {
   toDisplayString,
@@ -185,10 +186,12 @@ export { transformVNodeArgs } from './vnode'
 // **IMPORTANT** These APIs are exposed solely for @vue/server-renderer and may
 // change without notice between versions. User code should never rely on them.
 
+import { setCurrentRenderingInstance } from './componentRenderUtils'
 import { isVNode } from './vnode'
 
 const _ssrUtils = {
-  isVNode
+  isVNode,
+  setCurrentRenderingInstance
 }
 
 /**

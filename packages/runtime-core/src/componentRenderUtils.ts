@@ -5,3 +5,9 @@ import { ComponentInternalInstance } from './component'
  * resolveComponent, resolveDirective) during render
  */
 export let currentRenderingInstance: ComponentInternalInstance | null = null
+
+export function setCurrentRenderingInstance(
+  instance: ComponentInternalInstance | null
+) {
+  currentRenderingInstance = instance
+}
