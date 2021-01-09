@@ -28,7 +28,7 @@ export {
 // Advanced API ----------------------------------------------------------------
 export { h } from './h'
 // Advanced render function utilities
-export { createVNode, isVNode } from './vnode'
+export { createVNode, isVNode, cloneVNode, mergeProps } from './vnode'
 // VNodet types
 export { Fragment, Text, Comment, Static } from './vnode'
 // Built-in components

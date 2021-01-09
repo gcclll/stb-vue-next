@@ -26,6 +26,7 @@ import {
   isArray,
   isFunction,
   isObject,
+  isOn,
   isString,
   normalizeClass,
   normalizeStyle,
@@ -220,7 +221,17 @@ function _createVNode(
     type = Comment
   }
 
-  // 1. TODO type is vnode
+  // 1. type is vnode
+  if (isVNode(type)) {
+    // createVNode receiving an existing vnode. This happens in cases like
+    // <component :is="vnode"/>
+    // #2078 make sure to merge refs during the clone instead of overwriting it
+    const cloned = cloneVNode(type, props, true /* mergeRef: true */)
+    if (children) {
+      normalizeChildren(cloned, children)
+    }
+    return cloned
+  }
 
   // 2. class component
   if (isClassComponent(type)) {
@@ -327,6 +338,67 @@ function _createVNode(
   return vnode
 }
 
+export function cloneVNode<T, U>(
+  vnode: VNode<T, U>,
+  extraProps?: Data & VNodeProps | null,
+  mergeRef = false
+): VNode<T, U> {
+  // This is intentionally NOT using spread or extend to avoid the runtime
+  // key enumeration cost.
+  const { props, ref, patchFlag } = vnode
+  const mergedProps = extraProps ? mergeProps(props || {}, extraProps) : props
+  return {
+    __v_isVNode: true,
+    [ReactiveFlags.SKIP]: true,
+    type: vnode.type,
+    props: mergedProps,
+    key: mergedProps && normalizeKey(mergedProps),
+    ref:
+      extraProps && extraProps.ref
+        ? // #2078 in the case of <component :is="vnode" ref="extra"/>
+          // if the vnode itself already has a ref, cloneVNode will need to merge
+          // the refs so the single vnode can be set on multiple refs
+          mergeRef && ref
+          ? isArray(ref)
+            ? ref.concat(normalizeRef(extraProps)!)
+            : [ref, normalizeRef(extraProps)!]
+          : normalizeRef(extraProps)
+        : ref,
+    scopeId: vnode.scopeId,
+    children: vnode.children,
+    target: vnode.target,
+    targetAnchor: vnode.targetAnchor,
+    staticCount: vnode.staticCount,
+    shapeFlag: vnode.shapeFlag,
+    // if the vnode is cloned with extra props, we can no longer assume its
+    // existing patch flag to be reliable and need to add the FULL_PROPS flag.
+    // note: perserve flag for fragments since they use the flag for children
+    // fast paths only.
+    patchFlag:
+      extraProps && vnode.type !== Fragment
+        ? patchFlag === -1 // hoisted node
+          ? PatchFlags.FULL_PROPS
+          : patchFlag | PatchFlags.FULL_PROPS
+        : patchFlag,
+    dynamicProps: vnode.dynamicProps,
+    dynamicChildren: vnode.dynamicChildren,
+    appContext: vnode.appContext,
+    dirs: vnode.dirs,
+    transition: vnode.transition,
+
+    // These should technically only be non-null on mounted VNodes. However,
+    // they *should* be copied for kept-alive vnodes. So we just always copy
+    // them since them being non-null during a mount doesn't affect the logic as
+    // they will simply be overwritten.
+    component: vnode.component,
+    suspense: vnode.suspense,
+    ssContent: vnode.ssContent && cloneVNode(vnode.ssContent),
+    ssFallback: vnode.ssFallback && cloneVNode(vnode.ssFallback),
+    el: vnode.el,
+    anchor: vnode.anchor
+  }
+}
+
 /**
  * @private
  */
@@ -391,4 +463,31 @@ export function normalizeChildren(vnode: VNode, children: unknown) {
 
   vnode.children = children as VNodeNormalizedChildren
   vnode.shapeFlag |= type
+}
+
+export function mergeProps(...args: (Data & VNodeProps)[]) {
+  const ret = extend({}, args[0])
+  for (let i = 1; i < args.length; i++) {
+    const toMerge = args[i]
+    for (const key in toMerge) {
+      if (key === 'class') {
+        if (ret.class !== toMerge.class) {
+          ret.class = normalizeClass([ret.class, toMerge.class])
+        }
+      } else if (key === 'style') {
+        ret.style = normalizeStyle([ret.style, toMerge.style])
+      } else if (isOn(key)) {
+        const existing = ret[key]
+        const incoming = toMerge[key]
+        if (existing !== incoming) {
+          ret[key] = existing
+            ? [].concat(existing as any, toMerge[key] as any)
+            : incoming
+        }
+      } else if (key !== '') {
+        ret[key] = toMerge[key]
+      }
+    }
+  }
+  return ret
 }
