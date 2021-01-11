@@ -40,6 +40,7 @@ export { KeepAliveProps } from './components/KeepAlive'
 export { BaseTransitionProps } from './components/BaseTransition'
 
 // Custom Renderer API ---------------------------------------------------------
+export { queuePreFlushCb } from './scheduler'
 export { warn } from './warning'
 export {
   handleError,
