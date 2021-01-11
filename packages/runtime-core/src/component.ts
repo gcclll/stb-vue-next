@@ -13,6 +13,7 @@ import {
   ComponentPublicInstance,
   ComponentPublicInstanceConstructor
 } from './componentPublicInstance'
+import { currentRenderingInstance } from './componentRenderUtils'
 import { SuspenseBoundary } from './components/Suspense'
 import { InternalSlots, Slots } from './componentSlots'
 import { Directive } from './directives'
@@ -358,6 +359,11 @@ export interface ComponentInternalInstance {
   [LifecycleHooks.ERROR_CAPTURED]: LifecycleHook
 }
 
+export let currentInstance: ComponentInternalInstance | null = null
+
+export const getCurrentInstance: () => ComponentInternalInstance | null = () =>
+  currentInstance || currentRenderingInstance
+
 type CompileFunction = (
   template: string | object,
   options?: CompilerOptions
@@ -366,6 +372,18 @@ type CompileFunction = (
 const classifyRE = /(?:^|[-_])(\w)/g
 const classify = (str: string): string =>
   str.replace(classifyRE, c => c.toUpperCase()).replace(/[-_]/g, '')
+
+// record effects created during a component's setup() so that they can be
+// stopped when the component unmounts
+// 记录在组件 setup() 期间绑定了哪些 effects，方便当组件卸载的时候去停掉他们
+export function recordInstanceBoundEffect(
+  effect: ReactiveEffect,
+  instance = currentInstance
+) {
+  if (instance) {
+    ;(instance.effects || (instance.effects = [])).push(effect)
+  }
+}
 
 export function getComponentName(
   Component: ConcreteComponent
