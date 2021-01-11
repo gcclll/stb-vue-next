@@ -26,3 +26,15 @@ export interface SchedulerJob {
 
 export type SchedulerCb = Function & { id?: number }
 export type SchedulerCbs = SchedulerCb | SchedulerCb[]
+
+const resolvedPromise: Promise<any> = Promise.resolve()
+// 当前正在被执行的 promise 任务
+let currentFlushPromise: Promise<void> | null = null
+
+export function nextTick(
+  this: ComponentPublicInstance | void,
+  fn?: () => void
+): Promise<void> {
+  const p = currentFlushPromise || resolvedPromise
+  return fn ? p.then(this ? fn.bind(this) : fn) : p
+}
