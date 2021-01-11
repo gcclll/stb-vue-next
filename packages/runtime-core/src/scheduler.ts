@@ -1,3 +1,5 @@
+import { ComponentPublicInstance } from './componentPublicInstance'
+
 export interface SchedulerJob {
   (): void
   /**
@@ -20,7 +22,18 @@ export interface SchedulerJob {
   allowRecurse?: boolean
 }
 
+const resolvedPromise: Promise<any> = Promise.resolve()
+let currentFlushPromise: Promise<void> | null = null
+
 export type SchedulerCb = Function & { id?: number }
 export type SchedulerCbs = SchedulerCb | SchedulerCb[]
 
 type CountMap = Map<SchedulerJob | SchedulerCb, number>
+
+export function nextTick(
+  this: ComponentPublicInstance | void,
+  fn?: () => void
+) {
+  const p = currentFlushPromise || resolvedPromise
+  return fn ? p.then(this ? fn.bind(this) : fn) : p
+}

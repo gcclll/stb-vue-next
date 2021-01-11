@@ -25,6 +25,7 @@ export {
   toRaw
 } from '@vue/reactivity'
 export { watch, watchEffect } from './apiWatch'
+export { nextTick } from './scheduler'
 
 // Advanced API ----------------------------------------------------------------
 export { h } from './h'

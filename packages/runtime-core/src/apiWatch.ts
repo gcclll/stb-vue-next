@@ -7,7 +7,7 @@ import {
   Ref,
   stop
 } from '@vue/reactivity'
-import { isArray, isFunction, NOOP, remove } from '@vue/shared'
+import { EMPTY_OBJ, isArray, isFunction, NOOP, remove } from '@vue/shared'
 import { warn } from './warning'
 import { currentInstance, recordInstanceBoundEffect } from './component'
 import { SchedulerJob } from './scheduler'
@@ -173,7 +173,21 @@ function doWatch(
     } else {
       // no cb -> simple effect
       getter = () => {
-        // TODO
+        if (instance && instance.isUnmounted) {
+          // 组件可能被卸载了
+          return
+        }
+        if (cleanup) {
+          cleanup()
+        }
+
+        // 在 try...catch 里面执行 source 这里是个 effect fn
+        return callWithErrorHandling(
+          source,
+          instance,
+          ErrorCodes.WATCH_CALLBACK,
+          [onInvalidate]
+        )
       }
     }
   } else {
@@ -188,7 +202,9 @@ function doWatch(
 
   let cleanup: () => void
   const onInvalidate: InvalidateCbRegistrator = (fn: () => void) => {
-    // TODO
+    cleanup = runner.options.onStop = () => {
+      callWithErrorHandling(fn, instance, ErrorCodes.WATCH_CLEANUP)
+    }
   }
 
   // TODO in SSR there is no need to setup an actual effect, and it should be noop
@@ -205,7 +221,7 @@ function doWatch(
 
   let scheduler: ReactiveEffectOptions['scheduler']
   if (flush === 'sync') {
-    scheduler = job
+    // scheduler = job
   } else if (flush === 'post') {
     // TODO
   } else {
