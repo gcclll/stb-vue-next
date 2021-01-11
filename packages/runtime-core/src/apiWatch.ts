@@ -46,6 +46,14 @@ export interface WatchOptions<Immediate = boolean> extends WatchOptionsBase {
 
 export type WatchStopHandle = () => void
 
+// simple effect
+export function watchEffect(
+  effect: WatchEffect,
+  options?: WatchOptionsBase
+): WatchStopHandle {
+  return doWatch(effect, null, options)
+}
+
 // initial value for watchers to trigger on undefined initial values
 const INITIAL_WATCHER_VALUE = {}
 

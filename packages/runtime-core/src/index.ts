@@ -24,6 +24,7 @@ export {
   markRaw,
   toRaw
 } from '@vue/reactivity'
+export { watch, watchEffect } from './apiWatch'
 
 // Advanced API ----------------------------------------------------------------
 export { h } from './h'
