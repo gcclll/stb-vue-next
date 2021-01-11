@@ -7,11 +7,22 @@ import {
   Ref,
   stop
 } from '@vue/reactivity'
-import { EMPTY_OBJ, isArray, isFunction, NOOP, remove } from '@vue/shared'
+import {
+  EMPTY_OBJ,
+  hasChanged,
+  isArray,
+  isFunction,
+  NOOP,
+  remove
+} from '@vue/shared'
 import { warn } from './warning'
 import { currentInstance, recordInstanceBoundEffect } from './component'
-import { SchedulerJob } from './scheduler'
-import { callWithErrorHandling, ErrorCodes } from './errorHandling'
+import { queuePreFlushCb, SchedulerJob } from './scheduler'
+import {
+  callWithAsyncErrorHandling,
+  callWithErrorHandling,
+  ErrorCodes
+} from './errorHandling'
 
 export type WatchEffect = (onInvalidate: InvalidateCbRegistrator) => void
 
@@ -212,7 +223,30 @@ function doWatch(
 
   let oldValue = isArray(source) ? [] : INITIAL_WATCHER_VALUE
   const job: SchedulerJob = () => {
-    // TODO
+    if (!runner.active) {
+      // 可能被 stop 掉了
+      return
+    }
+    if (cb) {
+      // watch(source, cb)
+      const newValue = runner() // 最新值
+      if (deep || forceTrigger || hasChanged(newValue, oldValue)) {
+        // 执行 cb 之前先清理 effect，这里如果 cleanup 有值说明是非首次执行
+        if (cleanup) {
+          cleanup()
+        }
+        // 回调参数:watch(fn, (newV, oldV, onInvalidate) => {...})
+        callWithAsyncErrorHandling(cb, instance, ErrorCodes.WATCH_CALLBACK, [
+          newValue,
+          oldValue === INITIAL_WATCHER_VALUE ? undefined : oldValue,
+          onInvalidate
+        ])
+        oldValue = newValue
+      }
+    } else {
+      // watchEffect
+      runner()
+    }
   }
 
   // important: mark the job as a watcher callback so that scheduler knows
@@ -226,7 +260,16 @@ function doWatch(
     // TODO
   } else {
     // default: 'pre'
-    // TODO
+    scheduler = () => {
+      if (!instance || instance.isMounted) {
+        // 放到队列执行
+        queuePreFlushCb(job)
+      } else {
+        // with 'pre' option, the first call must happen before
+        // the component is mounted so it is called synchronously.
+        job()
+      }
+    }
   }
 
   const runner = effect(getter, {
@@ -240,7 +283,11 @@ function doWatch(
 
   // initial run
   if (cb) {
-    // TODO
+    if (immediate) {
+      job()
+    } else {
+      oldValue = runner()
+    }
   } else if (flush === 'post') {
     // TODO
   } else {
