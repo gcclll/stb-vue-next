@@ -56,6 +56,8 @@ export function queueJob(job: SchedulerJob) {
   // if the job is a watch() callback, the search will start with a +1 index to
   // allow it recursively trigger itself - it is the user's responsibility to
   // ensure it doesn't end up in an infinite loop.
+  // 1. 队列为空或不包含当前正入列的 job
+  // 2. job 非当前 parent job
   if (
     (!queue.length ||
       !queue.includes(
@@ -65,7 +67,7 @@ export function queueJob(job: SchedulerJob) {
     job !== currentPreFlushParentJob
   ) {
     queue.push(job)
-    queueFlush
+    queueFlush()
   }
 }
 
@@ -76,6 +78,51 @@ function queueFlush() {
   }
 }
 
-function flushJobs(seen?: CountMap) {
+export function queuePreFlushCb(cb: SchedulerCb) {
   // TODO
+}
+
+const getId = (job: SchedulerJob | SchedulerCb) =>
+  job.id == null ? Infinity : job.id
+
+function flushJobs(seen?: CountMap) {
+  isFlushPending = false
+  isFlushing = true
+
+  if (__DEV__) {
+    seen = seen || new Map()
+  }
+
+  // flushPreFLushCbs(seen)，默认的 job 类型
+
+  // flush 之前对 queue 排序
+  // 1. 组件更新顺序：parent -> child，因为 parent 总是在 child 之前
+  //    被创建，因此 parent render effect 有更低的优先级数字(数字越小越先创建？)
+  // 2. 如果组件在 parent 更新期间被卸载了，那么它的更新都会被忽略掉
+
+  queue.sort((a, b) => getId(a) - getId(b))
+
+  // 开始 flush
+  try {
+    for (flushIndex = 0; flushIndex < queue.length; flushIndex++) {
+      const job = queue[flushIndex]
+      if (job) {
+        // TODO DEV -> 检查递归更新问题
+        callWithErrorHandling(job, null, ErrorCodes.SCHEDULER)
+      }
+    }
+  } finally {
+    // 情况队列
+    flushIndex = 0
+    queue.length = 0
+
+    // TODO flush `post` 类型的 flush cbs
+
+    isFlushing = false
+    currentFlushPromise = null
+
+    // TDOO 代码执行到当前 tick 的时候，有可能有新的 job 加入
+    // some postFlushCb queued jobs!
+    // keep flushing until it drains.
+  }
 }
