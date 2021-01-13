@@ -31,7 +31,8 @@ export {
   queuePreFlushCb,
   queuePostFlushCb,
   flushPreFlushCbs,
-  flushPostFlushCbs
+  flushPostFlushCbs,
+  invalidateJob
 } from './scheduler'
 
 // Advanced API ----------------------------------------------------------------

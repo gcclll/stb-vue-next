@@ -89,6 +89,13 @@ function queueFlush() {
   }
 }
 
+export function invalidateJob(job: SchedulerJob) {
+  const i = queue.indexOf(job)
+  if (i > -1) {
+    queue.splice(i, 1)
+  }
+}
+
 function queueCb(
   cb: SchedulerCbs,
   activeQueue: SchedulerCb[] | null,
