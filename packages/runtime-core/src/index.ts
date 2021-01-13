@@ -29,7 +29,9 @@ export {
   nextTick,
   queueJob,
   queuePreFlushCb,
-  queuePostFlushCb
+  queuePostFlushCb,
+  flushPreFlushCbs,
+  flushPostFlushCbs
 } from './scheduler'
 
 // Advanced API ----------------------------------------------------------------
