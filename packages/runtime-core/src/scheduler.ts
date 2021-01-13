@@ -30,12 +30,19 @@ export type SchedulerCbs = SchedulerCb | SchedulerCb[]
 let isFlushing = false
 let isFlushPending = false
 
+// job
 const queue: SchedulerJob[] = []
 let flushIndex = 0
 
+// pre cb
 const pendingPreFlushCbs: SchedulerCb[] = []
 let activePreFlushCbs: SchedulerCb[] | null = null
 let preFlushIndex = 0
+
+// post cb
+const pendingPostFlushCbs: SchedulerCb[] = []
+let activePostFlushCbs: SchedulerCb[] | null = null
+let postFlushIndex = 0
 
 const resolvedPromise: Promise<any> = Promise.resolve()
 // 当前正在被执行的 promise 任务
@@ -108,6 +115,10 @@ export function queuePreFlushCb(cb: SchedulerCb) {
   queueCb(cb, activePreFlushCbs, pendingPreFlushCbs, preFlushIndex)
 }
 
+export function queuePostFlushCb(cb: SchedulerCbs) {
+  queueCb(cb, activePostFlushCbs, pendingPostFlushCbs, postFlushIndex)
+}
+
 export function flushPreFlushCbs(
   seen?: CountMap,
   parentJob: SchedulerJob | null = null
@@ -134,6 +145,38 @@ export function flushPreFlushCbs(
     currentPreFlushParentJob = null
     // 递归 flush 直到所有 pre jobs 被执行完成
     flushPreFlushCbs(seen, parentJob)
+  }
+}
+
+export function flushPostFlushCbs(seen?: CountMap) {
+  if (pendingPostFlushCbs.length) {
+    const deduped = [...new Set(pendingPostFlushCbs)]
+    pendingPostFlushCbs.length = 0
+
+    // #1947 already has active queue, nested flushPostFlushCbs call
+    if (activePostFlushCbs) {
+      activePostFlushCbs.push(...deduped)
+      return
+    }
+
+    activePostFlushCbs = deduped
+    if (__DEV__) {
+      seen = seen || new Map()
+    }
+
+    activePostFlushCbs.sort((a, b) => getId(a) - getId(b))
+
+    for (
+      postFlushIndex = 0;
+      postFlushIndex < activePostFlushCbs.length;
+      postFlushIndex++
+    ) {
+      // TODO 递归 update 检查
+      activePostFlushCbs[postFlushIndex]()
+    }
+
+    activePostFlushCbs = null
+    postFlushIndex = 0
   }
 }
 
@@ -171,7 +214,8 @@ function flushJobs(seen?: CountMap) {
     flushIndex = 0
     queue.length = 0
 
-    // TODO flush `post` 类型的 flush cbs
+    // flush `post` 类型的 flush cbs
+    flushPostFlushCbs(seen)
 
     isFlushing = false
     currentFlushPromise = null
