@@ -33,6 +33,10 @@ let isFlushPending = false
 const queue: SchedulerJob[] = []
 let flushIndex = 0
 
+const pendingPreFlushCbs: SchedulerCb[] = []
+let activePreFlushCbs: SchedulerCb[] | null = null
+let preFlushIndex = 0
+
 const resolvedPromise: Promise<any> = Promise.resolve()
 // 当前正在被执行的 promise 任务
 let currentFlushPromise: Promise<void> | null = null
@@ -78,8 +82,59 @@ function queueFlush() {
   }
 }
 
+function queueCb(
+  cb: SchedulerCbs,
+  activeQueue: SchedulerCb[] | null,
+  pendingQueue: SchedulerCb[],
+  index: number
+) {
+  if (!isArray(cb)) {
+    if (
+      !activeQueue ||
+      !activeQueue.includes(
+        cb,
+        (cb as SchedulerJob).allowRecurse ? index + 1 : index
+      )
+    ) {
+      pendingQueue.push(cb)
+    }
+  } else {
+    pendingQueue.push(...cb)
+  }
+  queueFlush()
+}
+
 export function queuePreFlushCb(cb: SchedulerCb) {
-  // TODO
+  queueCb(cb, activePreFlushCbs, pendingPreFlushCbs, preFlushIndex)
+}
+
+export function flushPreFlushCbs(
+  seen?: CountMap,
+  parentJob: SchedulerJob | null = null
+) {
+  if (pendingPreFlushCbs.length) {
+    currentPreFlushParentJob = parentJob
+    activePreFlushCbs = [...new Set(pendingPreFlushCbs)]
+    pendingPreFlushCbs.length = 0
+    if (__DEV__) {
+      seen = seen || new Map()
+    }
+
+    for (
+      preFlushIndex = 0;
+      preFlushIndex < activePreFlushCbs.length;
+      preFlushIndex++
+    ) {
+      // TODO 检查递归更新问题
+      activePreFlushCbs[preFlushIndex]()
+    }
+
+    activePreFlushCbs = null
+    preFlushIndex = 0
+    currentPreFlushParentJob = null
+    // 递归 flush 直到所有 pre jobs 被执行完成
+    flushPreFlushCbs(seen, parentJob)
+  }
 }
 
 const getId = (job: SchedulerJob | SchedulerCb) =>
@@ -93,7 +148,7 @@ function flushJobs(seen?: CountMap) {
     seen = seen || new Map()
   }
 
-  // flushPreFLushCbs(seen)，默认的 job 类型
+  flushPreFlushCbs(seen) // 默认的 job 类型
 
   // flush 之前对 queue 排序
   // 1. 组件更新顺序：parent -> child，因为 parent 总是在 child 之前
