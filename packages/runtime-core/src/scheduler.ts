@@ -176,8 +176,11 @@ function flushJobs(seen?: CountMap) {
     isFlushing = false
     currentFlushPromise = null
 
-    // TDOO 代码执行到当前 tick 的时候，有可能有新的 job 加入
+    // 代码执行到当前 tick 的时候，有可能有新的 job 加入
     // some postFlushCb queued jobs!
     // keep flushing until it drains.
+    if (queue.length || pendingPreFlushCbs.length) {
+      flushJobs(seen)
+    }
   }
 }
