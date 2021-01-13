@@ -223,7 +223,7 @@ function flushJobs(seen?: CountMap) {
     // 代码执行到当前 tick 的时候，有可能有新的 job 加入
     // some postFlushCb queued jobs!
     // keep flushing until it drains.
-    if (queue.length || pendingPreFlushCbs.length) {
+    if (queue.length || pendingPostFlushCbs.length) {
       flushJobs(seen)
     }
   }
