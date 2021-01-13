@@ -50,6 +50,7 @@ let currentFlushPromise: Promise<void> | null = null
 
 let currentPreFlushParentJob: SchedulerJob | null = null
 
+const RECURSION_LIMIT = 100
 type CountMap = Map<SchedulerJob | SchedulerCb, number>
 
 export function nextTick(
@@ -143,7 +144,10 @@ export function flushPreFlushCbs(
       preFlushIndex < activePreFlushCbs.length;
       preFlushIndex++
     ) {
-      // TODO 检查递归更新问题
+      // 检查递归更新问题
+      if (__DEV__) {
+        checkRecursiveUpdates(seen!, activePreFlushCbs[preFlushIndex])
+      }
       activePreFlushCbs[preFlushIndex]()
     }
 
@@ -178,7 +182,10 @@ export function flushPostFlushCbs(seen?: CountMap) {
       postFlushIndex < activePostFlushCbs.length;
       postFlushIndex++
     ) {
-      // TODO 递归 update 检查
+      // 递归 update 检查
+      if (__DEV__) {
+        checkRecursiveUpdates(seen!, activePostFlushCbs[postFlushIndex])
+      }
       activePostFlushCbs[postFlushIndex]()
     }
 
@@ -212,7 +219,10 @@ function flushJobs(seen?: CountMap) {
     for (flushIndex = 0; flushIndex < queue.length; flushIndex++) {
       const job = queue[flushIndex]
       if (job) {
-        // TODO DEV -> 检查递归更新问题
+        // 检查递归更新问题
+        if (__DEV__) {
+          checkRecursiveUpdates(seen!, job)
+        }
         callWithErrorHandling(job, null, ErrorCodes.SCHEDULER)
       }
     }
@@ -232,6 +242,25 @@ function flushJobs(seen?: CountMap) {
     // keep flushing until it drains.
     if (queue.length || pendingPostFlushCbs.length) {
       flushJobs(seen)
+    }
+  }
+}
+
+function checkRecursiveUpdates(seen: CountMap, fn: SchedulerJob | SchedulerCb) {
+  if (!seen.has(fn)) {
+    seen.set(fn, 1)
+  } else {
+    const count = seen.get(fn)!
+    if (count > RECURSION_LIMIT) {
+      throw new Error(
+        `Maximum recursive updates exceeded. ` +
+          `This means you have a reactive effect that is mutating its own ` +
+          `dependencies and thus recursively triggering itself. Possible sources ` +
+          `include component template, render function, updated hook or ` +
+          `watcher source function.`
+      )
+    } else {
+      seen.set(fn, count + 1)
     }
   }
 }
