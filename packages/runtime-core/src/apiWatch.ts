@@ -134,8 +134,30 @@ function doWatch(
   { immediate, deep, flush, onTrack, onTrigger }: WatchOptions = EMPTY_OBJ,
   instance = currentInstance
 ): WatchStopHandle {
-  // 1. TODO cb, immediate, deep 检测
-  //
+  // 1. cb, immediate, deep 检测
+  if (__DEV__ && !cb) {
+    if (immediate !== undefined) {
+      warn(
+        `watch() "immediate" option is only respected when using the ` +
+          `watch(source, callback, options?) signature.`
+      )
+    }
+    if (deep !== undefined) {
+      warn(
+        `watch() "deep" option is only respected when using the ` +
+          `watch(source, callback, options?) signature.`
+      )
+    }
+  }
+
+  const warnInvalidSource = (s: unknown) => {
+    warn(
+      `Invalid watch source: `,
+      s,
+      `A watch source can only be a getter/effect function, a ref, ` +
+        `a reactive object, or an array of these types.`
+    )
+  }
   // 2. TODO getter 函数，根据不同类型生成对应的 getter
   let getter: () => any
   let forceTrigger = false
@@ -160,7 +182,7 @@ function doWatch(
         } else if (isFunction(s)) {
           return callWithErrorHandling(s, instance, ErrorCodes.WATCH_GETTER)
         } else {
-          // TODO warn invalid source
+          __DEV__ && warnInvalidSource(s)
         }
       })
   }
@@ -193,7 +215,7 @@ function doWatch(
   // 2.5 其他情况
   else {
     getter = NOOP
-    // TODO invalid source
+    __DEV__ && warnInvalidSource(source)
   }
   //
   // 3. cb + deep: true
