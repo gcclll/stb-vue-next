@@ -131,5 +131,30 @@ function doWatch(
   { immediate, deep, flush, onTrack, onTrigger }: WatchOptions = EMPTY_OBJ,
   instance = currentInstance
 ): WatchStopHandle {
+  // 1. TODO cb, immediate, deep 检测
+  //
+  // 2. TODO getter 函数，根据不同类型生成对应的 getter
+  // 2.1 TODO source is ref
+  // 2.2 TODO source is reactive
+  // 2.3 TODO source is array
+  // 2.4 TODO source is function
+  // 2.5 TODO 其他情况
+  //
+  // 3. TODO cb + deep: true
+  //
+  // 4. TODO SSR + node env
+  //
+  // 5. TODO job 任务封装 -> queueJob
+  //
+  // 6. TODO scheduler 设置
+  // 6.1 TODO flush is 'sync'
+  // 6.2 TODO flush is 'post'
+  // 6.3 TODO flush is 'pre'(default)
+  //
+  // 7. TODO get runner
+  //
+  // 8. TODO runner 如何执行？
+  //
+  // 9. TODO return runner->stop, remove runner from instance.effects
   return {} as WatchStopHandle
 }
