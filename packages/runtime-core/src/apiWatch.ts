@@ -234,7 +234,7 @@ function doWatch(
   }
   // 4. TODO SSR + node env
   //
-  // 5. TODO job 任务封装 -> queueJob
+  // 5. job 任务封装 -> queueJob
   let oldValue = isArray(source) ? [] : INITIAL_WATCHER_VALUE
   const job: SchedulerJob = () => {
     if (cb) {
