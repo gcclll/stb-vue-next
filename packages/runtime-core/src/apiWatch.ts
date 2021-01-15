@@ -134,27 +134,72 @@ function doWatch(
   // 1. TODO cb, immediate, deep 检测
   //
   // 2. TODO getter 函数，根据不同类型生成对应的 getter
-  // 2.1 TODO source is ref
+  let getter: () => any
+  let forceTrigger = false
+  // 2.1 source is ref
+  if (isRef(source)) {
+    getter = () => (source as Ref).value
+    forceTrigger = !!(source as Ref)._shallow
+  }
+
   // 2.2 TODO source is reactive
   // 2.3 TODO source is array
   // 2.4 TODO source is function
   // 2.5 TODO 其他情况
+  else {
+    getter = NOOP
+    // TODO invalid source
+  }
   //
   // 3. TODO cb + deep: true
   //
   // 4. TODO SSR + node env
   //
   // 5. TODO job 任务封装 -> queueJob
+  const job: SchedulerJob = () => {}
   //
   // 6. TODO scheduler 设置
-  // 6.1 TODO flush is 'sync'
+  let scheduler: ReactiveEffectOptions['scheduler']
+  // 6.1 flush is 'sync'
+  if (false /* async */) {
+  }
   // 6.2 TODO flush is 'post'
+  else if (false /* post */) {
+  }
   // 6.3 TODO flush is 'pre'(default)
+  else {
+    // default: 'pre'
+    scheduler = () => {
+      if (!instance || instance.isMounted) {
+      } else {
+        // with 'pre' option, the first call must happen before
+        // the component is mounted so it is called synchronously.
+        // 在 mounted 之前同步执行
+        job()
+      }
+    }
+  }
   //
-  // 7. TODO get runner
+  // 7. get runner
+  const runner = effect(getter, {
+    lazy: true,
+    onTrack,
+    onTrigger,
+    scheduler
+  })
   //
   // 8. TODO runner 如何执行？
+  if (false /*cb*/) {
+  } else if (false /*flush->post*/) {
+  } else {
+    runner()
+  }
   //
-  // 9. TODO return runner->stop, remove runner from instance.effects
-  return {} as WatchStopHandle
+  // 9. return runner->stop, remove runner from instance.effects
+  return () => {
+    stop(runner)
+    if (instance) {
+      remove(instance.effects!, runner)
+    }
+  }
 }
