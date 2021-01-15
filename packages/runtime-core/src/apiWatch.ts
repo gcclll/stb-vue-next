@@ -143,10 +143,14 @@ function doWatch(
   if (isRef(source)) {
     getter = () => (source as Ref).value
     forceTrigger = !!(source as Ref)._shallow
-  } else if (isReactive(source)) {
+  }
+  // 2.2 source is reactive
+  else if (isReactive(source)) {
     getter = () => source
     deep = true
-  } else if (isArray(source)) {
+  }
+  // 2.3 source is array
+  else if (isArray(source)) {
     getter = () =>
       source.map(s => {
         if (isRef(s)) {
@@ -160,11 +164,33 @@ function doWatch(
         }
       })
   }
+  // 2.4 source is function
+  else if (isFunction(source)) {
+    // 如果是函数，直接执行取得函数执行结果
+    if (cb) {
+      // getter with cb
+      getter = () =>
+        callWithErrorHandling(source, instance, ErrorCodes.WATCH_GETTER)
+    } else {
+      // no cb -> simple effect
+      getter = () => {
+        if (instance && instance.isUnmounted) {
+          // 组件已经卸载了
+          return
+        }
 
-  // 2.2 TODO source is reactive
-  // 2.3 TODO source is array
-  // 2.4 TODO source is function
-  // 2.5 TODO 其他情况
+        if (cleanup) cleanup()
+
+        return callWithErrorHandling(
+          source,
+          instance,
+          ErrorCodes.WATCH_CALLBACK,
+          [onInvalidate]
+        )
+      }
+    }
+  }
+  // 2.5 其他情况
   else {
     getter = NOOP
     // TODO invalid source
