@@ -153,10 +153,37 @@ function doWatch(
   //
   // 3. TODO cb + deep: true
   //
+
+  let cleanup: () => void
+  const onInvalidate: InvalidateCbRegistrator = (fn: () => void) => {
+    cleanup = runner.options.onStop = () => {
+      callWithErrorHandling(fn, instance, ErrorCodes.WATCH_CLEANUP)
+    }
+  }
   // 4. TODO SSR + node env
   //
   // 5. TODO job 任务封装 -> queueJob
-  const job: SchedulerJob = () => {}
+  let oldValue = isArray(source) ? [] : INITIAL_WATCHER_VALUE
+  const job: SchedulerJob = () => {
+    if (cb) {
+      // watch(source, cb)
+      const newValue = runner()
+      if (deep || forceTrigger || hasChanged(newValue, oldValue)) {
+        // cleanup
+        if (cleanup) cleanup()
+        callWithAsyncErrorHandling(cb, instance, ErrorCodes.WATCH_CALLBACK, [
+          newValue,
+          // pass undefined as the old value when it's changed for the first time
+          // 第一次的时候 oldValue 为 undefined
+          oldValue === INITIAL_WATCHER_VALUE ? undefined : oldValue,
+          onInvalidate
+        ])
+        oldValue = newValue
+      }
+    } else {
+      // TODO
+    }
+  }
   //
   // 6. TODO scheduler 设置
   let scheduler: ReactiveEffectOptions['scheduler']
@@ -171,11 +198,8 @@ function doWatch(
     // default: 'pre'
     scheduler = () => {
       if (!instance || instance.isMounted) {
+        queuePreFlushCb(job)
       } else {
-        // with 'pre' option, the first call must happen before
-        // the component is mounted so it is called synchronously.
-        // 在 mounted 之前同步执行
-        job()
       }
     }
   }
@@ -189,7 +213,12 @@ function doWatch(
   })
   //
   // 8. TODO runner 如何执行？
-  if (false /*cb*/) {
+  if (cb) {
+    if (immediate) {
+      // TODO
+    } else {
+      oldValue = runner()
+    }
   } else if (false /*flush->post*/) {
   } else {
     runner()
