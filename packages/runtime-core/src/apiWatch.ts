@@ -146,6 +146,19 @@ function doWatch(
   } else if (isReactive(source)) {
     getter = () => source
     deep = true
+  } else if (isArray(source)) {
+    getter = () =>
+      source.map(s => {
+        if (isRef(s)) {
+          return s.value
+        } else if (isReactive(s)) {
+          return traverse(s)
+        } else if (isFunction(s)) {
+          return callWithErrorHandling(s, instance, ErrorCodes.WATCH_GETTER)
+        } else {
+          // TODO warn invalid source
+        }
+      })
   }
 
   // 2.2 TODO source is reactive
