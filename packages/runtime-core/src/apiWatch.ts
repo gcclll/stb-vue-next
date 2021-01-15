@@ -231,7 +231,8 @@ function doWatch(
         oldValue = newValue
       }
     } else {
-      // TODO
+      // watchEffect, no cb
+      runner()
     }
   }
   //
