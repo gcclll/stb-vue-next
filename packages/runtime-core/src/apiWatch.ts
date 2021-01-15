@@ -12,6 +12,9 @@ import {
   hasChanged,
   isArray,
   isFunction,
+  isObject,
+  isSet,
+  isMap,
   NOOP,
   remove
 } from '@vue/shared'
@@ -140,6 +143,9 @@ function doWatch(
   if (isRef(source)) {
     getter = () => (source as Ref).value
     forceTrigger = !!(source as Ref)._shallow
+  } else if (isReactive(source)) {
+    getter = () => source
+    deep = true
   }
 
   // 2.2 TODO source is reactive
@@ -151,8 +157,13 @@ function doWatch(
     // TODO invalid source
   }
   //
-  // 3. TODO cb + deep: true
-  //
+  // 3. cb + deep: true
+  if (cb && deep) {
+    const baseGetter = getter
+    // a. deep: true
+    // b. source is reactive
+    getter = () => traverse(baseGetter())
+  }
 
   let cleanup: () => void
   const onInvalidate: InvalidateCbRegistrator = (fn: () => void) => {
@@ -231,4 +242,27 @@ function doWatch(
       remove(instance.effects!, runner)
     }
   }
+}
+
+function traverse(value: unknown, seen: Set<unknown> = new Set()) {
+  if (!isObject(value) || seen.has(value)) {
+    return value
+  }
+  seen.add(value)
+  if (isRef(value)) {
+    traverse(value.value, seen)
+  } else if (isArray(value)) {
+    for (let i = 0; i < value.length; i++) {
+      traverse(value[i], seen)
+    }
+  } else if (isSet(value) || isMap(value)) {
+    value.forEach((v: any) => {
+      traverse(v, seen)
+    })
+  } else {
+    for (const key in value) {
+      traverse(value[key], seen)
+    }
+  }
+  return value
 }
