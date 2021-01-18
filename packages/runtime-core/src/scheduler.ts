@@ -1,4 +1,4 @@
-import { isArray } from '@vue/shared/src'
+import { isArray } from '@vue/shared'
 import { ComponentPublicInstance } from './componentPublicInstance'
 import { callWithErrorHandling, ErrorCodes } from './errorHandling'
 
@@ -20,6 +20,13 @@ export interface SchedulerJob {
    * triggers itself again, it's likely intentional and it is the user's
    * responsibility to perform recursive state mutation that eventually
    * stabilizes (#1727).
+   * 这个大概意思就是允许当前的 Job/cb 在执行期间调用对应的 queue 入列函数将自己
+   * 加入到当前执行队列，这样如果处理不好容易造成死循环。
+   * 而调度器的实现是根据索引来查找是否重复做的入列操作，因为这种使用方式有一点是可以肯定的：
+   * 那就是 cb 中 queue 新的 cb 时候，那么这个新的 cb 任务在 index+1 位置肯定找不到
+   * 如：检测代码 includes(allowRecurse ? index + 1 : index)
+   * 这样同一个 cb 就能继续进行入列操作而得到：
+   * [cb] -> 查找重复，index + 1 -> 找不到 -> 重复入列 -> [cb, cb]
    */
   allowRecurse?: boolean
 }
@@ -27,32 +34,51 @@ export interface SchedulerJob {
 export type SchedulerCb = Function & { id?: number }
 export type SchedulerCbs = SchedulerCb | SchedulerCb[]
 
-let isFlushing = false
-let isFlushPending = false
+let isFlushing = false // 开始 flush pre/job/post
+let isFlushPending = false // 正在 flush pre cbs
 
 // job
-const queue: SchedulerJob[] = []
-let flushIndex = 0
+const queue: SchedulerJob[] = [] // job 队列
+let flushIndex = 0 // for -> job 时候的索引
 
-// pre cb
+// 默认 pre cb 队列
 const pendingPreFlushCbs: SchedulerCb[] = []
+// 正在执行的 pre cbs，由 pendingPreFlushCbs 去重而来的任务队列
 let activePreFlushCbs: SchedulerCb[] | null = null
 let preFlushIndex = 0
 
-// post cb
+// post 类型的 cb 队列
 const pendingPostFlushCbs: SchedulerCb[] = []
+// 当前正在执行的 post cbs 队列，由 pendingPostFlushCbs 去重而来
+// 且它不会执行期间进行扩充，而是在 flushJobs 中 queue jobs 执行完成之后
+// 的 finally 里面检测 post 队列重新调用 flushJobs 来清空
 let activePostFlushCbs: SchedulerCb[] | null = null
 let postFlushIndex = 0
 
+// 空的 Promise 用来进行异步化，实现 nextTick
 const resolvedPromise: Promise<any> = Promise.resolve()
-// 当前正在被执行的 promise 任务
+// 当 flushJobs 执行完毕，即当 pre/job/post 队列中所有
+// 任务都完成之后返回的一个 promise ，所以当使用 nextTick()
+// 的时候，对应的代码都是在这个基础完成之后调用
+// 所以 nextTick() 顾名思义就是在当前的 tick 下所有任务(pre/job/post)都
+// 执行完毕之后才执行的代码
 let currentFlushPromise: Promise<void> | null = null
 
+// queue job 可以作为 pre cbs 的父级任务
+// 比如：在手动调用 flushPreFlushCbs(seen, parentJob) 就可以
+// 传一个 queue job 当做当前 cbs 的父级任务。
+// 这个用途是为了避免该 job 的上一次入列任务(包括 job 及其子 pre cbs)
+// 还没完成就再次调用 queueJob 重复入列, 说白了就是为了同一个 job 不能在
+// parentJob 完成之前调用 queueJob，就算调了也没用
 let currentPreFlushParentJob: SchedulerJob | null = null
 
+// pre/job/post 三种任务在同一个 tick 下，一次执行上限是100个
+// 超出视为死循环
 const RECURSION_LIMIT = 100
 type CountMap = Map<SchedulerJob | SchedulerCb, number>
 
+// 这个函数将使得 fn 或使用了 await 时候后面的代码总是在
+// 当前 tick 下的 pre/job/post 队列都 flush 空了之后执行
 export function nextTick(
   this: ComponentPublicInstance | void,
   fn?: () => void
@@ -83,6 +109,7 @@ export function queueJob(job: SchedulerJob) {
   }
 }
 
+// 立即启动异步 flush 操作
 function queueFlush() {
   if (!isFlushing && !isFlushPending) {
     isFlushPending = true
@@ -90,6 +117,7 @@ function queueFlush() {
   }
 }
 
+// 失效一个任务就是将其删除
 export function invalidateJob(job: SchedulerJob) {
   const i = queue.indexOf(job)
   if (i > -1) {
@@ -97,6 +125,10 @@ export function invalidateJob(job: SchedulerJob) {
   }
 }
 
+// pre/post 任务入列函数，注意点
+// 1. 不能重复添加同一个 cb
+// 2. 如果指定了 allowRecurse: true 是可以重复添加的
+// 如下面的实现，查找从 index+1 开始肯定是找不到的
 function queueCb(
   cb: SchedulerCbs,
   activeQueue: SchedulerCb[] | null,
@@ -114,6 +146,12 @@ function queueCb(
       pendingQueue.push(cb)
     }
   } else {
+    // 如果 cb 是个数组，那么它是个组件生命周期的 Hook 函数，这些函数只能被
+    // 一个 job 触发，且在对应的 queue flush 函数中进过了去重操作
+    // 因为这里直接跳过去重检测提高性能
+    // 意思就是，在 flush[Pre|Post]FlushCbs 函数执行期间会进行去重操作，
+    // 因此这里不需要重复做(如： activePostFlushCbs, activePreFlushCbs 都是
+    // 去重之后待执行的 cbs)
     pendingQueue.push(...cb)
   }
   queueFlush()
@@ -127,6 +165,11 @@ export function queuePostFlushCb(cb: SchedulerCbs) {
   queueCb(cb, activePostFlushCbs, pendingPostFlushCbs, postFlushIndex)
 }
 
+// flush pre cbs，在 flushJobs 中优先调用，也就是说 pre cbs
+// 在同一 tick 内执行优先级最高，即最先执行(pre cbs > job > post cbs)
+// 并且它会一直递归到没有新的 pre cbs 为止
+// 比如： 有10个任务，执行到第5个的时候来了个新的任务(queuePreFlushCb(cb))
+// 那么这个任务会在前面10个执行完成之后作为第 11 个去执行，但记住是下次递归时完成
 export function flushPreFlushCbs(
   seen?: CountMap,
   parentJob: SchedulerJob | null = null
@@ -159,6 +202,12 @@ export function flushPreFlushCbs(
   }
 }
 
+// flush post cbs 和 pre cbs 差不多，唯一不同的点在于：
+// 如果执行期间有新的任务进来 (queuePostFlushCb(cb)) 的时候
+// 它不是在当前 post cbs 后面立即执行，而是当 pre cbs -> jobs -> post -cbs
+// 执行完一轮之后在 flushJobs 的 finally 中重启新一轮的 flushJobs
+// 所以，这期间如果有新的 pre cbs 或 Jobs 那么这两个都会在新的 post cbs
+// 之前得到执行
 export function flushPostFlushCbs(seen?: CountMap) {
   if (pendingPostFlushCbs.length) {
     const deduped = [...new Set(pendingPostFlushCbs)]
@@ -197,6 +246,7 @@ export function flushPostFlushCbs(seen?: CountMap) {
 const getId = (job: SchedulerJob | SchedulerCb) =>
   job.id == null ? Infinity : job.id
 
+// 开启三种任务 flush 操作，优先级 pre cbs > jobs > post cbs
 function flushJobs(seen?: CountMap) {
   isFlushPending = false
   isFlushing = true
