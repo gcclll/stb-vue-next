@@ -222,6 +222,7 @@ function doWatch(
   if (cb && deep) {
     const baseGetter = getter
     // a. deep: true
+
     // b. source is reactive
     getter = () => traverse(baseGetter())
   }
@@ -276,6 +277,9 @@ function doWatch(
       if (!instance || instance.isMounted) {
         queuePreFlushCb(job)
       } else {
+        // 带 { pre: true } 选项，第一次调用必须发生在组件 mounted 之前
+        // 从而使他被同步调用，立即执行一次
+        job()
       }
     }
   }
@@ -291,7 +295,7 @@ function doWatch(
   // 8. TODO runner 如何执行？
   if (cb) {
     if (immediate) {
-      // TODO
+      job()
     } else {
       oldValue = runner()
     }
