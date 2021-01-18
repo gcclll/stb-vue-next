@@ -265,7 +265,8 @@ function doWatch(
   // 6. TODO scheduler 设置
   let scheduler: ReactiveEffectOptions['scheduler']
   // 6.1 flush is 'sync'
-  if (false /* async */) {
+  if (flush === 'sync') {
+    scheduler = job
   }
   // 6.2 TODO flush is 'post'
   else if (false /* post */) {
