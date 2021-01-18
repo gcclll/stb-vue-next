@@ -237,6 +237,9 @@ function doWatch(
   // 5. job 任务封装 -> queueJob
   let oldValue = isArray(source) ? [] : INITIAL_WATCHER_VALUE
   const job: SchedulerJob = () => {
+    if (!runner.active) {
+      return
+    }
     if (cb) {
       // watch(source, cb)
       const newValue = runner()
