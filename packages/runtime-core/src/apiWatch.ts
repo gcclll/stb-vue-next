@@ -264,7 +264,8 @@ function doWatch(
   //
   // 6. TODO scheduler 设置
   let scheduler: ReactiveEffectOptions['scheduler']
-  // 6.1 flush is 'sync'
+  // 6.1 flush is 'sync'，让依赖同步执行，即当值发生改变之后
+  // 立即就会体现出来，因为依赖在赋值之后被立即执行了
   if (flush === 'sync') {
     scheduler = job
   }
