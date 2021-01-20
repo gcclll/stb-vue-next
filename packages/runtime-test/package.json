@@ -6,18 +6,17 @@
   "main": "index.js",
   "module": "dist/runtime-test.esm-bundler.js",
   "types": "dist/runtime-test.d.ts",
-  "files": [
-    "index.js",
-    "dist"
-  ],
+  "files": ["index.js", "dist"],
+  "buildOptions": {
+    "name": "VueRuntimeTest",
+    "formats": ["cjs"]
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/vuejs/vue-next.git",
     "directory": "packages/runtime-test"
   },
-  "keywords": [
-    "vue"
-  ],
+  "keywords": ["vue"],
   "author": "Evan You",
   "license": "MIT",
   "bugs": {
