@@ -171,7 +171,24 @@ export function createAppAPI<HostElement>(
       },
 
       mixin(mixin: ComponentOptions) {
-        // TODO
+        if (__FEATURE_OPTIONS_API__) {
+          if (!context.mixins.includes(mixin)) {
+            context.mixins.push(mixin)
+            // 带有 props/emits 的全局 mixin 会是的 props/emits 缓存优化失效
+            if (mixin.props || mixin.emits) {
+              context.deopt = true
+            }
+          } else if (__DEV__) {
+            warn(
+              'Mixin has already been applied to target app' +
+                (mixin.name ? `: ${mixin.name}` : '')
+            )
+          }
+        } else if (__DEV__) {
+          // 必须开启了 options api 特性才能使用，即 vue3 里面可根据需要
+          // 关闭这个功能
+          warn('Mixins are only available in builds supporting Options API')
+        }
         return app
       },
 
