@@ -1,6 +1,11 @@
 import { NO, isObject, isFunction } from '@vue/shared'
 import { InjectionKey } from './apiInject'
-import { Component, ConcreteComponent, Data } from './component'
+import {
+  Component,
+  ConcreteComponent,
+  Data,
+  validateComponentName
+} from './component'
 import { ComponentOptions } from './componentOptions'
 import { ComponentPublicInstance } from './componentPublicInstance'
 import { Directive } from './directives'
@@ -192,8 +197,23 @@ export function createAppAPI<HostElement>(
         return app
       },
 
-      component(nam: string, component?: Component): any {
-        // TODO
+      component(name: string, component?: Component): any {
+        if (__DEV__) {
+          // 验证组件名称是否合法
+          validateComponentName(name, context.config)
+        }
+
+        // 没有对应组件，视为根据名称获取组件操作
+        if (!component) {
+          return context.components[name]
+        }
+
+        if (__DEV__ && context.components[name]) {
+          // 组件已经注册过了，再次注册等于覆盖原有的
+          warn(`Component "${name}" has already been registered in target app.`)
+        }
+
+        context.components[name] = component
         return app
       },
 

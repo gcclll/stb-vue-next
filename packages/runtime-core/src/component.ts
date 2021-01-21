@@ -1,7 +1,7 @@
-import { CompilerOptions } from '@vue/compiler-dom/src'
+import { CompilerOptions } from '@vue/compiler-dom'
 import { ReactiveEffect } from '@vue/reactivity'
-import { isFunction } from '@vue/shared/src'
-import { AppContext } from './apiCreateApp'
+import { isFunction, makeMap, NO } from '@vue/shared'
+import { AppConfig, AppContext } from './apiCreateApp'
 import { EmitFn, EmitsOptions, ObjectEmitsOptions } from './componentEmits'
 import {
   ComponentOptions,
@@ -18,6 +18,7 @@ import { SuspenseBoundary } from './components/Suspense'
 import { InternalSlots, Slots } from './componentSlots'
 import { Directive } from './directives'
 import { VNode, VNodeChild } from './vnode'
+import { warn } from './warning'
 
 export type Data = Record<string, unknown>
 
@@ -363,6 +364,16 @@ export let currentInstance: ComponentInternalInstance | null = null
 
 export const getCurrentInstance: () => ComponentInternalInstance | null = () =>
   currentInstance || currentRenderingInstance
+
+const isBuiltInTag = /*#__PURE__*/ makeMap('slot,component')
+export function validateComponentName(name: string, config: AppConfig) {
+  const appIsNativeTag = config.isNativeTag || NO
+  if (isBuiltInTag(name) || appIsNativeTag(name)) {
+    warn(
+      'Do not use built-in or reserved HTML elements as component id: ' + name
+    )
+  }
+}
 
 type CompileFunction = (
   template: string | object,
