@@ -11,6 +11,8 @@ import { ComponentPublicInstance } from './componentPublicInstance'
 import { Directive, validateDirectiveName } from './directives'
 import { RootHydrateFunction } from './hydration'
 import { RootRenderFunction } from './renderer'
+import { createVNode, cloneVNode, VNode } from './vnode'
+import { devtoolsInitApp } from './devtools'
 import { warn } from './warning'
 import { version } from '.'
 
@@ -235,7 +237,47 @@ export function createAppAPI<HostElement>(
       },
 
       mount(rootContainer: HostElement, isHydrate?: boolean): any {
-        // TODO
+        if (!isMounted) {
+          const vnode = createVNode(
+            rootComponent as ConcreteComponent,
+            rootProps
+          )
+
+          // 保存 app context 到 root VNode 节点上
+          // 这个将会在初始化 mount 时候被设置到根实例上
+          vnode.appContext = context
+
+          // HMR root reload
+          if (__DEV__) {
+            context.reload = () => {
+              render(cloneVNode(vnode), rootContainer)
+            }
+          }
+
+          if (isHydrate && hydrate) {
+            hydrate(vnode as VNode<Node, Element>, rootContainer as any)
+          } else {
+            render(vnode, rootContainer)
+          }
+
+          isMounted = true
+          app._container = rootContainer
+          // for devtools and telemetry
+          ;(rootContainer as any).__vue_app__ = app
+
+          if (__DEV__ || __FEATURE_PROD_DEVTOOLS__) {
+            devtoolsInitApp(app, version)
+          }
+
+          return vnode.component!.proxy
+        } else if (__DEV__) {
+          warn(
+            `App has already been mounted.\n` +
+              `If you want to remount the same app, move your app creation logic ` +
+              `into a factory function and create fresh app instances for each ` +
+              `mount - e.g. \`const createMyApp = () => createApp(App)\``
+          )
+        }
       },
       unmount() {
         // TODO
