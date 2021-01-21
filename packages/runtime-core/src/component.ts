@@ -365,6 +365,12 @@ export let currentInstance: ComponentInternalInstance | null = null
 export const getCurrentInstance: () => ComponentInternalInstance | null = () =>
   currentInstance || currentRenderingInstance
 
+export const setCurrentInstance = (
+  instance: ComponentInternalInstance | null
+) => {
+  currentInstance = instance
+}
+
 const isBuiltInTag = /*#__PURE__*/ makeMap('slot,component')
 export function validateComponentName(name: string, config: AppConfig) {
   const appIsNativeTag = config.isNativeTag || NO
