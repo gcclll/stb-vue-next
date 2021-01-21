@@ -1,4 +1,4 @@
-import { NO, isObject } from '@vue/shared'
+import { NO, isObject, isFunction } from '@vue/shared'
 import { InjectionKey } from './apiInject'
 import { Component, ConcreteComponent, Data } from './component'
 import { ComponentOptions } from './componentOptions'
@@ -150,7 +150,23 @@ export function createAppAPI<HostElement>(
       },
 
       use(plugin: Plugin, ...options: any[]) {
-        // TODO
+        if (installedPlugins.has(plugin)) {
+          __DEV__ && warn(`Plugin has already been applied to target app.`)
+        } else if (plugin && isFunction(plugin.install)) {
+          // 函数直接执行
+          installedPlugins.add(plugin)
+          plugin.install(app, ...options)
+        } else if (isFunction(plugin)) {
+          // 没有 install 函数时
+          installedPlugins.add(plugin)
+          plugin(app, ...options)
+        } else if (__DEV__) {
+          // plugin 必须要么自己是函数，要么是包含 install 函数的对象
+          warn(
+            `A plugin must either be a function or an object with an "install" ` +
+              `function.`
+          )
+        }
         return app
       },
 
