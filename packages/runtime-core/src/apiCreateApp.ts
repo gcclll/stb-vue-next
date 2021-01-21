@@ -290,7 +290,17 @@ export function createAppAPI<HostElement>(
         }
       },
       provide(key, value) {
-        // TODO
+        if (__DEV__ && (key as string | symbol) in context.provides) {
+          warn(
+            `App already provides property with key "${String(key)}". ` +
+              `It will be overwritten with the new value.`
+          )
+        }
+
+        // TypeScript doesn't allow symbols as index type
+        // https://github.com/Microsoft/TypeScript/issues/24587
+        context.provides[key as string] = value
+
         return app
       }
     })
