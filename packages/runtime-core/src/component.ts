@@ -375,6 +375,8 @@ export function validateComponentName(name: string, config: AppConfig) {
   }
 }
 
+export let isInSSRComponentSetup = false
+
 type CompileFunction = (
   template: string | object,
   options?: CompilerOptions
