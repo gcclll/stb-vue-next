@@ -1,3 +1,4 @@
+import { isFunction } from '@vue/shared'
 import { AllowedComponentProps, ComponentCustomProps } from './component'
 import { EmitsOptions } from './componentEmits'
 import {
@@ -59,3 +60,8 @@ export type DefineComponent<
     Defaults
   > &
   PP
+
+// implementation, close to no-op
+export function defineComponent(options: unknown) {
+  return isFunction(options) ? { setup: options, name: options.name } : options
+}
