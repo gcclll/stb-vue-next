@@ -26,6 +26,7 @@ import {
   callWithErrorHandling,
   ErrorCodes
 } from './errorHandling'
+import { queuePostRenderEffect } from './renderer'
 
 export type WatchEffect = (onInvalidate: InvalidateCbRegistrator) => void
 
@@ -262,17 +263,18 @@ function doWatch(
     }
   }
   //
-  // 6. TODO scheduler 设置
+  // 6. scheduler 设置
   let scheduler: ReactiveEffectOptions['scheduler']
   // 6.1 flush is 'sync'，让依赖同步执行，即当值发生改变之后
   // 立即就会体现出来，因为依赖在赋值之后被立即执行了
   if (flush === 'sync') {
     scheduler = job
   }
-  // 6.2 TODO flush is 'post'
-  else if (false /* post */) {
+  // 6.2 flush is 'post'
+  else if (flush === 'post') {
+    scheduler = () => queuePostRenderEffect(job, instance && instance.suspense)
   }
-  // 6.3 TODO flush is 'pre'(default)
+  // 6.3 flush is 'pre'(default)
   else {
     // default: 'pre'
     scheduler = () => {

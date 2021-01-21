@@ -1,7 +1,11 @@
 import { CreateAppFunction } from './apiCreateApp'
 import { ComponentInternalInstance } from './component'
-import { SuspenseBoundary } from './components/Suspense'
+import {
+  queueEffectWithSuspense,
+  SuspenseBoundary
+} from './components/Suspense'
 import { RootHydrateFunction } from './hydration'
+import { queuePostFlushCb } from './scheduler'
 import { VNode, VNodeArrayChildren } from './vnode'
 
 export interface Renderer<HostElement = RendererElement> {
@@ -193,3 +197,7 @@ export const enum MoveType {
   LEAVE,
   REORDER
 }
+
+export const queuePostRenderEffect = __FEATURE_SUSPENSE__
+  ? queueEffectWithSuspense
+  : queuePostFlushCb

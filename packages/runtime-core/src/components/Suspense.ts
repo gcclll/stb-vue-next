@@ -8,6 +8,7 @@ import {
   RendererNode,
   SetupRenderEffectFn
 } from '../renderer'
+import { queuePostFlushCb } from '../scheduler'
 import { normalizeVNode, VNode, VNodeChild, VNodeProps } from '../vnode'
 import { warn } from '../warning'
 
@@ -103,4 +104,19 @@ function normalizeSuspenseSlot(s: any) {
     s = singleChild
   }
   return normalizeVNode(s)
+}
+
+export function queueEffectWithSuspense(
+  fn: Function | Function[],
+  suspense: SuspenseBoundary | null
+): void {
+  if (suspense && suspense.pendingBranch) {
+    if (isArray(fn)) {
+      suspense.effects.push(...fn)
+    } else {
+      suspense.effects.push(fn)
+    }
+  } else {
+    queuePostFlushCb(fn)
+  }
 }
