@@ -1,4 +1,4 @@
-import { NO } from '@vue/shared'
+import { NO, isObject } from '@vue/shared'
 import { InjectionKey } from './apiInject'
 import { Component, ConcreteComponent, Data } from './component'
 import { ComponentOptions } from './componentOptions'
@@ -6,6 +6,8 @@ import { ComponentPublicInstance } from './componentPublicInstance'
 import { Directive } from './directives'
 import { RootHydrateFunction } from './hydration'
 import { RootRenderFunction } from './renderer'
+import { warn } from './warning'
+import { version } from '.'
 
 export interface App<HostElement = any> {
   version: string
@@ -115,5 +117,70 @@ export function createAppAPI<HostElement>(
   render: RootRenderFunction,
   hydrate?: RootHydrateFunction
 ): CreateAppFunction<HostElement> {
-  return function createApp(rootComponent, rootProps = null) {}
+  return function createApp(rootComponent, rootProps = null) {
+    if (rootProps != null && !isObject(rootProps)) {
+      __DEV__ && warn(`root props passed to app.mount() must be an object.`)
+      rootProps = null
+    }
+
+    const context = createAppContext()
+    const installedPlugins = new Set()
+
+    let isMounted = false
+
+    const app: App = (context.app = {
+      _uid: uid++,
+      _component: rootComponent as ConcreteComponent,
+      _props: rootProps,
+      _container: null,
+      _context: context,
+
+      version,
+
+      get config() {
+        return context.config
+      },
+
+      set config(v) {
+        if (__DEV__) {
+          warn(
+            `app.config cannot be replaced. Modify individual options instead.`
+          )
+        }
+      },
+
+      use(plugin: Plugin, ...options: any[]) {
+        // TODO
+        return app
+      },
+
+      mixin(mixin: ComponentOptions) {
+        // TODO
+        return app
+      },
+
+      component(nam: string, component?: Component): any {
+        // TODO
+        return app
+      },
+
+      directive(name: string, directive?: Directive) {
+        // TODO
+        return app
+      },
+
+      mount(rootContainer: HostElement, isHydrate?: boolean): any {
+        // TODO
+      },
+      unmount() {
+        // TODO
+      },
+      provide(key, value) {
+        // TODO
+        return app
+      }
+    })
+
+    return app
+  }
 }
