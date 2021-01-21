@@ -8,7 +8,7 @@ import {
 } from './component'
 import { ComponentOptions } from './componentOptions'
 import { ComponentPublicInstance } from './componentPublicInstance'
-import { Directive } from './directives'
+import { Directive, validateDirectiveName } from './directives'
 import { RootHydrateFunction } from './hydration'
 import { RootRenderFunction } from './renderer'
 import { warn } from './warning'
@@ -218,7 +218,19 @@ export function createAppAPI<HostElement>(
       },
 
       directive(name: string, directive?: Directive) {
-        // TODO
+        if (__DEV__) {
+          validateDirectiveName(name)
+        }
+
+        if (!directive) {
+          return context.directives[name] as any
+        }
+
+        if (__DEV__ && context.directives[name]) {
+          warn(`Directive "${name}" has already been registered in target app.`)
+        }
+        context.directives[name] = directive
+
         return app
       },
 

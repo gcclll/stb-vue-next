@@ -1,6 +1,8 @@
+import { makeMap } from '@vue/shared'
 import { Data } from './component'
 import { ComponentPublicInstance } from './componentPublicInstance'
 import { VNode } from './vnode'
+import { warn } from './warning'
 
 /**
 Runtime helper for applying directives to a vnode. Example usage:
@@ -54,6 +56,16 @@ export type Directive<T = any, V = any> =
   | FunctionDirective<T, V>
 
 export type DirectiveModifiers = Record<string, boolean>
+
+const isBuiltInDirective = /*#__PURE__*/ makeMap(
+  'bind,cloak,else-if,else,for,html,if,model,on,once,pre,show,slot,text'
+)
+
+export function validateDirectiveName(name: string) {
+  if (isBuiltInDirective(name)) {
+    warn('Do not use built-in directive ids as custom directive id: ' + name)
+  }
+}
 
 // Directive, value, argument, modifiers
 export type DirectiveArguments = Array<
