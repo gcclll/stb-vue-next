@@ -1,4 +1,6 @@
+import { isFunction } from '@vue/shared'
 import { currentInstance } from './component'
+import { currentRenderingInstance } from './componentRenderUtils'
 import { warn } from './warning'
 
 export interface InjectionKey<T> extends Symbol {}
@@ -48,5 +50,28 @@ export function inject(
   defaultValue?: unknown,
   treatDefaultAsFactory = false
 ) {
-  // TODO
+  // currentRenderingInstance 兼容函数式组件
+  const instance = currentInstance || currentRenderingInstance
+  if (instance) {
+    // #2400
+    // to support `app.use` plugins,
+    // fallback to appContext's `provides` if the intance is at root
+    const provides =
+      instance.parent == null // root
+        ? instance.vnode.appContext && instance.vnode.appContext.provides
+        : instance.parent.provides
+
+    if (provides && (key as string | symbol) in provides) {
+      // TS doesn't allow symbol as index type
+      return provides[key as string]
+    } else if (arguments.length > 1) {
+      return treatDefaultAsFactory && isFunction(defaultValue)
+        ? defaultValue()
+        : defaultValue
+    } else if (__DEV__) {
+      warn(`injection "${String(key)}" not found.`)
+    }
+  } else if (__DEV__) {
+    warn(`inject() can only be used inside setup() or functional components.`)
+  }
 }
