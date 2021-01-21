@@ -16,10 +16,15 @@ import {
   isSet,
   isMap,
   NOOP,
-  remove
+  remove,
+  isString
 } from '@vue/shared'
 import { warn } from './warning'
-import { currentInstance, recordInstanceBoundEffect } from './component'
+import {
+  ComponentInternalInstance,
+  currentInstance,
+  recordInstanceBoundEffect
+} from './component'
 import { queuePreFlushCb, SchedulerJob } from './scheduler'
 import {
   callWithAsyncErrorHandling,
@@ -320,6 +325,20 @@ function doWatch(
       remove(instance.effects!, runner)
     }
   }
+}
+
+// this.$watch
+export function instanceWatch(
+  this: ComponentInternalInstance,
+  source: string | Function,
+  cb: WatchCallback,
+  options?: WatchOptions
+): WatchStopHandle {
+  const publicThis = this.proxy as any
+  const getter = isString(source)
+    ? () => publicThis[source]
+    : source.bind(publicThis)
+  return doWatch(getter, cb.bind(publicThis), options, this)
 }
 
 function traverse(value: unknown, seen: Set<unknown> = new Set()) {
