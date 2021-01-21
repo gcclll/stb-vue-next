@@ -32,7 +32,7 @@ export function injectHook(
         // 因为它们有可能在 effects 中被调用
         pauseTracking()
         // 在 hook 执行期间设置 currentInstance = targt
-        // 假设 hook 没有被同步的触发其他 hooks，即在一个 hook 里面同步调用
+        // 假设 hook 没有同步地触发其他 hooks，即在一个 hook 里面同步调用
         // 另一个声明周期函数？
         setCurrentInstance(target)
         const res = callWithAsyncErrorHandling(hook, target, type, args)
@@ -69,7 +69,8 @@ export const onBeforeMount = createHook(LifecycleHooks.BEFORE_MOUNT)
 export const onMounted = createHook(LifecycleHooks.MOUNTED)
 export const onBeforeUpdate = createHook(LifecycleHooks.BEFORE_UPDATE)
 export const onUpdated = createHook(LifecycleHooks.UPDATED)
-export const onUnMount = createHook(LifecycleHooks.UNMOUNTED)
+export const onBeforeUnmount = createHook(LifecycleHooks.BEFORE_UNMOUNT)
+export const onUnmount = createHook(LifecycleHooks.UNMOUNTED)
 
 export type DebuggerHook = (e: DebuggerEvent) => void
 export const onRenderTriggered = createHook<DebuggerHook>(

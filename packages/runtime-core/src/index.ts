@@ -27,6 +27,18 @@ export {
 } from '@vue/reactivity'
 export { watch, watchEffect } from './apiWatch'
 export {
+  onBeforeMount,
+  onMounted,
+  onBeforeUpdate,
+  onUpdated,
+  onBeforeUnmount,
+  onUnmount,
+  onRenderTracked,
+  onRenderTriggered,
+  onErrorCaptured
+} from './apiLifecycle'
+export { provide, inject } from './apiInject'
+export {
   nextTick,
   queueJob,
   queuePreFlushCb,
@@ -35,7 +47,6 @@ export {
   flushPostFlushCbs,
   invalidateJob
 } from './scheduler'
-export { provide, inject } from './apiInject'
 export { defineComponent } from './apiDefineComponent'
 
 // Advanced API ----------------------------------------------------------------
