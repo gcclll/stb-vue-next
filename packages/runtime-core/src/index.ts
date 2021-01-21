@@ -35,6 +35,7 @@ export {
   flushPostFlushCbs,
   invalidateJob
 } from './scheduler'
+export { provide, inject } from './apiInject'
 export { defineComponent } from './apiDefineComponent'
 
 // Advanced API ----------------------------------------------------------------
