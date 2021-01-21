@@ -159,7 +159,7 @@ function doWatch(
         `a reactive object, or an array of these types.`
     )
   }
-  // 2. TODO getter 函数，根据不同类型生成对应的 getter
+  // 2. getter 函数，根据不同类型生成对应的 getter
   let getter: () => any
   let forceTrigger = false
   // 2.1 source is ref
@@ -295,15 +295,20 @@ function doWatch(
     onTrigger,
     scheduler
   })
-  //
-  // 8. TODO runner 如何执行？
+
+  // 将 effect->runner 加入到 instance.effects 中
+  // 以致于在组件 unmount 时他们可以被 stop
+  recordInstanceBoundEffect(runner, instance)
+
+  // 8. runner 如何执行？
   if (cb) {
     if (immediate) {
       job()
     } else {
       oldValue = runner()
     }
-  } else if (false /*flush->post*/) {
+  } else if (flush === 'post') {
+    queuePostRenderEffect(runner, instance && instance.suspense)
   } else {
     runner()
   }
