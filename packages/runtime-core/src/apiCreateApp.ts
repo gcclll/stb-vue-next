@@ -12,7 +12,7 @@ import { Directive, validateDirectiveName } from './directives'
 import { RootHydrateFunction } from './hydration'
 import { RootRenderFunction } from './renderer'
 import { createVNode, cloneVNode, VNode } from './vnode'
-import { devtoolsInitApp } from './devtools'
+import { devtoolsInitApp, devtoolsUnmountApp } from './devtools'
 import { warn } from './warning'
 import { version } from '.'
 
@@ -280,7 +280,14 @@ export function createAppAPI<HostElement>(
         }
       },
       unmount() {
-        // TODO
+        if (isMounted) {
+          render(null, app._container)
+          if (__DEV__ || __FEATURE_PROD_DEVTOOLS__) {
+            devtoolsUnmountApp(app)
+          }
+        } else {
+          warn(`Cannot unmount an app that is not mounted.`)
+        }
       },
       provide(key, value) {
         // TODO
