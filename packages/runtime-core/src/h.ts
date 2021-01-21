@@ -155,19 +155,19 @@ export function h<P>(
 ): VNode
 
 // Actual implementation
-export function h(type: any, propsOrChildgen?: any, children?: any): VNode {
+export function h(type: any, propsOrChildren?: any, children?: any): VNode {
   const l = arguments.length
   if (l === 2) {
-    if (isObject(propsOrChildgen) && !isArray(propsOrChildgen)) {
+    if (isObject(propsOrChildren) && !isArray(propsOrChildren)) {
       // 没有 props 的 单节点(single vnode)
-      if (isVNode(propsOrChildgen)) {
-        return createVNode(type, null, [propsOrChildgen])
+      if (isVNode(propsOrChildren)) {
+        return createVNode(type, null, [propsOrChildren])
       }
       // 有 props 没有 children
-      return createVNode(type, propsOrChildgen)
+      return createVNode(type, propsOrChildren)
     } else {
       // omit props
-      return createVNode(type, null, propsOrChildgen)
+      return createVNode(type, null, propsOrChildren)
     }
   } else {
     // 从第三个参数开始全当做孩子节点处理
@@ -176,6 +176,6 @@ export function h(type: any, propsOrChildgen?: any, children?: any): VNode {
     } else if (l === 3 && isVNode(children)) {
       children = [children]
     }
-    return createVNode(type, propsOrChildgen, children)
+    return createVNode(type, propsOrChildren, children)
   }
 }
