@@ -1,8 +1,11 @@
+import { NO } from '@vue/shared'
 import { InjectionKey } from './apiInject'
 import { Component, ConcreteComponent, Data } from './component'
 import { ComponentOptions } from './componentOptions'
 import { ComponentPublicInstance } from './componentPublicInstance'
 import { Directive } from './directives'
+import { RootHydrateFunction } from './hydration'
+import { RootRenderFunction } from './renderer'
 
 export interface App<HostElement = any> {
   version: string
@@ -82,7 +85,35 @@ export type Plugin =
       install: PluginInstallFunction
     }
 
+export function createAppContext(): AppContext {
+  return {
+    app: null as any,
+    config: {
+      isNativeTag: NO,
+      performance: false,
+      globalProperties: {},
+      optionMergeStrategies: {},
+      isCustomElement: NO,
+      errorHandler: undefined,
+      warnHandler: undefined
+    },
+    mixins: [],
+    components: {},
+    directives: {},
+    provides: Object.create(null)
+  }
+}
+
 export type CreateAppFunction<HostElement> = (
   rootComponent: Component,
   rootProps?: Data | null
 ) => App<HostElement>
+
+let uid = 0
+
+export function createAppAPI<HostElement>(
+  render: RootRenderFunction,
+  hydrate?: RootHydrateFunction
+): CreateAppFunction<HostElement> {
+  return function createApp(rootComponent, rootProps = null) {}
+}
