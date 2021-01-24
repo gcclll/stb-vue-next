@@ -1,5 +1,5 @@
 import { CompilerOptions } from '@vue/compiler-dom'
-import { ReactiveEffect } from '@vue/reactivity'
+import { proxyRefs, ReactiveEffect, shallowReadonly } from '@vue/reactivity'
 import { isFunction, makeMap, NO } from '@vue/shared'
 import { AppConfig, AppContext } from './apiCreateApp'
 import { EmitFn, EmitsOptions, ObjectEmitsOptions } from './componentEmits'
@@ -13,7 +13,10 @@ import {
   ComponentPublicInstance,
   ComponentPublicInstanceConstructor
 } from './componentPublicInstance'
-import { currentRenderingInstance } from './componentRenderUtils'
+import {
+  currentRenderingInstance,
+  markAttrsAccessed
+} from './componentRenderUtils'
 import { SuspenseBoundary } from './components/Suspense'
 import { InternalSlots, Slots } from './componentSlots'
 import { Directive } from './directives'
@@ -392,6 +395,63 @@ const classifyRE = /(?:^|[-_])(\w)/g
 const classify = (str: string): string =>
   str.replace(classifyRE, c => c.toUpperCase()).replace(/[-_]/g, '')
 
+const attrHandlers: ProxyHandler<Data> = {
+  get: (target, key: string) => {
+    if (__DEV__) {
+      markAttrsAccessed()
+    }
+    return target[key]
+  },
+  set: () => {
+    warn(`setupContext.attrs is readonly.`)
+    return false
+  },
+  deleteProperty: () => {
+    warn(`setupContext.attrs is readonly.`)
+    return false
+  }
+}
+
+export function createSetupContext(
+  instance: ComponentInternalInstance
+): SetupContext {
+  const expose: SetupContext['expose'] = exposed => {
+    if (__DEV__ && instance.exposed) {
+      warn(`expose() should be called only once per setup().`)
+    }
+
+    // ref 类型值，通过代理实现对 value 的 get/set
+    instance.exposed = proxyRefs(exposed)
+  }
+  if (__DEV__) {
+    // We use getters in dev in case libs like test-utils overwrite instance
+    // properties (overwrites should not be done in prod)
+    // 防止覆盖属性
+
+    return Object.freeze({
+      get props() {
+        return instance.props
+      },
+      get attrs() {
+        return new Proxy(instance.attrs, attrHandlers)
+      },
+      get slots() {
+        return shallowReadonly(instance.slots)
+      },
+      get emit() {
+        return (event: string, ...args: any[]) => instance.emit(event, ...args)
+      },
+      expose
+    })
+  } else {
+    return {
+      attrs: instance.attrs,
+      slots: instance.slots,
+      emit: instance.emit,
+      expose
+    }
+  }
+}
 // record effects created during a component's setup() so that they can be
 // stopped when the component unmounts
 // 记录在组件 setup() 期间绑定了哪些 effects，方便当组件卸载的时候去停掉他们

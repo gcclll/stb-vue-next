@@ -13,6 +13,19 @@ export function setCurrentRenderingInstance(
   currentRenderingInstance = instance
 }
 
+/**
+ * dev only flag to track whether $attrs was used during render.
+ * If $attrs was used during render then the warning for failed attrs
+ * fallthrough can be suppressed.
+ * 开发是用的标识，用来跟踪 $attrs 静态属性在 render 期间是否被使用
+ * 如果被使用了，或许就不需要给出警告？啥意思???
+ */
+let accessedAttrs: boolean = false
+
+export function markAttrsAccessed() {
+  accessedAttrs = true
+}
+
 export function filterSingleRoot(
   children: VNodeArrayChildren
 ): VNode | undefined {
