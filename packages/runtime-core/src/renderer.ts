@@ -6,9 +6,17 @@ import {
 } from './components/Suspense'
 import { createHydrationFunctions, RootHydrateFunction } from './hydration'
 import { queuePostFlushCb, flushPostFlushCbs } from './scheduler'
-import { VNode, VNodeArrayChildren } from './vnode'
+import {
+  isSameVNodeType,
+  VNode,
+  VNodeArrayChildren,
+  Text,
+  Static,
+  Fragment
+} from './vnode'
 import { initFeatureFlags } from './featureFlags'
 import { createAppAPI } from './apiCreateApp'
+import { ShapeFlags } from '@vue/shared'
 
 export interface Renderer<HostElement = RendererElement> {
   render: RootRenderFunction<HostElement>
@@ -269,7 +277,37 @@ function baseCreateRenderer(
     isSVG = false,
     optimized = false
   ) => {
-    // TODO
+    // 不同类型节点，直接卸载老的🌲
+    if (n1 && !isSameVNodeType(n1, n2)) {
+      // TODO
+    }
+
+    // TODO patch bail, 进行全比较(full diff)
+
+    // 新节点处理
+    const { type, ref, shapeFlag } = n2
+    switch (type) {
+      default:
+        // ELEMENT/COMPONENT/TELEPORT/SUSPENSE
+        // 默认只支持这四种组件
+        if (shapeFlag & ShapeFlags.ELEMENT) {
+          processElement(
+            n1,
+            n2,
+            container,
+            anchor,
+            parentComponent,
+            parentSuspense,
+            isSVG,
+            optimized
+          )
+        }
+        break
+    }
+
+    if (ref != null && parentComponent) {
+      // TODO set ref
+    }
   }
   // 3. TODO processText 处理文本
   // 4. TODO processCommentNode 处理注释节点
@@ -277,7 +315,19 @@ function baseCreateRenderer(
   // 6. TODO patchStaticNode, Dev/HMR only
   // 7. TODO moveStaticNode，移动静态节点
   // 8. TODO removeStaticNode, 删除静态节点
-  // 9. TODO processElement, 处理元素
+  // 9. processElement, 处理元素
+  const processElement = (
+    n1: VNode | null,
+    n2: VNode,
+    container: RendererElement,
+    anchor: RendererNode | null,
+    parentComponent: ComponentInternalInstance | null,
+    parentSuspense: SuspenseBoundary | null,
+    isSVB: boolean,
+    optimized: boolean
+  ) => {
+    // TODO
+  }
   // 10. TODO mountElement, 加载元素
   // 11. TODO setScopeId, 设置 scope id
   // 12. TODO mountChildren, 加载孩子节点

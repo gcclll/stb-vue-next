@@ -2,6 +2,7 @@ import {
   ClassComponent,
   Component,
   ComponentInternalInstance,
+  ConcreteComponent,
   Data,
   isClassComponent
 } from './component'
@@ -37,6 +38,7 @@ import {
   SlotFlags
 } from '@vue/shared'
 import { setCompiledSlotRendering } from './helpers/renderSlot'
+import { hmrDirtyComponents } from './hmr'
 
 export const Fragment = (Symbol(__DEV__ ? 'Fragment' : undefined) as any) as {
   __isFragment: true
@@ -256,6 +258,19 @@ export function createBlock(
 
 export function isVNode(value: any): value is VNode {
   return value ? value.__v_isVNode === true : false
+}
+
+export function isSameVNodeType(n1: VNode, n2: VNode): boolean {
+  if (
+    __DEV__ &&
+    n2.shapeFlag & ShapeFlags.COMPONENT &&
+    hmrDirtyComponents.has(n2.type as ConcreteComponent)
+  ) {
+    // HMR only: if the component has been hot-updated, force a reload.
+    // 组件被热更新，强制重新加载
+    return false
+  }
+  return n1.type === n2.type && n1.key === n2.key
 }
 
 let vnodeArgsTransformer:
