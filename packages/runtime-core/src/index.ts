@@ -48,6 +48,8 @@ export {
   invalidateJob
 } from './scheduler'
 export { defineComponent } from './apiDefineComponent'
+export { defineAsyncComponent } from './apiAsyncComponent'
+export { defineProps, defineEmit, useContext } from './apiSetupHelpers'
 
 // Advanced API ----------------------------------------------------------------
 export { h } from './h'

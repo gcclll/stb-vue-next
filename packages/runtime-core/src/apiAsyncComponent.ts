@@ -65,11 +65,11 @@ export function defineAsyncComponent<
       (thisRequest = pendingRequest = loader()
         .catch(err => {
           // TODO, 组件加载异常
-          console.log('async comp load error')
+          console.log('\nasync comp load error')
         })
         .then((comp: any) => {
           // TODO, 组件正常加载
-          console.log('async comp load ok')
+          console.log('\nasync comp load ok, ', comp())
           // 1. TODO thisRequest 非当前 pendingRequest
           // 2. TODO 没有 comp 情况，非法组件
           // 3. TODO es6 export default 模块语法
@@ -87,14 +87,16 @@ export function defineAsyncComponent<
     setup() {
       const instance = currentInstance!
 
+      console.log('\n resolved comp before')
       // 异步组件已经完成了
       if (resolvedComp) {
+        console.log('\n resolved comp')
         return createInnerComp(resolvedComp!, instance)
       }
 
       const onError = (err: Error) => {
         // TODO
-        console.log('async comp load err', err.message)
+        console.log('\nasync comp load err', err.message)
       }
 
       // TODO suspense-controlled or SSR
@@ -124,6 +126,7 @@ export function defineAsyncComponent<
         })
 
       return () => {
+        console.log('loaded.value = ', loaded.value)
         if (loaded.value && resolvedComp) {
           // 组件正常加载完成
           return createInnerComp(resolvedComp, instance)
