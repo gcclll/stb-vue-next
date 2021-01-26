@@ -323,15 +323,50 @@ function baseCreateRenderer(
     anchor: RendererNode | null,
     parentComponent: ComponentInternalInstance | null,
     parentSuspense: SuspenseBoundary | null,
-    isSVB: boolean,
+    isSVG: boolean,
+    optimized: boolean
+  ) => {
+    isSVG = isSVG || (n2.type as string) === 'svg'
+    if (n1 == null) {
+      // no old
+      mountElement(
+        n2,
+        container,
+        anchor,
+        parentComponent,
+        parentSuspense,
+        isSVG,
+        optimized
+      )
+    } else {
+      patchElement(n1, n2, parentComponent, parentSuspense, isSVG, optimized)
+    }
+  }
+  // 10. mountElement, 加载元素
+  const mountElement = (
+    vnode: VNode,
+    container: RendererElement,
+    anchor: RendererNode | null,
+    parentComponent: ComponentInternalInstance | null,
+    parentSuspense: SuspenseBoundary | null,
+    isSVG: boolean,
     optimized: boolean
   ) => {
     // TODO
   }
-  // 10. TODO mountElement, 加载元素
   // 11. TODO setScopeId, 设置 scope id
   // 12. TODO mountChildren, 加载孩子节点
-  // 13. TODO patchElement
+  // 13. patchElement
+  const patchElement = (
+    n1: VNode,
+    n2: VNode,
+    parentComponent: ComponentInternalInstance | null,
+    parentSuspense: SuspenseBoundary | null,
+    isSVG: boolean,
+    optimized: boolean
+  ) => {
+    // TODO
+  }
   // 14. TODO patchBlockChildren
   // 15. TODO patchProps
   // 16. TODO processFragment
