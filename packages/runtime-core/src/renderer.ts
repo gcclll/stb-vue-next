@@ -5,9 +5,10 @@ import {
   SuspenseBoundary
 } from './components/Suspense'
 import { createHydrationFunctions, RootHydrateFunction } from './hydration'
-import { queuePostFlushCb } from './scheduler'
+import { queuePostFlushCb, flushPostFlushCbs } from './scheduler'
 import { VNode, VNodeArrayChildren } from './vnode'
 import { initFeatureFlags } from './featureFlags'
+import { createAppAPI } from './apiCreateApp'
 
 export interface Renderer<HostElement = RendererElement> {
   render: RootRenderFunction<HostElement>
@@ -255,8 +256,21 @@ function baseCreateRenderer(
     initFeatureFlags()
   }
 
-  // 1. TODO 结构 options
-  // 2. TODO patch 函数
+  // 1. 解构 options
+  const { insert: hostInsert } = options
+  // 2. patch 函数
+  const patch: PatchFn = (
+    n1,
+    n2,
+    container,
+    anchor = null,
+    parentComponent = null,
+    parentSuspense = null,
+    isSVG = false,
+    optimized = false
+  ) => {
+    // TODO
+  }
   // 3. TODO processText 处理文本
   // 4. TODO processCommentNode 处理注释节点
   // 5. TODO mountStaticNode 加载静态节点
@@ -286,8 +300,24 @@ function baseCreateRenderer(
   // 29. TODO unmountComponent
   // 30. TODO unmountChildren
   // 31. TODO getNextHostNode
-  // 32. TODO render
+  // 32. render
+  const render: RootRenderFunction = (vnode, container) => {
+    // render(h('div'), root)
+    if (vnode == null) {
+      // TODO unmount
+    } else {
+      patch(container._vnode || null, vnode, container)
+    }
+    flushPostFlushCbs()
+    container._vnode = vnode
+  }
   // 33. TODO internals object, 函数别名
   // 34. TODO createHydrationFns
-  // 35. TODO return { render, hydrate, createApp }
+  let hydrate
+  // 35. return { render, hydrate, createApp }
+  return {
+    render,
+    hydrate,
+    createApp: createAppAPI(render, hydrate)
+  }
 }
