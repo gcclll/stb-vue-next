@@ -7,6 +7,7 @@ import {
 import { createHydrationFunctions, RootHydrateFunction } from './hydration'
 import { queuePostFlushCb } from './scheduler'
 import { VNode, VNodeArrayChildren } from './vnode'
+import { initFeatureFlags } from './featureFlags'
 
 export interface Renderer<HostElement = RendererElement> {
   render: RootRenderFunction<HostElement>
@@ -250,5 +251,43 @@ function baseCreateRenderer(
   options: RendererOptions,
   createHydrationFns?: typeof createHydrationFunctions
 ) {
-  // TODO
+  if (__ESM_BUNDLER__ && !__TEST__) {
+    initFeatureFlags()
+  }
+
+  // 1. TODO 结构 options
+  // 2. TODO patch 函数
+  // 3. TODO processText 处理文本
+  // 4. TODO processCommentNode 处理注释节点
+  // 5. TODO mountStaticNode 加载静态节点
+  // 6. TODO patchStaticNode, Dev/HMR only
+  // 7. TODO moveStaticNode，移动静态节点
+  // 8. TODO removeStaticNode, 删除静态节点
+  // 9. TODO processElement, 处理元素
+  // 10. TODO mountElement, 加载元素
+  // 11. TODO setScopeId, 设置 scope id
+  // 12. TODO mountChildren, 加载孩子节点
+  // 13. TODO patchElement
+  // 14. TODO patchBlockChildren
+  // 15. TODO patchProps
+  // 16. TODO processFragment
+  // 17. TODO processComponent
+  // 18. TODO mountComponent
+  // 19. TODO updateComponent
+  // 20. TODO setupRenderEffect
+  // 21. TODO updateComponentPreRender
+  // 22. TODO patchChildren
+  // 23. TODO patchUnkeyedChildren
+  // 24. TODO patchKeyedChildren
+  // 25. TODO move
+  // 26. TODO unmount
+  // 27. TODO remove
+  // 28. TODO removeFragment
+  // 29. TODO unmountComponent
+  // 30. TODO unmountChildren
+  // 31. TODO getNextHostNode
+  // 32. TODO render
+  // 33. TODO internals object, 函数别名
+  // 34. TODO createHydrationFns
+  // 35. TODO return { render, hydrate, createApp }
 }
