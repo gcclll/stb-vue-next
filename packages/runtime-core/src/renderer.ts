@@ -4,7 +4,7 @@ import {
   queueEffectWithSuspense,
   SuspenseBoundary
 } from './components/Suspense'
-import { RootHydrateFunction } from './hydration'
+import { createHydrationFunctions, RootHydrateFunction } from './hydration'
 import { queuePostFlushCb } from './scheduler'
 import { VNode, VNodeArrayChildren } from './vnode'
 
@@ -201,3 +201,54 @@ export const enum MoveType {
 export const queuePostRenderEffect = __FEATURE_SUSPENSE__
   ? queueEffectWithSuspense
   : queuePostFlushCb
+
+/**
+ * The createRenderer function accepts two generic arguments:
+ * HostNode and HostElement, corresponding to Node and Element types in the
+ * host environment. For example, for runtime-dom, HostNode would be the DOM
+ * `Node` interface and HostElement would be the DOM `Element` interface.
+ *
+ * Custom renderers can pass in the platform specific types like this:
+ *
+ * ``` js
+ * const { render, createApp } = createRenderer<Node, Element>({
+ *   patchProp,
+ *   ...nodeOps
+ * })
+ * ```
+ */
+export function createRenderer<
+  HostNode = RendererNode,
+  HostElement = RendererElement
+>(options: RendererOptions<HostNode, HostElement>) {
+  return baseCreateRenderer<HostNode, HostElement>(options)
+}
+
+// Separate API for creating hydration-enabled renderer.
+// Hydration logic is only used when calling this function, making it
+// tree-shakable.
+export function createHydrationRenderer(
+  options: RendererOptions<Node, Element>
+) {
+  return baseCreateRenderer(options, createHydrationFunctions)
+}
+
+// overload 1: no hydration
+function baseCreateRenderer<
+  HostNode = RendererNode,
+  HostElement = RendererElement
+>(options: RendererOptions<HostNode, HostElement>): Renderer<HostElement>
+
+// overload 2: with hydration
+function baseCreateRenderer(
+  options: RendererOptions<Node, Element>,
+  createHydrationFns: typeof createHydrationFunctions
+): HydrationRenderer
+
+// implementation
+function baseCreateRenderer(
+  options: RendererOptions,
+  createHydrationFns?: typeof createHydrationFunctions
+) {
+  // TODO
+}
