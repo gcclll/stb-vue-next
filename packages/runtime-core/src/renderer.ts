@@ -294,7 +294,16 @@ function baseCreateRenderer(
   // 23. TODO patchUnkeyedChildren
   // 24. TODO patchKeyedChildren
   // 25. TODO move
-  // 26. TODO unmount
+  // 26. unmount
+  const unmount: UnmountFn = (
+    vndoe,
+    parentComponent,
+    parentSuspense,
+    doRemove = false,
+    optimized = false
+  ) => {
+    // TODO
+  }
   // 27. TODO remove
   // 28. TODO removeFragment
   // 29. TODO unmountComponent
@@ -304,10 +313,13 @@ function baseCreateRenderer(
   const render: RootRenderFunction = (vnode, container) => {
     // render(h('div'), root)
     if (vnode == null) {
-      // TODO unmount
+      if (container._vnode) {
+        unmount(container._vnode, null, null, true)
+      }
     } else {
       patch(container._vnode || null, vnode, container)
     }
+    // 执行所有 post 异步任务
     flushPostFlushCbs()
     container._vnode = vnode
   }
