@@ -64,6 +64,8 @@ export { KeepAliveProps } from './components/KeepAlive'
 export { BaseTransitionProps } from './components/BaseTransition'
 
 // Custom Renderer API ---------------------------------------------------------
+
+export { createRenderer } from './renderer'
 export { warn } from './warning'
 export {
   handleError,
