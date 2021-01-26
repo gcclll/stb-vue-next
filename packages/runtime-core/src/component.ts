@@ -1,4 +1,4 @@
-import { CompilerOptions } from '@vue/compiler-dom'
+// import { CompilerOptions } from '@vue/compiler-dom'
 import { proxyRefs, ReactiveEffect, shallowReadonly } from '@vue/reactivity'
 import { isFunction, makeMap, NO } from '@vue/shared'
 import { AppConfig, AppContext } from './apiCreateApp'
@@ -386,10 +386,10 @@ export function validateComponentName(name: string, config: AppConfig) {
 
 export let isInSSRComponentSetup = false
 
-type CompileFunction = (
-  template: string | object,
-  options?: CompilerOptions
-) => InternalRenderFunction
+// type CompileFunction = (
+//   template: string | object,
+//   options?: CompilerOptions
+// ) => InternalRenderFunction
 
 const classifyRE = /(?:^|[-_])(\w)/g
 const classify = (str: string): string =>

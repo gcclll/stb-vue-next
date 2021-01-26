@@ -20,10 +20,10 @@ export const enum TeleportMoveTypes {
   REORDER // moved in the main view
 }
 
-interface TeleportTargetElement extends Element {
-  // last teleport target
-  _lpa?: Node | null
-}
+// interface TeleportTargetElement extends Element {
+//   // last teleport target
+//   _lpa?: Node | null
+// }
 
 export const Teleport = (TeleportImpl as any) as {
   __isTeleport: true

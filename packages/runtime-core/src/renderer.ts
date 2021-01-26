@@ -9,14 +9,14 @@ import { queuePostFlushCb, flushPostFlushCbs } from './scheduler'
 import {
   isSameVNodeType,
   VNode,
-  VNodeArrayChildren,
-  Text,
-  Static,
-  Fragment
+  VNodeArrayChildren
+  // Text,
+  // Static,
+  // Fragment
 } from './vnode'
 import { initFeatureFlags } from './featureFlags'
 import { createAppAPI } from './apiCreateApp'
-import { ShapeFlags } from '@vue/shared'
+import { EMPTY_OBJ, PatchFlags, ShapeFlags } from '@vue/shared'
 
 export interface Renderer<HostElement = RendererElement> {
   render: RootRenderFunction<HostElement>
@@ -185,12 +185,12 @@ export type MountComponentFn = (
   optimized: boolean
 ) => void
 
-type ProcessTextOrCommentFn = (
-  n1: VNode | null,
-  n2: VNode,
-  container: RendererElement,
-  anchor: RendererNode | null
-) => void
+// type ProcessTextOrCommentFn = (
+//   n1: VNode | null,
+//   n2: VNode,
+//   container: RendererElement,
+//   anchor: RendererNode | null
+// ) => void
 
 export type SetupRenderEffectFn = (
   instance: ComponentInternalInstance,
@@ -237,11 +237,11 @@ export function createRenderer<
 // Separate API for creating hydration-enabled renderer.
 // Hydration logic is only used when calling this function, making it
 // tree-shakable.
-export function createHydrationRenderer(
-  options: RendererOptions<Node, Element>
-) {
-  return baseCreateRenderer(options, createHydrationFunctions)
-}
+// export function createHydrationRenderer(
+//   options: RendererOptions<Node, Element>
+// ) {
+//   return baseCreateRenderer(options, createHydrationFunctions)
+// }
 
 // overload 1: no hydration
 function baseCreateRenderer<
@@ -250,10 +250,10 @@ function baseCreateRenderer<
 >(options: RendererOptions<HostNode, HostElement>): Renderer<HostElement>
 
 // overload 2: with hydration
-function baseCreateRenderer(
-  options: RendererOptions<Node, Element>,
-  createHydrationFns: typeof createHydrationFunctions
-): HydrationRenderer
+// function baseCreateRenderer(
+//   options: RendererOptions<Node, Element>,
+//   createHydrationFns: typeof createHydrationFunctions
+// ): HydrationRenderer
 
 // implementation
 function baseCreateRenderer(
@@ -264,8 +264,9 @@ function baseCreateRenderer(
     initFeatureFlags()
   }
 
+  console.log('xxx')
   // 1. 解构 options
-  const { insert: hostInsert } = options
+  // const { insert: hostInsert } = options
   // 2. patch 函数
   const patch: PatchFn = (
     n1,
@@ -365,7 +366,33 @@ function baseCreateRenderer(
     isSVG: boolean,
     optimized: boolean
   ) => {
-    // TODO
+    // 旧的 el 替换掉新的 el ?
+    const el = (n2.el = n1.el!)
+    let { patchFlag, dynamicChildren } = n2
+    // #1426 take the old vnode's patch flag into account since user may clone a
+    // compiler-generated vnode, which de-opts to FULL_PROPS
+    patchFlag |= n1.patchFlag & PatchFlags.FULL_PROPS
+    const oldProps = n1.props || EMPTY_OBJ
+    const newProps = n2.props || EMPTY_OBJ
+
+    // TODO before update hooks
+
+    // TODO dirs, 指令处理
+
+    // TODO HRM updating
+
+    console.log({ el, patchFlag, oldProps, newProps })
+    if (patchFlag > 0) {
+    } else if (!optimized && dynamicChildren == null) {
+    }
+
+    // const areaChildrenSVG = isSVG && n2.type !== 'foreignObject'
+
+    if (dynamicChildren) {
+    } else if (!optimized) {
+    }
+
+    // TODO vnode hook or dirs 处理
   }
   // 14. TODO patchBlockChildren
   // 15. TODO patchProps
@@ -396,6 +423,7 @@ function baseCreateRenderer(
   // 31. TODO getNextHostNode
   // 32. render
   const render: RootRenderFunction = (vnode, container) => {
+    console.log(vnode, container, 'render')
     // render(h('div'), root)
     if (vnode == null) {
       if (container._vnode) {

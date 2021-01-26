@@ -22,6 +22,7 @@ export function setCurrentRenderingInstance(
  */
 let accessedAttrs: boolean = false
 
+console.log(accessedAttrs)
 export function markAttrsAccessed() {
   accessedAttrs = true
 }

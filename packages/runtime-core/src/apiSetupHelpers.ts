@@ -68,5 +68,5 @@ export function useContext(): SetupContext {
   if (__DEV__ && !i) {
     warn(`useContext() called without active instance.`)
   }
-  return i.setupContext || (i.setupContext = createSetupContext())
+  return i.setupContext || (i.setupContext = createSetupContext(i))
 }

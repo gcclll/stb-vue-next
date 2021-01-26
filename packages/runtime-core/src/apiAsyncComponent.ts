@@ -1,4 +1,4 @@
-import { isFunction, isObject } from '@vue/shared'
+import { isFunction } from '@vue/shared'
 import { ref } from '@vue/reactivity'
 import { defineComponent } from './apiDefineComponent'
 import {
@@ -9,9 +9,7 @@ import {
   currentInstance
 } from './component'
 import { ComponentPublicInstance } from './componentPublicInstance'
-import { ErrorCodes, handleError } from './errorHandling'
 import { createVNode, VNode } from './vnode'
-import { warn } from './warning'
 
 export type AsyncComponentResolveResult<T = Component> = T | { default: T } // es modules
 
@@ -50,12 +48,12 @@ export function defineAsyncComponent<
   let pendingRequest: Promise<ConcreteComponent> | null = null
   let resolvedComp: ConcreteComponent | undefined
 
-  let retries = 0 // 重试次数
-  const retry = () => {
-    retries++
-    pendingRequest = null
-    return load()
-  }
+  // let retries = 0 // 重试次数
+  // const retry = () => {
+  //   retries++
+  //   pendingRequest = null
+  //   return load()
+  // }
 
   // 2. TODO 函数封装
   const load = (): Promise<ConcreteComponent> => {
@@ -65,7 +63,7 @@ export function defineAsyncComponent<
       (thisRequest = pendingRequest = loader()
         .catch(err => {
           // TODO, 组件加载异常
-          console.log('\nasync comp load error')
+          console.log('\nasync comp load error', thisRequest)
         })
         .then((comp: any) => {
           // TODO, 组件正常加载
@@ -94,15 +92,15 @@ export function defineAsyncComponent<
         return createInnerComp(resolvedComp!, instance)
       }
 
-      const onError = (err: Error) => {
-        // TODO
-        console.log('\nasync comp load err', err.message)
-      }
+      // const onError = (err: Error) => {
+      //   // TODO
+      //   console.log('\nasync comp load err', err.message)
+      // }
 
       // TODO suspense-controlled or SSR
 
       const loaded = ref(false)
-      const error = ref()
+      // const error = ref()
       const delayed = ref(!!delay)
 
       if (delay) {
