@@ -9,14 +9,15 @@ import { queuePostFlushCb, flushPostFlushCbs } from './scheduler'
 import {
   isSameVNodeType,
   VNode,
-  VNodeArrayChildren
+  VNodeArrayChildren,
+  VNodeHook
   // Text,
   // Static,
   // Fragment
 } from './vnode'
 import { initFeatureFlags } from './featureFlags'
 import { createAppAPI } from './apiCreateApp'
-import { EMPTY_OBJ, PatchFlags, ShapeFlags } from '@vue/shared'
+import { PatchFlags, ShapeFlags } from '@vue/shared'
 
 export interface Renderer<HostElement = RendererElement> {
   render: RootRenderFunction<HostElement>
@@ -264,9 +265,12 @@ function baseCreateRenderer(
     initFeatureFlags()
   }
 
-  console.log('xxx')
   // 1. 解构 options
-  // const { insert: hostInsert } = options
+  const {
+    insert: hostInsert,
+    cloneNode: hostCloneNode,
+    createElement: hostCreateElement
+  } = options
   // 2. patch 函数
   const patch: PatchFn = (
     n1,
@@ -278,6 +282,7 @@ function baseCreateRenderer(
     isSVG = false,
     optimized = false
   ) => {
+    console.log('patching...')
     // 不同类型节点，直接卸载老的🌲
     if (n1 && !isSameVNodeType(n1, n2)) {
       // TODO
@@ -353,7 +358,39 @@ function baseCreateRenderer(
     isSVG: boolean,
     optimized: boolean
   ) => {
+    console.log('mount element...')
     // TODO
+    let el: RendererElement
+    let vnodeHook: VNodeHook | undefined | null
+    const { type, shapeFlag, patchFlag, props } = vnode
+
+    if (
+      !__DEV__ &&
+      vnode.el &&
+      hostCloneNode !== undefined &&
+      patchFlag === PatchFlags.HOISTED
+    ) {
+      // TODO
+      el = null as any
+      console.log(`mountElement if...`)
+    } else {
+      console.log(`mountElment else...`)
+      el = vnode.el = hostCreateElement(
+        vnode.type as string,
+        isSVG,
+        props && props.is
+      )
+      console.log('el = vnode.el = hostCreateElement = ', vnode.el)
+
+      // ...
+    }
+
+    // ...
+
+    // hostInsert
+    hostInsert(el, container, anchor)
+
+    // ...
   }
   // 11. TODO setScopeId, 设置 scope id
   // 12. TODO mountChildren, 加载孩子节点
@@ -367,13 +404,13 @@ function baseCreateRenderer(
     optimized: boolean
   ) => {
     // 旧的 el 替换掉新的 el ?
-    const el = (n2.el = n1.el!)
+    // const el = (n2.el = n1.el!)
     let { patchFlag, dynamicChildren } = n2
     // #1426 take the old vnode's patch flag into account since user may clone a
     // compiler-generated vnode, which de-opts to FULL_PROPS
     patchFlag |= n1.patchFlag & PatchFlags.FULL_PROPS
-    const oldProps = n1.props || EMPTY_OBJ
-    const newProps = n2.props || EMPTY_OBJ
+    // const oldProps = n1.props || EMPTY_OBJ
+    // const newProps = n2.props || EMPTY_OBJ
 
     // TODO before update hooks
 
@@ -381,7 +418,6 @@ function baseCreateRenderer(
 
     // TODO HRM updating
 
-    console.log({ el, patchFlag, oldProps, newProps })
     if (patchFlag > 0) {
     } else if (!optimized && dynamicChildren == null) {
     }
@@ -423,7 +459,7 @@ function baseCreateRenderer(
   // 31. TODO getNextHostNode
   // 32. render
   const render: RootRenderFunction = (vnode, container) => {
-    console.log(vnode, container, 'render')
+    console.log('render.......xxx')
     // render(h('div'), root)
     if (vnode == null) {
       if (container._vnode) {
