@@ -17,7 +17,8 @@ import {
 } from './vnode'
 import { initFeatureFlags } from './featureFlags'
 import { createAppAPI } from './apiCreateApp'
-import { PatchFlags, ShapeFlags } from '@vue/shared'
+import { isReservedProp, PatchFlags, ShapeFlags } from '@vue/shared'
+import { callWithAsyncErrorHandling, ErrorCodes } from './errorHandling'
 
 export interface Renderer<HostElement = RendererElement> {
   render: RootRenderFunction<HostElement>
@@ -268,6 +269,7 @@ function baseCreateRenderer(
   // 1. 解构 options
   const {
     insert: hostInsert,
+    patchProp: hostPatchProp,
     cloneNode: hostCloneNode,
     createElement: hostCreateElement
   } = options
@@ -380,9 +382,30 @@ function baseCreateRenderer(
         isSVG,
         props && props.is
       )
-      console.log('el = vnode.el = hostCreateElement = ', vnode.el)
 
-      // ...
+      if (props) {
+        for (const key in props) {
+          // vue 保留属性 ref/key/onVnodeXxx 生命周期
+          if (!isReservedProp(key)) {
+            hostPatchProp(
+              el,
+              key,
+              null,
+              props[key],
+              isSVG,
+              vnode.children as VNode[],
+              parentComponent,
+              parentSuspense,
+              unmountChildren
+            )
+          }
+        }
+
+        if ((vnodeHook = props.onVnodeBeforeMount)) {
+          // 执行 before mount hook
+          invokeVNodeHook(vnodeHook, parentComponent, vnode)
+        }
+      }
     }
 
     // ...
@@ -456,10 +479,20 @@ function baseCreateRenderer(
   // 28. TODO removeFragment
   // 29. TODO unmountComponent
   // 30. TODO unmountChildren
+  const unmountChildren: UnmountChildrenFn = (
+    children,
+    parentComponent,
+    parentSuspense,
+    doRemove = false,
+    optimized = false,
+    start = 0
+  ) => {
+    //TODO
+  }
   // 31. TODO getNextHostNode
   // 32. render
   const render: RootRenderFunction = (vnode, container) => {
-    console.log('render.......xxx')
+    console.log('render.......')
     // render(h('div'), root)
     if (vnode == null) {
       if (container._vnode) {
@@ -481,4 +514,16 @@ function baseCreateRenderer(
     hydrate,
     createApp: createAppAPI(render, hydrate)
   }
+}
+
+export function invokeVNodeHook(
+  hook: VNodeHook,
+  instance: ComponentInternalInstance | null,
+  vnode: VNode,
+  prevVNode: VNode | null = null
+) {
+  callWithAsyncErrorHandling(hook, instance, ErrorCodes.VNODE_HOOK, [
+    vnode,
+    prevVNode
+  ])
 }

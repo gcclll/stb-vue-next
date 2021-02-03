@@ -164,7 +164,6 @@ function insert(child: TestNode, parent: TestElement, ref?: TestNode | null) {
     parent.children.splice(refIndex, 0, child)
     child.parentNode = parent
   }
-  console.log(parent)
 }
 
 function remove(child: TestNode, logOp: boolean = true) {
