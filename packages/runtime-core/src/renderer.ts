@@ -271,7 +271,8 @@ function baseCreateRenderer(
     insert: hostInsert,
     patchProp: hostPatchProp,
     cloneNode: hostCloneNode,
-    createElement: hostCreateElement
+    createElement: hostCreateElement,
+    setElementText: hostSetElementText
   } = options
   // 2. patch 函数
   const patch: PatchFn = (
@@ -382,6 +383,14 @@ function baseCreateRenderer(
         isSVG,
         props && props.is
       )
+
+      // 在处理 props 之前先 mount children ，因为
+      // 有些 props 可能会依赖于 child 是否已经渲染出来
+      // 比如： `<select value>`
+      if (shapeFlag & ShapeFlags.TEXT_CHILDREN) {
+        // 文本节点处理(纯文本，插值)
+        hostSetElementText(el, vnode.children as string)
+      }
 
       if (props) {
         for (const key in props) {
