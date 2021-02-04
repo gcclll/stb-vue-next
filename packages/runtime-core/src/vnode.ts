@@ -558,6 +558,13 @@ export function normalizeVNode(child: VNodeChild): VNode {
   }
 }
 
+// 针对 template-compiled render fns 做的优化
+export function cloneIfMounted(child: VNode): VNode {
+  // child.el 如果存在的话，child 属于静态节点会被静态提升
+  // 所以需要 clone 一份出来，否则直接返回 child
+  return child.el === null ? child : cloneVNode(child)
+}
+
 export function normalizeChildren(vnode: VNode, children: unknown) {
   let type = 0
   const { shapeFlag } = vnode

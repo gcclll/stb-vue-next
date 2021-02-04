@@ -7,11 +7,13 @@ import {
 import { createHydrationFunctions, RootHydrateFunction } from './hydration'
 import { queuePostFlushCb, flushPostFlushCbs } from './scheduler'
 import {
+  cloneIfMounted,
   isSameVNodeType,
+  normalizeVNode,
   VNode,
   VNodeArrayChildren,
-  VNodeHook
-  // Text,
+  VNodeHook,
+  Text
   // Static,
   // Fragment
 } from './vnode'
@@ -187,12 +189,12 @@ export type MountComponentFn = (
   optimized: boolean
 ) => void
 
-// type ProcessTextOrCommentFn = (
-//   n1: VNode | null,
-//   n2: VNode,
-//   container: RendererElement,
-//   anchor: RendererNode | null
-// ) => void
+type ProcessTextOrCommentFn = (
+  n1: VNode | null,
+  n2: VNode,
+  container: RendererElement,
+  anchor: RendererNode | null
+) => void
 
 export type SetupRenderEffectFn = (
   instance: ComponentInternalInstance,
@@ -272,6 +274,7 @@ function baseCreateRenderer(
     patchProp: hostPatchProp,
     cloneNode: hostCloneNode,
     createElement: hostCreateElement,
+    createText: hostCreateText,
     setElementText: hostSetElementText
   } = options
   // 2. patch 函数
@@ -295,7 +298,11 @@ function baseCreateRenderer(
 
     // 新节点处理
     const { type, ref, shapeFlag } = n2
+    console.log({ type, shapeFlag })
     switch (type) {
+      case Text:
+        processText(n1, n2, container, anchor)
+        break
       default:
         // ELEMENT/COMPONENT/TELEPORT/SUSPENSE
         // 默认只支持这四种组件
@@ -318,7 +325,20 @@ function baseCreateRenderer(
       // TODO set ref
     }
   }
-  // 3. TODO processText 处理文本
+  // 3. processText 处理文本
+  const processText: ProcessTextOrCommentFn = (n1, n2, container, anchor) => {
+    console.log('process text...')
+    if (n1 == null /* old */) {
+      // 新节点，插入处理
+      hostInsert(
+        (n2.el = hostCreateText(n2.children as string)),
+        container,
+        anchor
+      )
+    } else {
+      // has old vnode, need to diff
+    }
+  }
   // 4. TODO processCommentNode 处理注释节点
   // 5. TODO mountStaticNode 加载静态节点
   // 6. TODO patchStaticNode, Dev/HMR only
@@ -335,6 +355,7 @@ function baseCreateRenderer(
     isSVG: boolean,
     optimized: boolean
   ) => {
+    console.log('process element...')
     isSVG = isSVG || (n2.type as string) === 'svg'
     if (n1 == null) {
       // no old
@@ -390,6 +411,16 @@ function baseCreateRenderer(
       if (shapeFlag & ShapeFlags.TEXT_CHILDREN) {
         // 文本节点处理(纯文本，插值)
         hostSetElementText(el, vnode.children as string)
+      } else if (shapeFlag & ShapeFlags.ARRAY_CHILDREN) {
+        mountChildren(
+          vnode.children as VNodeArrayChildren,
+          el,
+          null,
+          parentComponent,
+          parentSuspense,
+          isSVG && type !== 'foreignObject',
+          optimized || !!vnode.dynamicChildren
+        )
       }
 
       if (props) {
@@ -426,6 +457,41 @@ function baseCreateRenderer(
   }
   // 11. TODO setScopeId, 设置 scope id
   // 12. TODO mountChildren, 加载孩子节点
+  const mountChildren: MountChildrenFn = (
+    children,
+    container,
+    anchor,
+    parentComponent,
+    parentSuspense,
+    isSVG,
+    optimized,
+    start = 0
+  ) => {
+    for (let i = start; i < children.length; i++) {
+      const child = (children[i] = optimized
+        ? // 这里是检测 child.el 是不是存在，如果存在则是可服用的 vnode
+          // 即需要提升的静态节点，则需要进行 cloneVNode 之后返回
+          // 新的 vnode 对象
+          cloneIfMounted(children[i] as VNode)
+        : // 根据 child 的类型进行拆分处理
+          // 1. boolean, 创建一个空的 Comment
+          // 2. array, 使用 Fragment 将 child 包起来
+          // 3. object, 如果是对象，child.el 存在与否进行 clone
+          // 4. 其他情况，字符串或数字，当做 Text 类型处理
+          normalizeVNode(children[i]))
+      // 然后进入 patch 递归处理 children
+      patch(
+        null,
+        child,
+        container,
+        anchor,
+        parentComponent,
+        parentSuspense,
+        isSVG,
+        optimized
+      )
+    }
+  }
   // 13. patchElement
   const patchElement = (
     n1: VNode,
