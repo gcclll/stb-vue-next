@@ -288,7 +288,7 @@ function baseCreateRenderer(
     isSVG = false,
     optimized = false
   ) => {
-    console.log('patching...')
+    console.log('patch()...')
     // 不同类型节点，直接卸载老的🌲
     if (n1 && !isSameVNodeType(n1, n2)) {
       // TODO
@@ -298,7 +298,6 @@ function baseCreateRenderer(
 
     // 新节点处理
     const { type, ref, shapeFlag } = n2
-    console.log({ type, shapeFlag })
     switch (type) {
       case Text:
         processText(n1, n2, container, anchor)
@@ -327,7 +326,7 @@ function baseCreateRenderer(
   }
   // 3. processText 处理文本
   const processText: ProcessTextOrCommentFn = (n1, n2, container, anchor) => {
-    console.log('process text...')
+    console.log('processText()...')
     if (n1 == null /* old */) {
       // 新节点，插入处理
       hostInsert(
@@ -355,7 +354,7 @@ function baseCreateRenderer(
     isSVG: boolean,
     optimized: boolean
   ) => {
-    console.log('process element...')
+    console.log('processElement()...')
     isSVG = isSVG || (n2.type as string) === 'svg'
     if (n1 == null) {
       // no old
@@ -382,7 +381,7 @@ function baseCreateRenderer(
     isSVG: boolean,
     optimized: boolean
   ) => {
-    console.log('mount element...')
+    console.log('mountElement()...')
     // TODO
     let el: RendererElement
     let vnodeHook: VNodeHook | undefined | null
@@ -501,8 +500,9 @@ function baseCreateRenderer(
     isSVG: boolean,
     optimized: boolean
   ) => {
+    console.log('patchElement()...')
     // 旧的 el 替换掉新的 el ?
-    // const el = (n2.el = n1.el!)
+    const el = (n2.el = n1.el!)
     let { patchFlag, dynamicChildren } = n2
     // #1426 take the old vnode's patch flag into account since user may clone a
     // compiler-generated vnode, which de-opts to FULL_PROPS
@@ -516,14 +516,31 @@ function baseCreateRenderer(
 
     // TODO HRM updating
 
+    // patch props 处理
     if (patchFlag > 0) {
+      console.log(`patch flag > 0 ? ${patchFlag}`)
     } else if (!optimized && dynamicChildren == null) {
+      console.log({ optimized, patchFlag })
+      // 未优化的，需要 full diff
     }
 
-    // const areaChildrenSVG = isSVG && n2.type !== 'foreignObject'
+    const areChildrenSVG = isSVG && n2.type !== 'foreignObject'
 
+    // patch children
     if (dynamicChildren) {
+      console.log('dynamic children...')
     } else if (!optimized) {
+      // full diff
+      console.log('optimized null, 非可复用节点')
+      patchChildren(
+        n1,
+        n2,
+        el,
+        null,
+        parentComponent,
+        parentSuspense,
+        areChildrenSVG
+      )
     }
 
     // TODO vnode hook or dirs 处理
@@ -531,12 +548,71 @@ function baseCreateRenderer(
   // 14. TODO patchBlockChildren
   // 15. TODO patchProps
   // 16. TODO processFragment
+
   // 17. TODO processComponent
   // 18. TODO mountComponent
   // 19. TODO updateComponent
   // 20. TODO setupRenderEffect
   // 21. TODO updateComponentPreRender
-  // 22. TODO patchChildren
+  // 22. patchChildren
+  const patchChildren: PatchChildrenFn = (
+    n1,
+    n2,
+    container,
+    anchor,
+    parentComponent,
+    parentSuspense,
+    isSVG,
+    optimized = false
+  ) => {
+    console.log('patchChildren()...')
+    const c1 = n1 && n1.children
+    const prevShapeFlag = n1 ? n1.shapeFlag : 0
+    const c2 = n2.children
+
+    const { patchFlag, shapeFlag } = n2
+    // fast path
+    if (patchFlag > 0) {
+      console.log(`patchChildren, patchFlag > 0 ? ${patchFlag} ...`)
+    }
+
+    // children 有三种可能： text, array, 或没有 children
+    if (shapeFlag & ShapeFlags.TEXT_CHILDREN) {
+      console.log('patchChildren, old 是 text children...')
+    } else {
+      console.log('patchChildren, old 非 text children')
+      if (prevShapeFlag & ShapeFlags.ARRAY_CHILDREN) {
+        console.log(
+          'patchChildren, old 非 text children, new 是 array children...'
+        )
+      } else {
+        console.log(
+          'patchChildren, old 非 text children, new 非 array children...'
+        )
+        // prev children was text or null
+        // new children is array or null
+        // 老的 children 是 text，新的又是数组情况
+        if (prevShapeFlag & ShapeFlags.TEXT_CHILDREN) {
+          // 先清空？
+          hostSetElementText(container, '')
+        }
+        // 然后直接重新加载新的 array children -> c2
+        // old children 是 array
+        if (shapeFlag & ShapeFlags.ARRAY_CHILDREN) {
+          mountChildren(
+            c2 as VNodeArrayChildren,
+            container,
+            anchor,
+            parentComponent,
+            parentSuspense,
+            isSVG,
+            optimized
+          )
+        }
+      }
+    }
+  }
+
   // 23. TODO patchUnkeyedChildren
   // 24. TODO patchKeyedChildren
   // 25. TODO move
@@ -567,7 +643,7 @@ function baseCreateRenderer(
   // 31. TODO getNextHostNode
   // 32. render
   const render: RootRenderFunction = (vnode, container) => {
-    console.log('render.......')
+    console.log('render()...')
     // render(h('div'), root)
     if (vnode == null) {
       if (container._vnode) {
