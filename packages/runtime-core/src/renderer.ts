@@ -13,9 +13,9 @@ import {
   VNode,
   VNodeArrayChildren,
   VNodeHook,
-  Text
+  Text,
   // Static,
-  // Fragment
+  Fragment
 } from './vnode'
 import { initFeatureFlags } from './featureFlags'
 import { createAppAPI } from './apiCreateApp'
@@ -271,6 +271,7 @@ function baseCreateRenderer(
   // 1. 解构 options
   const {
     insert: hostInsert,
+    remove: hostRemove,
     patchProp: hostPatchProp,
     cloneNode: hostCloneNode,
     createElement: hostCreateElement,
@@ -578,7 +579,15 @@ function baseCreateRenderer(
 
     // children 有三种可能： text, array, 或没有 children
     if (shapeFlag & ShapeFlags.TEXT_CHILDREN) {
-      console.log('patchChildren, old 是 text children...')
+      console.log('patchChildren, new text...')
+      // text children fast path
+      if (prevShapeFlag & ShapeFlags.ARRAY_CHILDREN) {
+        unmountChildren(c1 as VNode[], parentComponent, parentSuspense)
+      }
+
+      if (c2 !== c1) {
+        hostSetElementText(container, c2 as string)
+      }
     } else {
       console.log('patchChildren, old 非 text children')
       if (prevShapeFlag & ShapeFlags.ARRAY_CHILDREN) {
@@ -618,15 +627,77 @@ function baseCreateRenderer(
   // 25. TODO move
   // 26. unmount
   const unmount: UnmountFn = (
-    vndoe,
+    vnode,
     parentComponent,
     parentSuspense,
     doRemove = false,
     optimized = false
   ) => {
-    // TODO
+    const {
+      type,
+      props,
+      ref,
+      children,
+      dynamicChildren,
+      shapeFlag,
+      patchFlag,
+      dirs
+    } = vnode
+
+    // TODO unset ref
+
+    // TODO keep-alive
+
+    // TODO 执行 onVnodeBeforeUnmount hook
+
+    if (shapeFlag & ShapeFlags.COMPONENT) {
+      // TODO unmount component
+    } else {
+      // TODO SUSPENSE
+
+      // TODO should invoke dirs
+
+      if (false /* dyanmic children */) {
+        // TODO
+      } else if (
+        (type === Fragment &&
+          (patchFlag & PatchFlags.KEYED_FRAGMENT ||
+            patchFlag & PatchFlags.UNKEYED_FRAGMENT)) ||
+        (!optimized && shapeFlag & ShapeFlags.ARRAY_CHILDREN)
+      ) {
+        unmountChildren(children as VNode[], parentComponent, parentSuspense)
+      }
+
+      // TODO TELEPORT
+
+      if (doRemove) {
+        remove(vnode)
+      }
+    }
+
+    // TODO 执行 onVnodeUnmounted hook
   }
-  // 27. TODO remove
+  // 27. remove
+  const remove: RemoveFn = vnode => {
+    const { type, el, anchor, transition } = vnode
+    // TODO Fragment
+
+    // TODO Static
+
+    const performRemove = () => {
+      // 将 el 从它的 parenNode.children 中删除
+      hostRemove(el!)
+      if (transition && !transition.persisted && transition.afterLeave) {
+        transition.afterLeave()
+      }
+    }
+
+    if (false /* ELEMENT */) {
+      // TODO
+    } else {
+      performRemove()
+    }
+  }
   // 28. TODO removeFragment
   // 29. TODO unmountComponent
   // 30. TODO unmountChildren
@@ -638,7 +709,9 @@ function baseCreateRenderer(
     optimized = false,
     start = 0
   ) => {
-    //TODO
+    for (let i = start; i < children.length; i++) {
+      unmount(children[i], parentComponent, parentSuspense, doRemove, optimized)
+    }
   }
   // 31. TODO getNextHostNode
   // 32. render
