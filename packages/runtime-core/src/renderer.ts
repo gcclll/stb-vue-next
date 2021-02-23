@@ -589,15 +589,22 @@ function baseCreateRenderer(
         hostSetElementText(container, c2 as string)
       }
     } else {
-      console.log('patchChildren, old 非 text children')
+      console.log('patchChildren, new not text...')
       if (prevShapeFlag & ShapeFlags.ARRAY_CHILDREN) {
-        console.log(
-          'patchChildren, old 非 text children, new 是 array children...'
-        )
+        if (shapeFlag & ShapeFlags.ARRAY_CHILDREN) {
+          console.log('patchChildren, new array, old array...')
+          // TODO patchKeyedChildren
+        } else {
+          // new null, old array 直接卸载 old
+          unmountChildren(
+            c1 as VNode[],
+            parentComponent,
+            parentSuspense,
+            true /* doRemove */
+          )
+        }
       } else {
-        console.log(
-          'patchChildren, old 非 text children, new 非 array children...'
-        )
+        console.log('patchChildren, old array...')
         // prev children was text or null
         // new children is array or null
         // 老的 children 是 text，新的又是数组情况
