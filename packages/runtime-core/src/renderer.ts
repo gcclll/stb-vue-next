@@ -290,7 +290,6 @@ function baseCreateRenderer(
     isSVG = false,
     optimized = false
   ) => {
-    console.log('patch()...')
     // 不同类型节点，直接卸载老的🌲
     if (n1 && !isSameVNodeType(n1, n2)) {
       // 去下一个兄弟节点
@@ -331,7 +330,6 @@ function baseCreateRenderer(
   }
   // 3. processText 处理文本
   const processText: ProcessTextOrCommentFn = (n1, n2, container, anchor) => {
-    console.log('processText()...')
     if (n1 == null /* old */) {
       // 新节点，插入处理
       hostInsert(
@@ -359,7 +357,6 @@ function baseCreateRenderer(
     isSVG: boolean,
     optimized: boolean
   ) => {
-    console.log('processElement()...')
     isSVG = isSVG || (n2.type as string) === 'svg'
     if (n1 == null) {
       // no old
@@ -386,7 +383,6 @@ function baseCreateRenderer(
     isSVG: boolean,
     optimized: boolean
   ) => {
-    console.log('mountElement()...')
     // TODO
     let el: RendererElement
     let vnodeHook: VNodeHook | undefined | null
@@ -400,9 +396,7 @@ function baseCreateRenderer(
     ) {
       // TODO
       el = null as any
-      console.log(`mountElement if...`)
     } else {
-      console.log(`mountElment else...`)
       el = vnode.el = hostCreateElement(
         vnode.type as string,
         isSVG,
@@ -505,7 +499,6 @@ function baseCreateRenderer(
     isSVG: boolean,
     optimized: boolean
   ) => {
-    console.log('patchElement()...')
     // 旧的 el 替换掉新的 el ?
     const el = (n2.el = n1.el!)
     let { patchFlag, dynamicChildren } = n2
@@ -523,9 +516,7 @@ function baseCreateRenderer(
 
     // patch props 处理
     if (patchFlag > 0) {
-      console.log(`patch flag > 0 ? ${patchFlag}`)
     } else if (!optimized && dynamicChildren == null) {
-      console.log({ optimized, patchFlag })
       // 未优化的，需要 full diff
     }
 
@@ -533,10 +524,8 @@ function baseCreateRenderer(
 
     // patch children
     if (dynamicChildren) {
-      console.log('dynamic children...')
     } else if (!optimized) {
       // full diff
-      console.log('optimized null, 非可复用节点')
       patchChildren(
         n1,
         n2,
@@ -570,7 +559,6 @@ function baseCreateRenderer(
     isSVG,
     optimized = false
   ) => {
-    console.log('patchChildren()...')
     const c1 = n1 && n1.children
     const prevShapeFlag = n1 ? n1.shapeFlag : 0
     const c2 = n2.children
@@ -578,12 +566,10 @@ function baseCreateRenderer(
     const { patchFlag, shapeFlag } = n2
     // fast path
     if (patchFlag > 0) {
-      console.log(`patchChildren, patchFlag > 0 ? ${patchFlag} ...`)
     }
 
     // children 有三种可能： text, array, 或没有 children
     if (shapeFlag & ShapeFlags.TEXT_CHILDREN) {
-      console.log('patchChildren, new text...')
       // text children fast path
       if (prevShapeFlag & ShapeFlags.ARRAY_CHILDREN) {
         unmountChildren(c1 as VNode[], parentComponent, parentSuspense)
@@ -593,10 +579,8 @@ function baseCreateRenderer(
         hostSetElementText(container, c2 as string)
       }
     } else {
-      console.log('patchChildren, new not text...')
       if (prevShapeFlag & ShapeFlags.ARRAY_CHILDREN) {
         if (shapeFlag & ShapeFlags.ARRAY_CHILDREN) {
-          console.log('patchChildren, new array, old array...')
           patchKeyedChildren(
             c1 as VNode[],
             c2 as VNodeArrayChildren,
@@ -609,7 +593,6 @@ function baseCreateRenderer(
           )
         } else {
           // new null, old array 直接卸载 old
-          console.log('patchChildren, new null, old array...')
           unmountChildren(
             c1 as VNode[],
             parentComponent,
@@ -618,7 +601,6 @@ function baseCreateRenderer(
           )
         }
       } else {
-        console.log('patchChildren, old text | null...')
         // prev children was text or null
         // new children is array or null
         // 老的 children 是 text，新的又是数组情况
@@ -629,7 +611,6 @@ function baseCreateRenderer(
         // 然后直接重新加载新的 array children -> c2
         // old children 是 array
         if (shapeFlag & ShapeFlags.ARRAY_CHILDREN) {
-          console.log('patchChildren, new array...')
           mountChildren(
             c2 as VNodeArrayChildren,
             container,
@@ -656,6 +637,7 @@ function baseCreateRenderer(
     isSVG: boolean,
     optimized: boolean
   ) => {
+    console.log('patchKeyedChildren...')
     let i = 0
     const l2 = c2.length
     let e1 = c1.length - 1 // 上一个结束索引
@@ -666,6 +648,7 @@ function baseCreateRenderer(
     // (a b) d e
     // 这里结束之后 i 就会定位到第一个不同类型的位置，即 2
     while (i <= e1 && i <= e2) {
+      console.log('while 1, sync from start...')
       const n1 = c1[i]
       const n2 = (c2[i] = optimized // 静态节点
         ? cloneIfMounted(c2[i] as VNode)
@@ -694,6 +677,7 @@ function baseCreateRenderer(
     // d e (b c)
     // 这里结束之后，后面相同的节点就被处理掉了，此时 e1 = 0, e2 = 1
     while (i <= e1 && i <= e2) {
+      console.log('while 2, sync from end...')
       const n1 = c1[e1]
       const n2 = (c2[e2] = optimized
         ? cloneIfMounted(c2[e2] as VNode)
@@ -724,6 +708,7 @@ function baseCreateRenderer(
     // c (a b)
     // i = 0, e1 = -1, e2 = 0
     if (i > e1) {
+      console.log('patch keyed 新增 ...')
       if (i <= e2) {
         const nextPos = e2 + 1
         const anchor = nextPos < l2 ? (c2[nextPos] as VNode).el : parentAnchor
@@ -916,7 +901,6 @@ function baseCreateRenderer(
     moveType,
     parentSuspense = null
   ) => {
-    console.log('move...')
     const { el } = vnode
     // TODO COMPONENT
     // TODO SUSPENSE
@@ -1028,7 +1012,6 @@ function baseCreateRenderer(
   }
   // 32. render
   const render: RootRenderFunction = (vnode, container) => {
-    console.log('render()...')
     // render(h('div'), root)
     if (vnode == null) {
       if (container._vnode) {
