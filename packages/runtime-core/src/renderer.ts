@@ -863,6 +863,8 @@ function baseCreateRenderer(
         : EMPTY_ARR
       j = increasingNewIndexSequence.length - 1
 
+      console.log({ toBePatched })
+      moved && console.log('最长增长序列: ' + increasingNewIndexSequence)
       for (i = toBePatched - 1; i >= 0; i--) {
         const nextIndex = s2 + i
         const nextChild = c2[nextIndex] as VNode
@@ -881,6 +883,14 @@ function baseCreateRenderer(
             isSVG
           )
         } else if (moved) {
+          console.log({
+            val: increasingNewIndexSequence[j],
+            i,
+            j,
+            next: nextChild.children,
+            anchor: anchor ? anchor.children[0].text : null,
+            toBePatched
+          })
           // move if:
           // There is no stable subsequence (e.g. a reverse)
           // OR current node is not among the stable sequence
@@ -1052,6 +1062,7 @@ function getSequence(arr: number[]): number[] {
   const p = arr.slice()
   const result = [0]
   let i, j, u, v, c
+  console.log({ arr })
   const len = arr.length
   for (i = 0; i < len; i++) {
     const arrI = arr[i]
@@ -1080,6 +1091,7 @@ function getSequence(arr: number[]): number[] {
       }
     }
   }
+  console.log({ result })
   u = result.length
   v = result[u - 1]
   while (u-- > 0) {
