@@ -566,6 +566,33 @@ function baseCreateRenderer(
     const { patchFlag, shapeFlag } = n2
     // fast path
     if (patchFlag > 0) {
+      if (patchFlag & PatchFlags.KEYED_FRAGMENT) {
+        // this could be either fully-keyed or mixed (some keyed some not)
+        // presence of patchFlag means children are guaranteed to be arrays
+        patchKeyedChildren(
+          c1 as VNode[],
+          c2 as VNodeArrayChildren,
+          container,
+          anchor,
+          parentComponent,
+          parentSuspense,
+          isSVG,
+          optimized
+        )
+        return
+      } else if (patchFlag & PatchFlags.UNKEYED_FRAGMENT) {
+        patchUnkeyedChildren(
+          c1 as VNode[],
+          c2 as VNodeArrayChildren,
+          container,
+          anchor,
+          parentComponent,
+          parentSuspense,
+          isSVG,
+          optimized
+        )
+        return
+      }
     }
 
     // children 有三种可能： text, array, 或没有 children
@@ -625,7 +652,63 @@ function baseCreateRenderer(
     }
   }
 
-  // 23. TODO patchUnkeyedChildren
+  // 23. patchUnkeyedChildren
+  const patchUnkeyedChildren = (
+    c1: VNode[],
+    c2: VNodeArrayChildren,
+    container: RendererElement,
+    anchor: RendererNode | null,
+    parentComponent: ComponentInternalInstance | null,
+    parentSuspense: SuspenseBoundary | null,
+    isSVG: boolean,
+    optimized: boolean
+  ) => {
+    c1 = c1 || EMPTY_ARR
+    c2 = c2 || EMPTY_ARR
+    const oldLength = c1.length
+    const newLength = c2.length
+    const commonLength = Math.min(oldLength, newLength)
+    let i
+    for (i = 0; i < commonLength; i++) {
+      const nextChild = (c2[i] = optimized
+        ? cloneIfMounted(c2[i] as VNode)
+        : normalizeVNode(c2[i]))
+      patch(
+        c1[i],
+        nextChild,
+        container,
+        null,
+        parentComponent,
+        parentSuspense,
+        isSVG,
+        optimized
+      )
+    }
+
+    if (oldLength > newLength) {
+      // remove old
+      unmountChildren(
+        c1,
+        parentComponent,
+        parentSuspense,
+        true,
+        false,
+        commonLength
+      )
+    } else {
+      // mount new
+      mountChildren(
+        c2,
+        container,
+        anchor,
+        parentComponent,
+        parentSuspense,
+        isSVG,
+        optimized,
+        commonLength
+      )
+    }
+  }
   // 24. 可能所有都是 keyed 也可能部分
   const patchKeyedChildren = (
     c1: VNode[],
@@ -637,7 +720,6 @@ function baseCreateRenderer(
     isSVG: boolean,
     optimized: boolean
   ) => {
-    console.log('patchKeyedChildren...')
     let i = 0
     const l2 = c2.length
     let e1 = c1.length - 1 // 上一个结束索引
@@ -648,7 +730,6 @@ function baseCreateRenderer(
     // (a b) d e
     // 这里结束之后 i 就会定位到第一个不同类型的位置，即 2
     while (i <= e1 && i <= e2) {
-      console.log('while 1, sync from start...')
       const n1 = c1[i]
       const n2 = (c2[i] = optimized // 静态节点
         ? cloneIfMounted(c2[i] as VNode)
@@ -677,7 +758,6 @@ function baseCreateRenderer(
     // d e (b c)
     // 这里结束之后，后面相同的节点就被处理掉了，此时 e1 = 0, e2 = 1
     while (i <= e1 && i <= e2) {
-      console.log('while 2, sync from end...')
       const n1 = c1[e1]
       const n2 = (c2[e2] = optimized
         ? cloneIfMounted(c2[e2] as VNode)
@@ -708,7 +788,6 @@ function baseCreateRenderer(
     // c (a b)
     // i = 0, e1 = -1, e2 = 0
     if (i > e1) {
-      console.log('patch keyed 新增 ...')
       if (i <= e2) {
         const nextPos = e2 + 1
         const anchor = nextPos < l2 ? (c2[nextPos] as VNode).el : parentAnchor
@@ -863,8 +942,6 @@ function baseCreateRenderer(
         : EMPTY_ARR
       j = increasingNewIndexSequence.length - 1
 
-      console.log({ toBePatched })
-      moved && console.log('最长增长序列: ' + increasingNewIndexSequence)
       for (i = toBePatched - 1; i >= 0; i--) {
         const nextIndex = s2 + i
         const nextChild = c2[nextIndex] as VNode
@@ -883,14 +960,6 @@ function baseCreateRenderer(
             isSVG
           )
         } else if (moved) {
-          console.log({
-            val: increasingNewIndexSequence[j],
-            i,
-            j,
-            next: nextChild.children,
-            anchor: anchor ? anchor.children[0].text : null,
-            toBePatched
-          })
           // move if:
           // There is no stable subsequence (e.g. a reverse)
           // OR current node is not among the stable sequence
@@ -921,7 +990,6 @@ function baseCreateRenderer(
       // TODO
     } else {
       // 目前只实现普通元素的逻辑
-      console.log('move 交换...')
       hostInsert(el!, container, anchor)
     }
   }
@@ -1062,7 +1130,6 @@ function getSequence(arr: number[]): number[] {
   const p = arr.slice()
   const result = [0]
   let i, j, u, v, c
-  console.log({ arr })
   const len = arr.length
   for (i = 0; i < len; i++) {
     const arrI = arr[i]
@@ -1091,7 +1158,6 @@ function getSequence(arr: number[]): number[] {
       }
     }
   }
-  console.log({ result })
   u = result.length
   v = result[u - 1]
   while (u-- > 0) {
