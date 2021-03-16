@@ -1,8 +1,21 @@
 // import { CompilerOptions } from '@vue/compiler-dom'
 import { proxyRefs, ReactiveEffect, shallowReadonly } from '@vue/reactivity'
-import { isFunction, makeMap, NO } from '@vue/shared'
-import { AppConfig, AppContext } from './apiCreateApp'
-import { EmitFn, EmitsOptions, ObjectEmitsOptions } from './componentEmits'
+import {
+  NOOP,
+  ShapeFlags,
+  isFunction,
+  makeMap,
+  NO,
+  EMPTY_OBJ
+} from '@vue/shared'
+import { AppConfig, AppContext, createAppContext } from './apiCreateApp'
+import { CompilerOptions } from '@vue/compiler-core'
+import {
+  emit,
+  EmitFn,
+  EmitsOptions,
+  ObjectEmitsOptions
+} from './componentEmits'
 import {
   ComponentOptions,
   ComputedOptions,
@@ -11,7 +24,10 @@ import {
 import { ComponentPropsOptions, NormalizedPropsOptions } from './componentProps'
 import {
   ComponentPublicInstance,
-  ComponentPublicInstanceConstructor
+  ComponentPublicInstanceConstructor,
+  PublicInstanceProxyHandlers,
+  createRenderContext,
+  RuntimeCompiledPublicInstanceProxyHandlers
 } from './componentPublicInstance'
 import {
   currentRenderingInstance,
@@ -363,6 +379,98 @@ export interface ComponentInternalInstance {
   [LifecycleHooks.ERROR_CAPTURED]: LifecycleHook
 }
 
+const emptyAppContext = createAppContext()
+
+let uid = 0
+
+export function createComponentInstance(
+  vnode: VNode,
+  parent: ComponentInternalInstance | null,
+  suspense: SuspenseBoundary | null
+) {
+  const type = vnode.type as ConcreteComponent
+  // inherit parent app context - or - if root, adopt from root vnode
+  const appContext =
+    (parent ? parent.appContext : vnode.appContext) || emptyAppContext
+
+  const instance: ComponentInternalInstance = {
+    uid: uid++,
+    vnode,
+    type,
+    parent,
+    appContext,
+    root: null!, // to be immediately set
+    next: null,
+    subTree: null!, // will be set synchronously right after creation
+    update: null!, // will be set synchronously right after creation
+    render: null,
+    proxy: null,
+    exposed: null,
+    withProxy: null,
+    effects: null,
+    provides: parent ? parent.provides : Object.create(appContext.provides),
+    accessCache: null!,
+    renderCache: [],
+
+    // local resovled assets
+    components: null,
+    directives: null,
+
+    // TODO resolved props and emits options
+    propsOptions: {} as any, // normalizePropsOptions(type, appContext),
+    emitsOptions: {} as any, // normalizeEmitsOptions(type, appContext),
+
+    // emit
+    emit: null as any, // to be set immediately
+    emitted: null,
+
+    // state
+    ctx: EMPTY_OBJ,
+    data: EMPTY_OBJ,
+    props: EMPTY_OBJ,
+    attrs: EMPTY_OBJ,
+    slots: EMPTY_OBJ,
+    refs: EMPTY_OBJ,
+    setupState: EMPTY_OBJ,
+    setupContext: null,
+
+    // suspense related
+    suspense,
+    suspenseId: suspense ? suspense.pendingId : 0,
+    asyncDep: null,
+    asyncResolved: false,
+
+    // lifecycle hooks
+    // not using enums here because it results in computed properties
+    isMounted: false,
+    isUnmounted: false,
+    isDeactivated: false,
+    bc: null,
+    c: null,
+    bm: null,
+    m: null,
+    bu: null,
+    u: null,
+    um: null,
+    bum: null,
+    da: null,
+    a: null,
+    rtg: null,
+    rtc: null,
+    ec: null
+  }
+
+  if (__DEV__) {
+    instance.ctx = createRenderContext(instance)
+  } else {
+    instance.ctx = { _: instance }
+  }
+  instance.root = parent ? parent.root : instance
+  instance.emit = emit.bind(null, instance)
+
+  return instance
+}
+
 export let currentInstance: ComponentInternalInstance | null = null
 
 export const getCurrentInstance: () => ComponentInternalInstance | null = () =>
@@ -386,14 +494,94 @@ export function validateComponentName(name: string, config: AppConfig) {
 
 export let isInSSRComponentSetup = false
 
-// type CompileFunction = (
-//   template: string | object,
-//   options?: CompilerOptions
-// ) => InternalRenderFunction
+export function setupComponent(
+  instance: ComponentInternalInstance,
+  isSSR = false
+) {
+  isInSSRComponentSetup = isSSR
 
-const classifyRE = /(?:^|[-_])(\w)/g
-const classify = (str: string): string =>
-  str.replace(classifyRE, c => c.toUpperCase()).replace(/[-_]/g, '')
+  const { shapeFlag } = instance.vnode
+  const isStateful = shapeFlag & ShapeFlags.STATEFUL_COMPONENT
+  // TODO init props & slots
+
+  console.log('component stateful ? ' + isStateful)
+  const setupResult = isStateful
+    ? setupStatefulComponent(instance, isSSR)
+    : undefined
+  isInSSRComponentSetup = false
+  return setupResult
+}
+
+function setupStatefulComponent(
+  instance: ComponentInternalInstance,
+  isSSR: boolean
+) {
+  const Component = instance.type as ComponentOptions
+
+  // 0. create render proxy property access cache
+  instance.accessCache = Object.create(null)
+
+  // 1. create public instance / render proxy
+  // also mark it raw so it's never observed
+  instance.proxy = new Proxy(instance.ctx, PublicInstanceProxyHandlers)
+
+  console.log('call setup')
+  // 2. call setup()
+  const { setup } = Component
+  if (setup) {
+    // TODO
+  } else {
+    console.log('no setup')
+    finishComponentSetup(instance, isSSR)
+  }
+}
+
+type CompileFunction = (
+  template: string | object,
+  options?: CompilerOptions
+) => InternalRenderFunction
+
+let compile: CompileFunction | undefined
+
+function finishComponentSetup(
+  instance: ComponentInternalInstance,
+  isSSR: boolean
+) {
+  const Component = instance.type as ComponentOptions
+
+  // template / render function normalization
+  if (false /* node + ssr */) {
+    // TODO
+  } else if (!instance.render) {
+    // 没有 render 函数？
+    if (compile && Component.template && !Component.render) {
+      // 有 template 无 render ? 将模板编译成 render 函数
+      Component.render = compile(Component.template, {
+        isCustomElement: instance.appContext.config.isCustomElement,
+        delimiters: Component.delimiters
+      })
+    }
+
+    instance.render = (Component.render || NOOP) as InternalRenderFunction
+
+    if (instance.render._rc) {
+      instance.withProxy = new Proxy(
+        instance.ctx,
+        RuntimeCompiledPublicInstanceProxyHandlers
+      )
+    }
+  }
+
+  // TODO 兼容 2.x options api
+
+  if (__DEV__ && !Component.render && instance.render === NOOP) {
+    if (!compile && Component.template) {
+      // warn ...
+    } else {
+      // warn 没有 template 或 render 函数
+    }
+  }
+}
 
 const attrHandlers: ProxyHandler<Data> = {
   get: (target, key: string) => {
@@ -463,6 +651,10 @@ export function recordInstanceBoundEffect(
     ;(instance.effects || (instance.effects = [])).push(effect)
   }
 }
+
+const classifyRE = /(?:^|[-_])(\w)/g
+const classify = (str: string): string =>
+  str.replace(classifyRE, c => c.toUpperCase()).replace(/[-_]/g, '')
 
 export function getComponentName(
   Component: ConcreteComponent

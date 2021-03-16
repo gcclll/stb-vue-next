@@ -1,4 +1,5 @@
 import { ComputedGetter, WritableComputedOptions } from '@vue/reactivity'
+import { hasOwn } from '@vue/shared'
 import { WatchCallback, WatchOptions } from './apiWatch'
 import {
   Component,
@@ -428,3 +429,34 @@ function createDuplicateChecker() {
 type DataFn = (vm: ComponentPublicInstance) => any
 
 export let isInBeforeCreate = false
+
+export function resolveMergedOptions(
+  instance: ComponentInternalInstance
+): ComponentOptions {
+  const raw = instance.type as ComponentOptions
+  const { __merged, mixins, extends: extendsOptions } = raw
+  if (__merged) return __merged
+  const globalMixins = instance.appContext.mixins
+  if (!globalMixins.length && !mixins && !extendsOptions) return raw
+  const options = {}
+  globalMixins.forEach(m => mergeOptions(options, m, instance))
+  mergeOptions(options, raw, instance)
+  return (raw.__merged = options)
+}
+
+function mergeOptions(to: any, from: any, instance: ComponentInternalInstance) {
+  const strats = instance.appContext.config.optionMergeStrategies
+  const { mixins, extends: extendsOptions } = from
+
+  extendsOptions && mergeOptions(to, extendsOptions, instance)
+  mixins &&
+    mixins.forEach((m: ComponentOptionsMixin) => mergeOptions(to, m, instance))
+
+  for (const key in from) {
+    if (strats && hasOwn(strats, key)) {
+      to[key] = strats[key](to[key], from[key], instance.proxy, key)
+    } else {
+      to[key] = from[key]
+    }
+  }
+}

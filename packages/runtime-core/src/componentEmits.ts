@@ -1,4 +1,5 @@
 import { UnionToIntersection } from './helpers/typeUtils'
+import { ComponentInternalInstance } from './component'
 
 export type ObjectEmitsOptions = Record<
   string,
@@ -20,3 +21,9 @@ export type EmitFn<
             : (event: key, ...args: any[]) => void
         }[Event]
       >
+
+export function emit(
+  instance: ComponentInternalInstance,
+  event: string,
+  ...rawArgs: any[]
+) {}

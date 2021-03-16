@@ -1,11 +1,15 @@
 import { CreateAppFunction } from './apiCreateApp'
-import { ComponentInternalInstance } from './component'
+import {
+  ComponentInternalInstance,
+  setupComponent,
+  createComponentInstance
+} from './component'
 import {
   queueEffectWithSuspense,
   SuspenseBoundary
 } from './components/Suspense'
 import { createHydrationFunctions, RootHydrateFunction } from './hydration'
-import { queuePostFlushCb, flushPostFlushCbs } from './scheduler'
+import { queuePostFlushCb, flushPostFlushCbs, queueJob } from './scheduler'
 import {
   cloneIfMounted,
   isSameVNodeType,
@@ -20,6 +24,7 @@ import {
 import { initFeatureFlags } from './featureFlags'
 import { createAppAPI } from './apiCreateApp'
 import { isReservedProp, PatchFlags, ShapeFlags, EMPTY_ARR } from '@vue/shared'
+import { effect } from '@vue/reactivity'
 import { callWithAsyncErrorHandling, ErrorCodes } from './errorHandling'
 
 export interface Renderer<HostElement = RendererElement> {
@@ -212,6 +217,12 @@ export const enum MoveType {
   REORDER
 }
 
+const prodEffectOptions = {
+  scheduler: queueJob,
+  // #1801, #2043 component render effects should allow recursive updates
+  allowRecurse: true
+}
+
 export const queuePostRenderEffect = __FEATURE_SUSPENSE__
   ? queueEffectWithSuspense
   : queuePostFlushCb
@@ -311,6 +322,17 @@ function baseCreateRenderer(
         // 默认只支持这四种组件
         if (shapeFlag & ShapeFlags.ELEMENT) {
           processElement(
+            n1,
+            n2,
+            container,
+            anchor,
+            parentComponent,
+            parentSuspense,
+            isSVG,
+            optimized
+          )
+        } else if (shapeFlag & ShapeFlags.COMPONENT) {
+          processComponent(
             n1,
             n2,
             container,
@@ -543,10 +565,86 @@ function baseCreateRenderer(
   // 15. TODO patchProps
   // 16. TODO processFragment
 
-  // 17. TODO processComponent
-  // 18. TODO mountComponent
+  // 17. processComponent
+  const processComponent = (
+    n1: VNode | null,
+    n2: VNode,
+    container: RendererElement,
+    anchor: RendererNode | null,
+    parentComponent: ComponentInternalInstance | null,
+    parentSuspense: SuspenseBoundary | null,
+    isSVG: boolean,
+    optimized: boolean
+  ) => {
+    if (n1 == null) {
+      // mount
+      if (false /* keep alive */) {
+        // TODO
+      } else {
+        mountComponent(
+          n2,
+          container,
+          anchor,
+          parentComponent,
+          parentSuspense,
+          isSVG,
+          optimized
+        )
+      }
+    } else {
+      // TODO update
+    }
+  }
+  // 18. mountComponent
+  const mountComponent: MountComponentFn = (
+    initialVNode,
+    container,
+    anchor,
+    parentComponent,
+    parentSuspense,
+    isSVG,
+    optimized
+  ) => {
+    const instance: ComponentInternalInstance = (initialVNode.component = createComponentInstance(
+      initialVNode,
+      parentComponent,
+      parentSuspense
+    ))
+
+    setupComponent(instance)
+    console.log('mount component')
+
+    setupRenderEffect(
+      instance,
+      initialVNode,
+      container,
+      anchor,
+      parentSuspense,
+      isSVG,
+      optimized
+    )
+  }
   // 19. TODO updateComponent
-  // 20. TODO setupRenderEffect
+  // 20. setupRenderEffect
+  const setupRenderEffect: SetupRenderEffectFn = (
+    instance,
+    initialVNode,
+    container,
+    anchor,
+    parentSuspense,
+    isSVG,
+    optimized
+  ) => {
+    instance.update = effect(function componentEffect() {
+      // 监听更新
+      if (!instance.isMounted) {
+        // 还没加载完成，可能是第一次 mount 操作
+        // TODO
+      } else {
+        // TODO
+      }
+    }, __DEV__ ? /* TODO */ (null as any) : prodEffectOptions)
+  }
   // 21. TODO updateComponentPreRender
   // 22. patchChildren
   const patchChildren: PatchChildrenFn = (
