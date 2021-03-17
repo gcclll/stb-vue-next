@@ -21,6 +21,7 @@ import {
   // Static,
   Fragment
 } from './vnode'
+import { renderComponentRoot } from './componentRenderUtils'
 import { initFeatureFlags } from './featureFlags'
 import { createAppAPI } from './apiCreateApp'
 import {
@@ -657,7 +658,68 @@ function baseCreateRenderer(
         // 监听更新
         if (!instance.isMounted) {
           // 还没加载完成，可能是第一次 mount 操作
-          // TODO
+          let vnodeHook: VNodeHook | null | undefined
+          const { el, props } = initialVNode
+          const { bm, m, parent } = instance
+
+          // 1. beforeMount hook
+          if (bm) {
+            invokeArrayFns(bm)
+          }
+
+          // 2. onVnodeBeforeMount
+          if ((vnodeHook = props && props.onVnodeBeforeMount)) {
+            invokeVNodeHook(vnodeHook, parent, initialVNode)
+          }
+
+          // 3. render
+          // TODO start, end measure
+          const subTree = (instance.subTree = renderComponentRoot(instance))
+
+          if (el && hydrateNode) {
+            // TODO hydrateNode
+          } else {
+            console.log('patch component')
+            patch(
+              null,
+              subTree,
+              container,
+              anchor,
+              instance,
+              parentSuspense,
+              isSVG
+            )
+            initialVNode.el = subTree.el
+          }
+
+          // mounted hook
+          if (m) {
+            queuePostRenderEffect(m, parentSuspense)
+          }
+
+          // onVnodemounted
+          if ((vnodeHook = props && props.onVnodeMounted)) {
+            const scopedInitialVNode = initialVNode
+            queuePostRenderEffect(() => {
+              invokeVNodeHook(vnodeHook!, parent, scopedInitialVNode)
+            }, parentSuspense)
+          }
+
+          // activated hook for keep-alive roots.
+          // #1742 activated hook must be accessed after first render
+          // since the hook may be injected by a child keep-alive
+          const { a } = instance
+          if (
+            a &&
+            initialVNode.shapeFlag & ShapeFlags.COMPONENT_SHOULD_KEEP_ALIVE
+          ) {
+            queuePostRenderEffect(a, parentSuspense)
+          }
+          instance.isMounted = true
+
+          // #2458: deference mount-only object parameters to prevent memleaks
+          // 释放资源
+          initialVNode = container = anchor = null as any
         } else {
           // TODO
         }
@@ -1223,9 +1285,30 @@ function baseCreateRenderer(
     flushPostFlushCbs()
     container._vnode = vnode
   }
-  // 33. TODO internals object, 函数别名
-  // 34. TODO createHydrationFns
-  let hydrate
+  // 33. internals object, 函数别名
+  const internals: RendererInternals = {
+    p: patch,
+    um: unmount,
+    m: move,
+    r: remove,
+    mt: mountComponent,
+    mc: mountChildren,
+    pc: patchChildren,
+    pbc: [] as any /*patchBlockChildren*/,
+    n: getNextHostNode,
+    o: options
+  }
+
+  // 34. createHydrationFns
+  let hydrate: ReturnType<typeof createHydrationFunctions>[0] | undefined
+  let hydrateNode: ReturnType<typeof createHydrationFunctions>[1] | undefined
+
+  if (createHydrationFns) {
+    ;[hydrate, hydrateNode] = createHydrationFns(internals as RendererInternals<
+      Node,
+      Element
+    >)
+  }
   // 35. return { render, hydrate, createApp }
   return {
     render,
