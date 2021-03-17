@@ -23,8 +23,14 @@ import {
 } from './vnode'
 import { initFeatureFlags } from './featureFlags'
 import { createAppAPI } from './apiCreateApp'
-import { isReservedProp, PatchFlags, ShapeFlags, EMPTY_ARR } from '@vue/shared'
-import { effect } from '@vue/reactivity'
+import {
+  invokeArrayFns,
+  isReservedProp,
+  PatchFlags,
+  ShapeFlags,
+  EMPTY_ARR
+} from '@vue/shared'
+import { effect, ReactiveEffectOptions } from '@vue/reactivity'
 import { callWithAsyncErrorHandling, ErrorCodes } from './errorHandling'
 
 export interface Renderer<HostElement = RendererElement> {
@@ -221,6 +227,17 @@ const prodEffectOptions = {
   scheduler: queueJob,
   // #1801, #2043 component render effects should allow recursive updates
   allowRecurse: true
+}
+
+function createDevEffectOptions(
+  instance: ComponentInternalInstance
+): ReactiveEffectOptions {
+  return {
+    scheduler: queueJob,
+    allowRecurse: true,
+    onTrack: instance.rtc ? e => invokeArrayFns(instance.rtc!, e) : void 0,
+    onTrigger: instance.rtg ? e => invokeArrayFns(instance.rtg!, e) : void 0
+  }
 }
 
 export const queuePostRenderEffect = __FEATURE_SUSPENSE__
@@ -635,15 +652,21 @@ function baseCreateRenderer(
     isSVG,
     optimized
   ) => {
-    instance.update = effect(function componentEffect() {
-      // 监听更新
-      if (!instance.isMounted) {
-        // 还没加载完成，可能是第一次 mount 操作
-        // TODO
-      } else {
-        // TODO
-      }
-    }, __DEV__ ? /* TODO */ (null as any) : prodEffectOptions)
+    instance.update = effect(
+      function componentEffect() {
+        // 监听更新
+        if (!instance.isMounted) {
+          // 还没加载完成，可能是第一次 mount 操作
+          // TODO
+        } else {
+          // TODO
+        }
+      },
+      __DEV__
+        ? // 提供 onTrack/onTrigger 选项执行 rtc&rtg 两个周期函数
+          createDevEffectOptions(instance)
+        : prodEffectOptions
+    )
   }
   // 21. TODO updateComponentPreRender
   // 22. patchChildren

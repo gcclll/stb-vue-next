@@ -572,6 +572,7 @@ function finishComponentSetup(
     }
   }
 
+  console.log(instance.render, 'render')
   // TODO 兼容 2.x options api
 
   if (__DEV__ && !Component.render && instance.render === NOOP) {
