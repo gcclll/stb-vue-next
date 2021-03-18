@@ -9,7 +9,12 @@ import {
   SuspenseBoundary
 } from './components/Suspense'
 import { createHydrationFunctions, RootHydrateFunction } from './hydration'
-import { queuePostFlushCb, flushPostFlushCbs, queueJob } from './scheduler'
+import {
+  queuePostFlushCb,
+  flushPostFlushCbs,
+  queueJob,
+  flushPreFlushCbs
+} from './scheduler'
 import {
   cloneIfMounted,
   isSameVNodeType,
@@ -306,7 +311,8 @@ function baseCreateRenderer(
     createElement: hostCreateElement,
     createText: hostCreateText,
     setElementText: hostSetElementText,
-    nextSibling: hostNextSibling
+    nextSibling: hostNextSibling,
+    parentNode: hostParentNode
   } = options
   // 2. patch 函数
   const patch: PatchFn = (
@@ -721,7 +727,64 @@ function baseCreateRenderer(
           // 释放资源
           initialVNode = container = anchor = null as any
         } else {
-          // TODO
+          // updateComponent
+          // 当组件自身的状态或父组件调用 processComponent 时触发
+          console.log('component update')
+          let { next, bu, u, parent, vnode } = instance
+          let originNext = next
+          let vnodeHook: VNodeHook | null | undefined
+
+          if (next) {
+            next.el = vnode.el
+            updateComponentPreRender(instance, next, optimized)
+          } else {
+            next = vnode
+          }
+
+          // beforeUpdate hook
+          if (bu) {
+            invokeArrayFns(bu)
+          }
+          // onVnodeBeforeUpdate
+          if ((vnodeHook = next.props && next.props.onVnodeBeforeUpdate)) {
+            invokeVNodeHook(vnodeHook, parent, next, vnode)
+          }
+
+          //render
+          const nextTree = renderComponentRoot(instance)
+          const prevTree = instance.subTree
+          instance.subTree = nextTree
+
+          patch(
+            prevTree,
+            nextTree,
+            // 如果在 teleport 中，parent 可能会发生改变
+            hostParentNode(prevTree.el!)!,
+            // anchor may have changed if it's in a fragment
+            getNextHostNode(prevTree),
+            instance,
+            parentSuspense,
+            isSVG
+          )
+
+          next.el = nextTree.el
+          if (originNext === null) {
+            // self-triggered update. In case of HOC, update parent component
+            // vnode el. HOC is indicated by parent instance's subTree pointing
+            // to child component's vnode
+            // TODO
+          }
+
+          // updated hook
+          if (u) {
+            queuePostRenderEffect(u, parentSuspense)
+          }
+          // onVnodeUpdated
+          if ((vnodeHook = next.props && next.props.onVnodeUpdated)) {
+            queuePostRenderEffect(() => {
+              invokeVNodeHook(vnodeHook!, parent, next!, vnode)
+            })
+          }
         }
       },
       __DEV__
@@ -730,7 +793,23 @@ function baseCreateRenderer(
         : prodEffectOptions
     )
   }
-  // 21. TODO updateComponentPreRender
+  // 21. updateComponentPreRender
+  const updateComponentPreRender = (
+    instance: ComponentInternalInstance,
+    nextVNode: VNode,
+    optimized: boolean
+  ) => {
+    nextVNode.component = instance
+    // const prevProps = instance.vnode.props
+    instance.vnode = nextVNode
+    instance.next = null
+    // TODO update props
+    // TODO update slots
+
+    // props update may have triggered pre-flush watchers.
+    // flush them before the render update.
+    flushPreFlushCbs(undefined, instance.update)
+  }
   // 22. patchChildren
   const patchChildren: PatchChildrenFn = (
     n1,
