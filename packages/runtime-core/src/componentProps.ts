@@ -1,8 +1,12 @@
 import {
   Data,
   setCurrentInstance,
+  ConcreteComponent,
+  ComponentOptions,
   ComponentInternalInstance
 } from './component'
+import { AppContext } from './apiCreateApp'
+import { warn } from './warning'
 import {
   toRaw,
   shallowReactive,
@@ -11,6 +15,10 @@ import {
 } from '@vue/reactivity'
 
 import {
+  extend,
+  isArray,
+  EMPTY_OBJ,
+  EMPTY_ARR,
   hyphenate,
   def,
   isReservedProp,
@@ -223,6 +231,133 @@ function resolvePropValue(
     }
   }
   return value
+}
+
+export function normalizePropsOptions(
+  comp: ConcreteComponent,
+  appContext: AppContext,
+  asMixin: false
+): NormalizedPropsOptions {
+  if (!appContext.deopt && comp.__props) {
+    return comp.__props
+  }
+
+  const raw = comp.props
+  const normalized: NormalizedPropsOptions[0] = {}
+  const needCastKeys: NormalizedPropsOptions[1] = []
+
+  // mixin/extends props 应用
+  let hasExtends = false
+  // 必须开支 2.x options api 支持，且不是函数式组件
+  // 继承来的属性，用法： ~CompA = { extends: CompB, ... }~
+  // CompA 会继承 CompB 的 props
+  if (__FEATURE_OPTIONS_API__ && !isFunction(comp)) {
+    const extendProps = (raw: ComponentOptions) => {
+      hasExtends = true
+      const [props, keys] = normalizePropsOptions(raw, appContext, true)
+      extend(normalized, props)
+      if (keys) {
+        needCastKeys.push(...keys)
+      }
+    }
+
+    // Comp: { extends: CompA } 处理
+    if (comp.extends) {
+      extendProps(comp.extends)
+    }
+
+    // Comp: { mixins: [mixin] } 处理
+    if (!asMixin && appContext.mixins.length) {
+      appContext.mixins.forEach(extendProps)
+    }
+  }
+
+  // 既没有自身的 props 也没有 extends 继承来的 props 初始化为 []
+  if (!raw && !hasExtends) {
+    return (comp.__props = EMPTY_ARR as any)
+  }
+
+  if (isArray(raw)) {
+    // 当 props 是数组的时候，必须是字符类型，如: props: ['foo', 'bar', 'foo-bar']
+    // 'foo-bar' 会转成 'fooBar'，不允许 '$xxx' 形式的变量名
+    for (let i = 0; i < raw.length; i++) {
+      const normalizedKey = camelize(raw[i])
+      // 组件的属性名不能是以 $xx 开头的名称，这个是作为内部属性的
+      if (validatePropName(normalizedKey)) {
+        normalized[normalizedKey] = EMPTY_OBJ
+      }
+    }
+  } else if (raw) {
+    // 对象类型 props: { foo: 1, bar: 2, ... }
+    for (const key in raw) {
+      // 'foo-bar' -> 'fooBar'
+      const normalizedKey = camelize(key)
+      // 检查 $xxx 非法属性
+      if (validatePropName(normalizedKey)) {
+        const opt = raw[key]
+        // ? 值为数组或函数变成： { type: opt } ?
+        // 这里含义其实是： ~props: { foo: [Boolean, Function] }~
+        // 可以用数组定义该属性可以是多种类型的其中一种
+        const prop: NormalizedProp = (normalized[normalizedKey] =
+          isArray(opt) || isFunction(opt) ? { type: opt } : opt)
+        if (prop) {
+          // 找到 Boolean 在 foo: [Boolean, Function] 中的索引
+          const booleanIndex = getTypeIndex(Boolean, prop.type)
+          const stringIndex = getTypeIndex(String, prop.type)
+          prop[BooleanFlags.shouldCast] = booleanIndex > -1
+          // [String, Boolean] 类型，String 在 Boolean 前面
+          prop[BooleanFlags.shouldCastTrue] =
+            stringIndex < 0 || booleanIndex < stringIndex
+          // 如果是布尔类型的值或者有默认值的属性需要转换
+          // 转换是根据 type 和 default 值处理
+          // type非函数，default是函数，执行 default() 得到默认值
+          if (booleanIndex > -1 || hasOwn(prop, 'default')) {
+            needCastKeys.push(normalizedKey)
+          }
+        }
+      }
+    }
+  }
+
+  return (comp.__props = [normalized, needCastKeys])
+}
+
+function validatePropName(key: string) {
+  // 非内部属性？
+  if (key[0] !== '$') {
+    return true
+  } else if (__DEV__) {
+    // $xxx 为保留属性
+    warn(`Invalid prop name: "${key}" is a reserved property.`)
+  }
+  return false
+}
+
+// use function string name to check type constructors
+// so that it works across vms / iframes.
+function getType(ctor: Prop<any>): string {
+  const match = ctor && ctor.toString().match(/^\s*function (\w+)/)
+  return match ? match[1] : ''
+}
+
+function isSameType(a: Prop<any>, b: Prop<any>): boolean {
+  return getType(a) === getType(b)
+}
+
+function getTypeIndex(
+  type: Prop<any>,
+  expectedTypes: PropType<any> | void | null | true
+): number {
+  if (isArray(expectedTypes)) {
+    for (let i = 0, len = expectedTypes.length; i < len; i++) {
+      if (isSameType(expectedTypes[i], type)) {
+        return i
+      }
+    }
+  } else if (isFunction(expectedTypes)) {
+    return isSameType(expectedTypes, type) ? 0 : -1
+  }
+  return -1
 }
 
 type AssertionResult = {

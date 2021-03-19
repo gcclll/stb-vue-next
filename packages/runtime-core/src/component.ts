@@ -421,8 +421,8 @@ export function createComponentInstance(
     directives: null,
 
     // TODO resolved props and emits options
-    propsOptions: {} as any, // normalizePropsOptions(type, appContext),
-    emitsOptions: {} as any, // normalizeEmitsOptions(type, appContext),
+    propsOptions: normalizePropsOptions(type, appContext),
+    emitsOptions: normalizeEmitsOptions(type, appContext),
 
     // emit
     emit: null as any, // to be set immediately
