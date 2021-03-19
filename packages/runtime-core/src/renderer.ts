@@ -799,6 +799,7 @@ function baseCreateRenderer(
     nextVNode: VNode,
     optimized: boolean
   ) => {
+    console.log('update comp pre render')
     nextVNode.component = instance
     // const prevProps = instance.vnode.props
     instance.vnode = nextVNode

@@ -21,7 +21,11 @@ import {
   ComputedOptions,
   MethodOptions
 } from './componentOptions'
-import { ComponentPropsOptions, NormalizedPropsOptions } from './componentProps'
+import {
+  ComponentPropsOptions,
+  NormalizedPropsOptions,
+  initProps
+} from './componentProps'
 import {
   ComponentPublicInstance,
   ComponentPublicInstanceConstructor,
@@ -500,9 +504,10 @@ export function setupComponent(
 ) {
   isInSSRComponentSetup = isSSR
 
-  const { shapeFlag } = instance.vnode
+  const { shapeFlag, props } = instance.vnode
   const isStateful = shapeFlag & ShapeFlags.STATEFUL_COMPONENT
-  // TODO init props & slots
+  // init props & slots
+  initProps(instance, props, isStateful, isSSR)
 
   console.log('component stateful ? ' + isStateful)
   const setupResult = isStateful
