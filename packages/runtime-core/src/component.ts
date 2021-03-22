@@ -24,7 +24,8 @@ import {
 import {
   ComponentPropsOptions,
   NormalizedPropsOptions,
-  initProps
+  initProps,
+  normalizePropsOptions
 } from './componentProps'
 import {
   ComponentPublicInstance,
@@ -421,8 +422,8 @@ export function createComponentInstance(
     directives: null,
 
     // TODO resolved props and emits options
-    propsOptions: normalizePropsOptions(type, appContext),
-    emitsOptions: normalizeEmitsOptions(type, appContext),
+    propsOptions: normalizePropsOptions(type, appContext, false),
+    emitsOptions: {} as any, //normalizeEmitsOptions(type, appContext),
 
     // emit
     emit: null as any, // to be set immediately
