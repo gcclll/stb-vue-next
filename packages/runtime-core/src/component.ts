@@ -1,11 +1,19 @@
 // import { CompilerOptions } from '@vue/compiler-dom'
-import { proxyRefs, ReactiveEffect, shallowReadonly } from '@vue/reactivity'
+import {
+  pauseTracking,
+  resetTracking,
+  proxyRefs,
+  ReactiveEffect,
+  shallowReadonly
+} from '@vue/reactivity'
 import {
   NOOP,
   ShapeFlags,
   isFunction,
+  isObject,
   makeMap,
   NO,
+  isPromise,
   EMPTY_OBJ
 } from '@vue/shared'
 import { AppConfig, AppContext, createAppContext } from './apiCreateApp'
@@ -40,8 +48,9 @@ import {
 } from './componentRenderUtils'
 import { SuspenseBoundary } from './components/Suspense'
 import { InternalSlots, Slots } from './componentSlots'
+import { ErrorCodes, callWithErrorHandling } from './errorHandling'
 import { Directive } from './directives'
-import { VNode, VNodeChild } from './vnode'
+import { VNode, VNodeChild, isVNode } from './vnode'
 import { warn } from './warning'
 
 export type Data = Record<string, unknown>
@@ -535,11 +544,67 @@ function setupStatefulComponent(
   // 2. call setup()
   const { setup } = Component
   if (setup) {
-    // TODO
+    const setupContext = (instance.setupContext =
+      setup.length > 1 ? createSetupContext(instance) : null)
+
+    currentInstance = instance
+    pauseTracking()
+    const setupResult = callWithErrorHandling(
+      setup,
+      instance,
+      ErrorCodes.SETUP_FUNCTION,
+      [__DEV__ ? shallowReadonly(instance.props) : instance.props, setupContext]
+    )
+    resetTracking()
+    currentInstance = null
+
+    if (isPromise(setupResult)) {
+      if (isSSR) {
+        // return the promise so server-renderer can wait on it
+        return setupResult.then((resolvedResult: unknown) => {
+          handleSetupResult(instance, resolvedResult, isSSR)
+        })
+      } else if (__FEATURE_SUSPENSE__) {
+        // async setup returned Promise.
+        // bail here and wait for re-entry.
+
+        instance.asyncDep = setupResult
+      } else if (__DEV__) {
+        // TODO warn
+      }
+    } else {
+      handleSetupResult(instance, setupResult, isSSR)
+    }
   } else {
     console.log('no setup')
     finishComponentSetup(instance, isSSR)
   }
+}
+
+export function handleSetupResult(
+  instance: ComponentInternalInstance,
+  setupResult: unknown,
+  isSSR: boolean
+) {
+  // 1. 如果是函数当做render函数处理
+  // 2. 如果是对象
+  if (isFunction(setupResult)) {
+    // 返回内联 render 函数
+    if (__NODE_JS__ && (instance.type as ComponentOptions).__ssrInlineRender) {
+      // SSR 服务端渲染，替换 ssrRender 函数
+      // when the function's name is `ssrRender` (compiled by SFC inline mode),
+      // set it as ssrRender instead.
+      instance.ssrRender = setupResult
+    } else {
+      instance.render = setupResult as InternalRenderFunction
+    }
+  } else if (isObject(setupResult)) {
+    // 返回 bindings，这些变量可以直接在模板中使用
+    instance.setupState = proxyRefs(setupResult)
+  } else {
+    // warn 必须返回对象
+  }
+  finishComponentSetup(instance, isSSR)
 }
 
 type CompileFunction = (
