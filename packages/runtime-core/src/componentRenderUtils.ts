@@ -1,4 +1,4 @@
-import { ComponentInternalInstance } from './component'
+import { ComponentInternalInstance, Data } from './component'
 import {
   VNode,
   normalizeVNode,
@@ -13,6 +13,7 @@ import { PatchFlags, ShapeFlags, isOn, isModelListener } from '@vue/shared'
 import { handleError, ErrorCodes } from './errorHandling'
 import { warn } from './warning'
 import { Comment, isVNode, VNode, VNodeArrayChildren } from './vnode'
+import { isEmitListener } from './componentEmits'
 
 /**
  * mark the current rendering instance for asset resolution (e.g.
@@ -165,4 +166,92 @@ export function filterSingleRoot(
     }
   }
   return singleRoot
+}
+
+// 检查组件是否应该更新
+export function shouldUpdateComponent(
+  prevVNode: VNode,
+  nextVNode: VNode,
+  optimized?: boolean
+): boolean {
+  const { props: prevProps, children: prevChildren, component } = prevVNode
+  const { props: nextProps, children: nextChildren, patchFlag } = nextVNode
+  const emits = component!.emitsOptions
+
+  // 运行时 vnode 上的指令或者 transition 动画，强制 child 更新
+  if (nextVNode.dirs || nextVNode.transition) {
+    return true
+  }
+
+  if (optimized && patchFlag >= 0) {
+    if (patchFlag & PatchFlags.DYNAMIC_SLOTS) {
+      // 插槽内容引用的值可能发生了改变，比如： v-for 中
+      return true
+    }
+    if (patchFlag & PatchFlags.FULL_PROPS) {
+      if (!prevProps) {
+        return !!nextProps
+      }
+
+      return hasPropsChanged(prevProps, nextProps!, emits)
+    } else if (patchFlag & PatchFlags.PROPS) {
+      const dynamicProps = nextVNode.dynamicProps!
+      for (let i = 0; i < dynamicProps.length; i++) {
+        const key = dynamicProps[i]
+        // 只要有一个属性名不一样，就需要更新
+        if (
+          nextProps![key] !== prevProps![key] &&
+          !isEmitListener(emits, key)
+        ) {
+          return true
+        }
+      }
+    }
+  } else {
+    if (prevChildren || nextChildren) {
+      if (!nextChildren || !(nextChildren as any).$stable) {
+        return true
+      }
+    }
+
+    if (prevProps === nextProps) {
+      return false
+    }
+
+    if (!prevProps) {
+      return !!nextProps
+    }
+
+    if (!nextProps) {
+      return true
+    }
+
+    return hasPropsChanged(prevProps, nextProps, emits)
+  }
+
+  return false
+}
+
+function hasPropsChanged(
+  prevProps: Data,
+  nextProps: Data,
+  emitsOptions: ComponentInternalInstance['emitsOptions']
+): boolean {
+  const nextKeys = Object.keys(nextProps)
+  // 包含属性数不一样，可能删除、添加了
+  if (nextKeys.length !== Object.keys(prevProps).length) {
+    return true
+  }
+
+  for (let i = 0; i < nextKeys.length; i++) {
+    const key = nextKeys[i]
+    // 值不同，且不是事件属性
+    if (
+      nextProps[key] !== prevProps[key] &&
+      !isEmitListener(emitsOptions, key)
+    ) {
+      return true
+    }
+  }
+  return false
 }

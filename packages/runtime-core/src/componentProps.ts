@@ -24,7 +24,8 @@ import {
   isReservedProp,
   camelize,
   hasOwn,
-  isFunction
+  isFunction,
+  PatchFlags
 } from '@vue/shared'
 import { InternalObjectKey } from './vnode'
 import { isEmitListener } from './componentEmits'
@@ -145,6 +146,103 @@ export function initProps(
     }
   }
   instance.attrs = attrs
+}
+
+export function updateProps(
+  instance: ComponentInternalInstance,
+  rawProps: Data | null,
+  rawPrevProps: Data | null,
+  optimized: boolean
+) {
+  const {
+    props,
+    attrs,
+    vnode: { patchFlag }
+  } = instance
+  const rawCurrentProps = toRaw(props)
+  const [options] = instance.propsOptions
+
+  if (
+    // 开发模式下，总是强制进行 full diff
+    !(
+      __DEV__ &&
+      (instance.type.__hmrId ||
+        (instance.parent && instance.parent.type.__hmrId))
+    ) &&
+    (optimized || patchFlag > 0) &&
+    !(patchFlag & PatchFlags.FULL_PROPS)
+  ) {
+    if (patchFlag & PatchFlags.PROPS) {
+      const propsToUpdate = instance.vnode.dynamicProps!
+      for (let i = 0; i < propsToUpdate.length; i++) {
+        const key = propsToUpdate[i]
+        const value = rawProps![key]
+        if (options) {
+          // attr / props 在初始化阶段会被分离开，在这里只需要检测
+          // attrs 有没有该属性
+          if (hasOwn(attrs, key)) {
+            attrs[key] = value
+          } else {
+            const camelizedKey = camelize(key)
+            props[camelizedKey] = resolvePropValue(
+              options,
+              rawCurrentProps,
+              camelizedKey,
+              value,
+              instance
+            )
+          }
+        } else {
+          attrs[key] = value
+        }
+      }
+    }
+  } else {
+    // full props update
+    setFullProps(instance, rawProps, props, attrs)
+    // in case of dynamic props, check if we need to delete keys from
+    // the props object
+    let kebabKey: string
+    for (const key in rawCurrentProps) {
+      if (
+        !rawProps ||
+        // for camelcase
+        (!hasOwn(rawProps, key) &&
+          ((kebabKey = hyphenate(key)) === key || !hasOwn(rawProps, kebabKey)))
+      ) {
+        if (options) {
+          if (
+            rawPrevProps &&
+            // for camelCase
+            (rawPrevProps[key] !== undefined ||
+              // for kebad-case
+              rawPrevProps[kebabKey!] !== undefined)
+          ) {
+            props[key] = resolvePropValue(
+              options,
+              rawProps || EMPTY_OBJ,
+              key,
+              undefined,
+              instance
+            )
+          }
+        } else {
+          delete props[key]
+        }
+      }
+    }
+
+    if (attrs !== rawCurrentProps) {
+      for (const key in attrs) {
+        if (!rawProps || !hasOwn(rawProps, key)) {
+          delete attrs[key]
+        }
+      }
+    }
+  }
+
+  // trigger updates for $attrs in case it's used in component slots
+  trigger(instance, TriggerOpTypes.SET, '$attrs')
 }
 
 function setFullProps(

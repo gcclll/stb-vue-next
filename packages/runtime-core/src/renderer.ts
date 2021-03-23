@@ -4,6 +4,7 @@ import {
   setupComponent,
   createComponentInstance
 } from './component'
+import { updateProps } from './componentProps'
 import {
   queueEffectWithSuspense,
   SuspenseBoundary
@@ -26,7 +27,10 @@ import {
   // Static,
   Fragment
 } from './vnode'
-import { renderComponentRoot } from './componentRenderUtils'
+import {
+  renderComponentRoot,
+  shouldUpdateComponent
+} from './componentRenderUtils'
 import { initFeatureFlags } from './featureFlags'
 import { createAppAPI } from './apiCreateApp'
 import {
@@ -616,7 +620,7 @@ function baseCreateRenderer(
         )
       }
     } else {
-      // TODO update
+      updateComponent(n1, n2, optimized)
     }
   }
   // 18. mountComponent
@@ -648,7 +652,27 @@ function baseCreateRenderer(
       optimized
     )
   }
-  // 19. TODO updateComponent
+  // 19. updateComponent
+  const updateComponent = (n1: VNode, n2: VNode, optimized: boolean) => {
+    const instance = (n2.component = n1.component)!
+    if (shouldUpdateComponent(n1, n2, optimized)) {
+      if (
+        __FEATURE_SUSPENSE__ &&
+        instance.asyncDep && // async setup
+        instance.asyncResolved
+      ) {
+        // async & still pending - just update props and slots
+        // since the component's reactive effect for render isn't set-up yet
+        updateComponentPreRender(instance, n2, optimized)
+      }
+      return
+    } else {
+      // 没有更新，仅用 old child 的属性覆盖 new child
+      n2.component = n1.component
+      n2.el = n1.el
+      instance.vnode = n2
+    }
+  }
   // 20. setupRenderEffect
   const setupRenderEffect: SetupRenderEffectFn = (
     instance,
@@ -801,10 +825,11 @@ function baseCreateRenderer(
   ) => {
     console.log('update comp pre render')
     nextVNode.component = instance
-    // const prevProps = instance.vnode.props
+    const prevProps = instance.vnode.props
     instance.vnode = nextVNode
     instance.next = null
-    // TODO update props
+    // update props
+    updateProps(instance, nextVNode.props, prevProps, optimized)
     // TODO update slots
 
     // props update may have triggered pre-flush watchers.
