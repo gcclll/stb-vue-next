@@ -30,7 +30,8 @@ import {
 } from './vnode'
 import {
   renderComponentRoot,
-  shouldUpdateComponent
+  shouldUpdateComponent,
+  updateHOCHostEl
 } from './componentRenderUtils'
 import { initFeatureFlags } from './featureFlags'
 import { createAppAPI } from './apiCreateApp'
@@ -669,6 +670,7 @@ function baseCreateRenderer(
         updateComponentPreRender(instance, n2, optimized)
         return
       } else {
+        console.log('normal update')
         // 正常更新
         instance.next = n2
         // 考虑到 child 组件可能正在队列中排队，移除它避免
@@ -813,7 +815,7 @@ function baseCreateRenderer(
             // self-triggered update. In case of HOC, update parent component
             // vnode el. HOC is indicated by parent instance's subTree pointing
             // to child component's vnode
-            // TODO
+            updateHOCHostEl(instance, nextTree.el)
           }
 
           // updated hook
