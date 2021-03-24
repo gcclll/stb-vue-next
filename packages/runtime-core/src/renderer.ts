@@ -14,7 +14,8 @@ import {
   queuePostFlushCb,
   flushPostFlushCbs,
   queueJob,
-  flushPreFlushCbs
+  flushPreFlushCbs,
+  invalidateJob
 } from './scheduler'
 import {
   cloneIfMounted,
@@ -666,6 +667,18 @@ function baseCreateRenderer(
         // async & still pending - just update props and slots
         // since the component's reactive effect for render isn't set-up yet
         updateComponentPreRender(instance, n2, optimized)
+        return
+      } else {
+        // 正常更新
+        instance.next = n2
+        // 考虑到 child 组件可能正在队列中排队，移除它避免
+        // 在同一个 flush tick 重复更新同一个子组件
+        // 当下一次更新来到时，之前的一次更新取消？
+        invalidateJob(instance.update)
+        // instance.update 是在 setupRenderEffect 中
+        // 定义的一个 reactive effect runner
+        // 主动触发更新
+        instance.update()
       }
       return
     } else {
