@@ -47,7 +47,7 @@ import {
   markAttrsAccessed
 } from './componentRenderUtils'
 import { SuspenseBoundary } from './components/Suspense'
-import { InternalSlots, Slots } from './componentSlots'
+import { InternalSlots, Slots, initSlots } from './componentSlots'
 import { ErrorCodes, callWithErrorHandling } from './errorHandling'
 import { Directive } from './directives'
 import { VNode, VNodeChild, isVNode } from './vnode'
@@ -514,10 +514,11 @@ export function setupComponent(
 ) {
   isInSSRComponentSetup = isSSR
 
-  const { shapeFlag, props } = instance.vnode
+  const { shapeFlag, props, children } = instance.vnode
   const isStateful = shapeFlag & ShapeFlags.STATEFUL_COMPONENT
   // init props & slots
   initProps(instance, props, isStateful, isSSR)
+  initSlots(instance, children)
 
   console.log('component stateful ? ' + isStateful)
   const setupResult = isStateful

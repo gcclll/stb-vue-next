@@ -5,6 +5,7 @@ import {
   createComponentInstance
 } from './component'
 import { updateProps } from './componentProps'
+import { updateSlots } from './componentSlots'
 import {
   queueEffectWithSuspense,
   SuspenseBoundary
@@ -343,6 +344,7 @@ function baseCreateRenderer(
 
     // 新节点处理
     const { type, ref, shapeFlag } = n2
+    console.log({ type, shapeFlag })
     switch (type) {
       case Text:
         processText(n1, n2, container, anchor)
@@ -410,6 +412,7 @@ function baseCreateRenderer(
     optimized: boolean
   ) => {
     isSVG = isSVG || (n2.type as string) === 'svg'
+    console.log('process element')
     if (n1 == null) {
       // no old
       mountElement(
@@ -439,6 +442,7 @@ function baseCreateRenderer(
     let el: RendererElement
     let vnodeHook: VNodeHook | undefined | null
     const { type, shapeFlag, patchFlag, props } = vnode
+    console.log('mount elment')
 
     if (
       !__DEV__ &&
@@ -455,6 +459,7 @@ function baseCreateRenderer(
         props && props.is
       )
 
+      console.log({ shapeFlag })
       // 在处理 props 之前先 mount children ，因为
       // 有些 props 可能会依赖于 child 是否已经渲染出来
       // 比如： `<select value>`
@@ -849,7 +854,7 @@ function baseCreateRenderer(
     instance.next = null
     // update props
     updateProps(instance, nextVNode.props, prevProps, optimized)
-    // TODO update slots
+    updateSlots(instance, nextVNode.children)
 
     // props update may have triggered pre-flush watchers.
     // flush them before the render update.

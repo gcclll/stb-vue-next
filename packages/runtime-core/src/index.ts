@@ -52,6 +52,12 @@ export { defineAsyncComponent } from './apiAsyncComponent'
 export { defineProps, defineEmit, useContext } from './apiSetupHelpers'
 
 // Advanced API ----------------------------------------------------------------
+
+// For getting a hold of the internal instance in setup() - useful for advanced
+// plugins
+export { getCurrentInstance } from './component'
+
+// For raw render function users
 export { h } from './h'
 // Advanced render function utilities
 export { createVNode, isVNode, cloneVNode, mergeProps } from './vnode'
@@ -198,6 +204,8 @@ export {
 
 // For compiler generated code
 // should sync with '@vue/compiler-core/src/runtimeConstants.ts'
+export { withCtx } from './helpers/withRenderContext'
+export { createSlots } from './helpers/createSlots'
 export { createTextVNode } from './vnode'
 
 export {
