@@ -119,11 +119,9 @@ export const updateSlots = (
   const { vnode, slots } = instance
   let needDeletionCheck = true
   let deletionComparisonTarget = EMPTY_OBJ
-  console.log('update slots')
   if (vnode.shapeFlag & ShapeFlags.SLOTS_CHILDREN) {
     const type = (children as RawSlots)._
     if (type) {
-      console.log('update slots type')
       // compiled slots.
       if (__DEV__ && isHmrUpdating) {
         // TODO
@@ -137,20 +135,17 @@ export const updateSlots = (
         extend(slots, children as Slots)
       }
     } else {
-      console.log('update slots no type')
       needDeletionCheck = !(children as RawSlots).$stable
       normalizeObjectSlots(children as RawSlots, slots)
     }
     deletionComparisonTarget = children as RawSlots
   } else if (children) {
-    console.log('update slots children')
     // non slot object children (direct value)
     // passed to a component
     normalizeVNodeSlots(instance, children)
     deletionComparisonTarget = { default: 1 }
   }
 
-  console.log({ needDeletionCheck })
   // delete stale slots
   // 删除旧的 slots
   if (needDeletionCheck) {
