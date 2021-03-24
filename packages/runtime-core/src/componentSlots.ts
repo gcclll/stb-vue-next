@@ -85,7 +85,10 @@ const normalizeObjectSlots = (rawSlots: RawSlots, slots: InternalSlots) => {
 const normalizeVNodeSlots = (
   instance: ComponentInternalInstance,
   children: VNodeNormalizedChildren
-) => {}
+) => {
+  const normalized = normalizeSlotValue(children)
+  instance.slots.default = () => normalized
+}
 
 export const initSlots = (
   instance: ComponentInternalInstance,
