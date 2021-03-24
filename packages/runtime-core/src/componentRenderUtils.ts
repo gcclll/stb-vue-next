@@ -174,6 +174,7 @@ export function shouldUpdateComponent(
   nextVNode: VNode,
   optimized?: boolean
 ): boolean {
+  console.log('should update component')
   const { props: prevProps, children: prevChildren, component } = prevVNode
   const { props: nextProps, children: nextChildren, patchFlag } = nextVNode
   const emits = component!.emitsOptions
@@ -237,6 +238,7 @@ function hasPropsChanged(
   nextProps: Data,
   emitsOptions: ComponentInternalInstance['emitsOptions']
 ): boolean {
+  console.log('has changed props')
   const nextKeys = Object.keys(nextProps)
   // 包含属性数不一样，可能删除、添加了
   if (nextKeys.length !== Object.keys(prevProps).length) {

@@ -654,8 +654,10 @@ function baseCreateRenderer(
   }
   // 19. updateComponent
   const updateComponent = (n1: VNode, n2: VNode, optimized: boolean) => {
+    console.log('update component')
     const instance = (n2.component = n1.component)!
     if (shouldUpdateComponent(n1, n2, optimized)) {
+      console.log('should update component....')
       if (
         __FEATURE_SUSPENSE__ &&
         instance.asyncDep && // async setup
@@ -667,6 +669,7 @@ function baseCreateRenderer(
       }
       return
     } else {
+      console.log('should not update component....')
       // 没有更新，仅用 old child 的属性覆盖 new child
       n2.component = n1.component
       n2.el = n1.el
@@ -685,6 +688,7 @@ function baseCreateRenderer(
   ) => {
     instance.update = effect(
       function componentEffect() {
+        console.log('update effect')
         // 监听更新
         if (!instance.isMounted) {
           // 还没加载完成，可能是第一次 mount 操作
