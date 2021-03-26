@@ -10,6 +10,12 @@ import {
   queueEffectWithSuspense,
   SuspenseBoundary
 } from './components/Suspense'
+import {
+  // isTeleportDisabled,
+  TeleportImpl,
+  TeleportVNode
+} from './components/Teleport'
+
 import { createHydrationFunctions, RootHydrateFunction } from './hydration'
 import {
   queuePostFlushCb,
@@ -42,7 +48,8 @@ import {
   PatchFlags,
   ShapeFlags,
   EMPTY_ARR,
-  NOOP
+  NOOP,
+  isArray
 } from '@vue/shared'
 import { stop, effect, ReactiveEffectOptions } from '@vue/reactivity'
 import { callWithAsyncErrorHandling, ErrorCodes } from './errorHandling'
@@ -350,7 +357,6 @@ function baseCreateRenderer(
 
     // 新节点处理
     const { type, ref, shapeFlag } = n2
-    console.log({ type, shapeFlag })
     switch (type) {
       case Text:
         processText(n1, n2, container, anchor)
@@ -365,6 +371,18 @@ function baseCreateRenderer(
         } else if (__DEV__) {
           patchStaticNode(n1, n2, container, isSVG)
         }
+        break
+      case Fragment:
+        processFragment(
+          n1,
+          n2,
+          container,
+          anchor,
+          parentComponent,
+          parentSuspense,
+          isSVG,
+          optimized
+        )
         break
       default:
         // ELEMENT/COMPONENT/TELEPORT/SUSPENSE
@@ -390,6 +408,18 @@ function baseCreateRenderer(
             parentSuspense,
             isSVG,
             optimized
+          )
+        } else if (shapeFlag & ShapeFlags.TELEPORT) {
+          ;(type as typeof TeleportImpl).process(
+            n1 as TeleportVNode,
+            n2 as TeleportVNode,
+            container,
+            anchor,
+            parentComponent,
+            parentSuspense,
+            isSVG,
+            optimized,
+            internals
           )
         }
         break
@@ -699,9 +729,137 @@ function baseCreateRenderer(
 
     // TODO vnode hook or dirs 处理
   }
-  // 14. TODO patchBlockChildren
+  // 14. patchBlockChildren
+  // The fast path for blocks.
+  const patchBlockChildren: PatchBlockChildrenFn = (
+    oldChildren,
+    newChildren,
+    fallbackContainer,
+    parentComponent,
+    parentSuspense,
+    isSVG
+  ) => {
+    for (let i = 0; i < newChildren.length; i++) {
+      const oldVNode = oldChildren[i]
+      const newVNode = newChildren[i]
+      // Determine the container (parent element) for the patch.
+      const container =
+        // - In the case of a Fragment, we need to provide the actual parent
+        // of the Fragment itself so it can move its children.
+        oldVNode.type === Fragment ||
+        // - In the case of different nodes, there is going to be a replacement
+        // which also requires the correct parent container
+        !isSameVNodeType(oldVNode, newVNode) ||
+        // - In the case of a component, it could contain anything.
+        oldVNode.shapeFlag & ShapeFlags.COMPONENT ||
+        oldVNode.shapeFlag & ShapeFlags.TELEPORT
+          ? hostParentNode(oldVNode.el!)!
+          : // In other cases, the parent container is not actually used so we
+            // just pass the block element here to avoid a DOM parentNode call.
+            fallbackContainer
+      patch(
+        oldVNode,
+        newVNode,
+        container,
+        null,
+        parentComponent,
+        parentSuspense,
+        isSVG,
+        true
+      )
+    }
+  }
+
   // 15. TODO patchProps
-  // 16. TODO processFragment
+  // 16. processFragment
+  const processFragment = (
+    n1: VNode | null,
+    n2: VNode,
+    container: RendererElement,
+    anchor: RendererNode | null,
+    parentComponent: ComponentInternalInstance | null,
+    parentSuspense: SuspenseBoundary | null,
+    isSVG: boolean,
+    optimized: boolean
+  ) => {
+    const fragmentStartAnchor = (n2.el = n1 ? n1.el : hostCreateText(''))!
+    const fragmentEndAnchor = (n2.anchor = n1 ? n1.anchor : hostCreateText(''))!
+
+    let { patchFlag, dynamicChildren } = n2
+    if (patchFlag > 0) {
+      optimized = true
+    }
+
+    if (__DEV__ && isHmrUpdating) {
+      // HMR updated, force full diff
+      patchFlag = 0
+      optimized = false
+      dynamicChildren = null
+    }
+
+    if (n1 == null) {
+      hostInsert(fragmentStartAnchor, container, anchor)
+      hostInsert(fragmentEndAnchor, container, anchor)
+      // fragment 的 children 只会是 array children
+      // 因为他们要么是通过 compiler 生成的，要么是由数组创建的
+      mountChildren(
+        n2.children as VNodeArrayChildren,
+        container,
+        fragmentEndAnchor,
+        parentComponent,
+        parentSuspense,
+        isSVG,
+        optimized
+      )
+    } else {
+      if (
+        patchFlag > 0 &&
+        patchFlag & PatchFlags.STABLE_FRAGMENT &&
+        dynamicChildren &&
+        // #2715 the previous fragment could've been a BAILed one as a result
+        // of renderSlot() with no valid children
+        n1.dynamicChildren
+      ) {
+        // a stable fragment (template root or <template v-for>) doesn't need to
+        // patch children order, but it may contain dynamicChildren.
+        patchBlockChildren(
+          n1.dynamicChildren,
+          dynamicChildren,
+          container,
+          parentComponent,
+          parentSuspense,
+          isSVG
+        )
+        if (__DEV__ && parentComponent && parentComponent.type.__hmrId) {
+          traverseStaticChildren(n1, n2)
+        } else if (
+          // #2080 if the stable fragment has a key, it's a <template v-for> that may
+          //  get moved around. Make sure all root level vnodes inherit el.
+          // #2134 or if it's a component root, it may also get moved around
+          // as the component is being moved.
+          n2.key != null ||
+          (parentComponent && n2 === parentComponent.subTree)
+        ) {
+          traverseStaticChildren(n1, n2, true /* shallow */)
+        }
+      } else {
+        // keyed / unkeyed, or manual fragments.
+        // for keyed & unkeyed, since they are compiler generated from v-for,
+        // each child is guaranteed to be a block so the fragment will never
+        // have dynamicChildren.
+        patchChildren(
+          n1,
+          n2,
+          container,
+          fragmentEndAnchor,
+          parentComponent,
+          parentSuspense,
+          isSVG,
+          optimized
+        )
+      }
+    }
+  }
 
   // 17. processComponent
   const processComponent = (
@@ -1603,6 +1761,42 @@ export function invokeVNodeHook(
     vnode,
     prevVNode
   ])
+}
+
+/**
+ * #1156
+ * When a component is HMR-enabled, we need to make sure that all static nodes
+ * inside a block also inherit the DOM element from the previous tree so that
+ * HMR updates (which are full updates) can retrieve the element for patching.
+ *
+ * #2080
+ * Inside keyed `template` fragment static children, if a fragment is moved,
+ * the children will always moved so that need inherit el form previous nodes
+ * to ensure correct moved position.
+ */
+export function traverseStaticChildren(n1: VNode, n2: VNode, shallow = false) {
+  const ch1 = n1.children
+  const ch2 = n2.children
+  if (isArray(ch1) && isArray(ch2)) {
+    for (let i = 0; i < ch1.length; i++) {
+      // this is only called in the optimized path so array children are
+      // guaranteed to be vnodes
+      const c1 = ch1[i] as VNode
+      let c2 = ch2[i] as VNode
+      if (c2.shapeFlag & ShapeFlags.ELEMENT && !c2.dynamicChildren) {
+        if (c2.patchFlag <= 0 || c2.patchFlag === PatchFlags.HYDRATE_EVENTS) {
+          c2 = ch2[i] = cloneIfMounted(ch2[i] as VNode)
+          c2.el = c1.el
+        }
+        if (!shallow) traverseStaticChildren(c1, c2)
+      }
+      // also inherit for comment nodes, but not placeholders (e.g. v-if which
+      // would have received .el during block patch)
+      if (__DEV__ && c2.type === Comment && !c2.el) {
+        c2.el = c1.el
+      }
+    }
+  }
 }
 
 // https://en.wikipedia.org/wiki/Longest_increasing_subsequence
