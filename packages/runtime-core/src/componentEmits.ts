@@ -1,6 +1,26 @@
-import { isOn, hasOwn, hyphenate } from '@vue/shared'
+import {
+  camelize,
+  EMPTY_OBJ,
+  toHandlerKey,
+  extend,
+  hasOwn,
+  hyphenate,
+  isArray,
+  isFunction,
+  isOn,
+  toNumber
+} from '@vue/shared'
+import {
+  ComponentInternalInstance,
+  ComponentOptions,
+  ConcreteComponent,
+  formatComponentName
+} from './component'
+import { callWithAsyncErrorHandling, ErrorCodes } from './errorHandling'
+import { warn } from './warning'
 import { UnionToIntersection } from './helpers/typeUtils'
-import { ComponentInternalInstance } from './component'
+import { devtoolsComponentEmit } from './devtools'
+import { AppContext } from './apiCreateApp'
 
 export type ObjectEmitsOptions = Record<
   string,

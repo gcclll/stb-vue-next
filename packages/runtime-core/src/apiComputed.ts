@@ -1,9 +1,9 @@
 import {
   computed as _computed,
-  ComputedGetter,
   ComputedRef,
   WritableComputedOptions,
-  WritableComputedRef
+  WritableComputedRef,
+  ComputedGetter
 } from '@vue/reactivity'
 import { recordInstanceBoundEffect } from './component'
 

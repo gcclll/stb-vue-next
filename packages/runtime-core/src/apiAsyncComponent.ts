@@ -1,15 +1,18 @@
-import { isFunction } from '@vue/shared'
-import { ref } from '@vue/reactivity'
-import { defineComponent } from './apiDefineComponent'
 import {
   Component,
-  ComponentInternalInstance,
-  ComponentOptions,
   ConcreteComponent,
-  currentInstance
+  currentInstance,
+  ComponentInternalInstance,
+  isInSSRComponentSetup,
+  ComponentOptions
 } from './component'
+import { isFunction, isObject } from '@vue/shared'
 import { ComponentPublicInstance } from './componentPublicInstance'
 import { createVNode, VNode } from './vnode'
+import { defineComponent } from './apiDefineComponent'
+import { warn } from './warning'
+import { ref } from '@vue/reactivity'
+import { handleError, ErrorCodes } from './errorHandling'
 
 export type AsyncComponentResolveResult<T = Component> = T | { default: T } // es modules
 
@@ -32,7 +35,7 @@ export interface AsyncComponentOptions<T = any> {
   ) => any
 }
 
-export const isAsyncWrapper = (i: ComponentInternalInstance | VNode) =>
+export const isAsyncWrapper = (i: ComponentInternalInstance | VNode): boolean =>
   !!(i.type as ComponentOptions).__asyncLoader
 
 export function defineAsyncComponent<

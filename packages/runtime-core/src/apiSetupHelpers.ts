@@ -1,7 +1,7 @@
 import {
-  createSetupContext,
   getCurrentInstance,
-  SetupContext
+  SetupContext,
+  createSetupContext
 } from './component'
 import { EmitFn, EmitsOptions } from './componentEmits'
 import { ComponentObjectPropsOptions, ExtractPropTypes } from './componentProps'

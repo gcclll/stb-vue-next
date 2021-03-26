@@ -1419,7 +1419,7 @@ function baseCreateRenderer(
 
     // TODO suspense
   }
-  // 30. TODO unmountChildren
+  // 30. unmountChildren
   const unmountChildren: UnmountChildrenFn = (
     children,
     parentComponent,
@@ -1434,7 +1434,10 @@ function baseCreateRenderer(
   }
   // 31. getNextHostNode
   const getNextHostNode: NextFn = vnode => {
-    // TODO COMPONENT
+    // COMPONENT
+    if (vnode.shapeFlag & ShapeFlags.COMPONENT) {
+      return getNextHostNode(vnode.component!.subTree)
+    }
     // TODO SUSPENSE
 
     return hostNextSibling((vnode.anchor || vnode.el)!)

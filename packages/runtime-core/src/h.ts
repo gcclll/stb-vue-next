@@ -1,19 +1,23 @@
-import { isObject, isArray } from '@vue/shared'
-import { DefineComponent } from './apiDefineComponent'
-import { Component, ConcreteComponent, FunctionalComponent } from './component'
-import { EmitsOptions } from './componentEmits'
-import { ComponentOptions } from './componentOptions'
-import { Suspense, SuspenseProps } from './components/Suspense'
+import {
+  VNode,
+  VNodeProps,
+  createVNode,
+  VNodeArrayChildren,
+  Fragment,
+  isVNode
+} from './vnode'
 import { Teleport, TeleportProps } from './components/Teleport'
+import { Suspense, SuspenseProps } from './components/Suspense'
+import { isObject, isArray } from '@vue/shared'
 import { RawSlots } from './componentSlots'
 import {
-  createVNode,
-  Fragment,
-  isVNode,
-  VNode,
-  VNodeArrayChildren,
-  VNodeProps
-} from './vnode'
+  FunctionalComponent,
+  Component,
+  ComponentOptions,
+  ConcreteComponent
+} from './component'
+import { EmitsOptions } from './componentEmits'
+import { DefineComponent } from './apiDefineComponent'
 
 // `h` is a more user-friendly version of `createVNode` that allows omitting the
 // props when possible. It is intended for manually written render functions.

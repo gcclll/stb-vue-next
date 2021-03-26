@@ -1,12 +1,10 @@
-import { SlotFlags } from '@vue/shared'
-import { isHmrUpdating } from './hmr'
-import { ComponentInternalInstance } from './component'
+import { ComponentInternalInstance, currentInstance } from './component'
 import {
-  VNodeChild,
-  normalizeVNode,
-  InternalObjectKey,
   VNode,
-  VNodeNormalizedChildren
+  VNodeNormalizedChildren,
+  normalizeVNode,
+  VNodeChild,
+  InternalObjectKey
 } from './vnode'
 import {
   isArray,
@@ -17,7 +15,10 @@ import {
   def,
   SlotFlags
 } from '@vue/shared'
+import { warn } from './warning'
+import { isKeepAlive } from './components/KeepAlive'
 import { withCtx } from './helpers/withRenderContext'
+import { isHmrUpdating } from './hmr'
 
 export type Slot = (...args: any[]) => VNode[]
 

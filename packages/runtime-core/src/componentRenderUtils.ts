@@ -1,4 +1,8 @@
-import { ComponentInternalInstance, Data } from './component'
+import {
+  ComponentInternalInstance,
+  FunctionalComponent,
+  Data
+} from './component'
 import {
   VNode,
   normalizeVNode,
@@ -8,11 +12,11 @@ import {
   VNodeArrayChildren,
   isVNode
 } from './vnode'
-
-import { PatchFlags, ShapeFlags, isOn, isModelListener } from '@vue/shared'
 import { handleError, ErrorCodes } from './errorHandling'
+import { PatchFlags, ShapeFlags, isOn, isModelListener } from '@vue/shared'
 import { warn } from './warning'
-import { Comment, isVNode, VNode, VNodeArrayChildren } from './vnode'
+import { isHmrUpdating } from './hmr'
+import { NormalizedProps } from './componentProps'
 import { isEmitListener } from './componentEmits'
 
 /**

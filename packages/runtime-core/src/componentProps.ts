@@ -1,34 +1,38 @@
 import {
-  Data,
-  setCurrentInstance,
-  ConcreteComponent,
-  ComponentOptions,
-  ComponentInternalInstance
-} from './component'
-import { AppContext } from './apiCreateApp'
-import { warn } from './warning'
-import {
   toRaw,
   shallowReactive,
   trigger,
   TriggerOpTypes
 } from '@vue/reactivity'
-
 import {
-  extend,
-  isArray,
   EMPTY_OBJ,
-  EMPTY_ARR,
-  hyphenate,
-  def,
-  isReservedProp,
   camelize,
-  hasOwn,
+  hyphenate,
+  capitalize,
+  isString,
   isFunction,
-  PatchFlags
+  isArray,
+  isObject,
+  hasOwn,
+  toRawType,
+  PatchFlags,
+  makeMap,
+  isReservedProp,
+  EMPTY_ARR,
+  def,
+  extend
 } from '@vue/shared'
-import { InternalObjectKey } from './vnode'
+import { warn } from './warning'
+import {
+  Data,
+  ComponentInternalInstance,
+  ComponentOptions,
+  ConcreteComponent,
+  setCurrentInstance
+} from './component'
 import { isEmitListener } from './componentEmits'
+import { InternalObjectKey } from './vnode'
+import { AppContext } from './apiCreateApp'
 
 export type ComponentPropsOptions<P = Data> =
   | ComponentObjectPropsOptions<P>
@@ -334,7 +338,7 @@ function resolvePropValue(
 export function normalizePropsOptions(
   comp: ConcreteComponent,
   appContext: AppContext,
-  asMixin: false
+  asMixin = false
 ): NormalizedPropsOptions {
   if (!appContext.deopt && comp.__props) {
     return comp.__props
@@ -359,14 +363,17 @@ export function normalizePropsOptions(
       }
     }
 
+    // Comp: { mixins: [mixin] } 处理
+    if (!asMixin && appContext.mixins.length) {
+      appContext.mixins.forEach(extendProps)
+    }
+
     // Comp: { extends: CompA } 处理
     if (comp.extends) {
       extendProps(comp.extends)
     }
-
-    // Comp: { mixins: [mixin] } 处理
-    if (!asMixin && appContext.mixins.length) {
-      appContext.mixins.forEach(extendProps)
+    if (comp.mixins) {
+      comp.mixins.forEach(extendProps)
     }
   }
 

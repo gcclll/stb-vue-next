@@ -1,57 +1,62 @@
-// import { CompilerOptions } from '@vue/compiler-dom'
+import { VNode, VNodeChild, isVNode } from './vnode'
 import {
+  ReactiveEffect,
   pauseTracking,
   resetTracking,
-  proxyRefs,
-  ReactiveEffect,
-  shallowReadonly
+  shallowReadonly,
+  proxyRefs
 } from '@vue/reactivity'
 import {
-  NOOP,
-  ShapeFlags,
-  isFunction,
-  isObject,
-  makeMap,
-  NO,
-  isPromise,
-  EMPTY_OBJ
-} from '@vue/shared'
-import { AppConfig, AppContext, createAppContext } from './apiCreateApp'
-import { CompilerOptions } from '@vue/compiler-core'
-import {
-  emit,
-  EmitFn,
-  EmitsOptions,
-  ObjectEmitsOptions
-} from './componentEmits'
-import {
-  ComponentOptions,
-  ComputedOptions,
-  MethodOptions
-} from './componentOptions'
+  ComponentPublicInstance,
+  PublicInstanceProxyHandlers,
+  RuntimeCompiledPublicInstanceProxyHandlers,
+  createRenderContext,
+  exposePropsOnRenderContext,
+  exposeSetupStateOnRenderContext,
+  ComponentPublicInstanceConstructor
+} from './componentPublicInstance'
 import {
   ComponentPropsOptions,
   NormalizedPropsOptions,
   initProps,
   normalizePropsOptions
 } from './componentProps'
+import { Slots, initSlots, InternalSlots } from './componentSlots'
+import { warn } from './warning'
+import { ErrorCodes, callWithErrorHandling } from './errorHandling'
+import { AppContext, createAppContext, AppConfig } from './apiCreateApp'
+import { Directive, validateDirectiveName } from './directives'
 import {
-  ComponentPublicInstance,
-  ComponentPublicInstanceConstructor,
-  PublicInstanceProxyHandlers,
-  createRenderContext,
-  RuntimeCompiledPublicInstanceProxyHandlers
-} from './componentPublicInstance'
+  applyOptions,
+  ComponentOptions,
+  ComputedOptions,
+  MethodOptions
+} from './componentOptions'
+import {
+  EmitsOptions,
+  ObjectEmitsOptions,
+  EmitFn,
+  emit,
+  normalizeEmitsOptions
+} from './componentEmits'
+import {
+  EMPTY_OBJ,
+  isFunction,
+  NOOP,
+  isObject,
+  NO,
+  makeMap,
+  isPromise,
+  ShapeFlags
+} from '@vue/shared'
+import { SuspenseBoundary } from './components/Suspense'
+import { CompilerOptions } from '@vue/compiler-core'
 import {
   currentRenderingInstance,
   markAttrsAccessed
 } from './componentRenderUtils'
-import { SuspenseBoundary } from './components/Suspense'
-import { InternalSlots, Slots, initSlots } from './componentSlots'
-import { ErrorCodes, callWithErrorHandling } from './errorHandling'
-import { Directive } from './directives'
-import { VNode, VNodeChild, isVNode } from './vnode'
-import { warn } from './warning'
+import { startMeasure, endMeasure } from './profiling'
+import { devtoolsComponentAdded } from './devtools'
 
 export type Data = Record<string, unknown>
 

@@ -1,19 +1,19 @@
-import { NO, isObject, isFunction } from '@vue/shared'
-import { InjectionKey } from './apiInject'
 import {
-  Component,
   ConcreteComponent,
   Data,
-  validateComponentName
+  validateComponentName,
+  Component
 } from './component'
 import { ComponentOptions } from './componentOptions'
 import { ComponentPublicInstance } from './componentPublicInstance'
 import { Directive, validateDirectiveName } from './directives'
-import { RootHydrateFunction } from './hydration'
 import { RootRenderFunction } from './renderer'
-import { createVNode, cloneVNode, VNode } from './vnode'
-import { devtoolsInitApp, devtoolsUnmountApp } from './devtools'
+import { InjectionKey } from './apiInject'
+import { isFunction, NO, isObject } from '@vue/shared'
 import { warn } from './warning'
+import { createVNode, cloneVNode, VNode } from './vnode'
+import { RootHydrateFunction } from './hydration'
+import { devtoolsInitApp, devtoolsUnmountApp } from './devtools'
 import { version } from '.'
 
 export interface App<HostElement = any> {
@@ -285,7 +285,7 @@ export function createAppAPI<HostElement>(
           if (__DEV__ || __FEATURE_PROD_DEVTOOLS__) {
             devtoolsUnmountApp(app)
           }
-        } else {
+        } else if (__DEV__) {
           warn(`Cannot unmount an app that is not mounted.`)
         }
       },

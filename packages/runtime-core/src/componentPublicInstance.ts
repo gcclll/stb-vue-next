@@ -1,41 +1,42 @@
+import { ComponentInternalInstance, Data } from './component'
+import { nextTick, queueJob } from './scheduler'
+import { instanceWatch, WatchOptions, WatchStopHandle } from './apiWatch'
+import {
+  EMPTY_OBJ,
+  hasOwn,
+  isGloballyWhitelisted,
+  NOOP,
+  extend,
+  isString
+} from '@vue/shared'
 import {
   ReactiveEffect,
-  ShallowUnwrapRef,
+  toRaw,
   shallowReadonly,
   ReactiveFlags,
   track,
-  TrackOpTypes
+  TrackOpTypes,
+  ShallowUnwrapRef
 } from '@vue/reactivity'
-import { nextTick, queueJob } from './scheduler'
 import {
-  isGloballyWhitelisted,
-  EMPTY_OBJ,
-  hasOwn,
-  isString,
-  extend,
-  NOOP
-} from '@vue/shared'
-import { instanceWatch, WatchOptions, WatchStopHandle } from './apiWatch'
-import { ComponentInternalInstance, Data } from './component'
-import { EmitFn, EmitsOptions } from './componentEmits'
-import {
-  ComponentOptionsBase,
-  ComponentOptionsMixin,
-  ComputedOptions,
   ExtractComputedReturns,
+  ComponentOptionsBase,
+  ComputedOptions,
   MethodOptions,
-  OptionTypesKeys,
+  ComponentOptionsMixin,
   OptionTypesType,
+  OptionTypesKeys,
   resolveMergedOptions,
   isInBeforeCreate
 } from './componentOptions'
+import { EmitsOptions, EmitFn } from './componentEmits'
+import { Slots } from './componentSlots'
 import {
   currentRenderingInstance,
   markAttrsAccessed
 } from './componentRenderUtils'
-import { Slots } from './componentSlots'
-import { UnionToIntersection } from './helpers/typeUtils'
 import { warn } from './warning'
+import { UnionToIntersection } from './helpers/typeUtils'
 
 /**
  * Custom properties added to component instances in any way and can be accessed through `this`

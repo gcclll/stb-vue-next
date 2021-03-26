@@ -1,5 +1,3 @@
-import { DebuggerEvent, pauseTracking, resetTracking } from '@vue/reactivity'
-import { toHandlerKey } from '@vue/shared'
 import {
   ComponentInternalInstance,
   currentInstance,
@@ -10,6 +8,10 @@ import {
 import { ComponentPublicInstance } from './componentPublicInstance'
 import { callWithAsyncErrorHandling, ErrorTypeStrings } from './errorHandling'
 import { warn } from './warning'
+import { toHandlerKey } from '@vue/shared'
+import { DebuggerEvent, pauseTracking, resetTracking } from '@vue/reactivity'
+
+export { onActivated, onDeactivated } from './components/KeepAlive'
 
 export function injectHook(
   type: LifecycleHooks,
@@ -57,7 +59,6 @@ export function injectHook(
           : ``)
     )
   }
-  return
 }
 
 export const createHook = <T extends Function = () => any>(
@@ -70,7 +71,7 @@ export const onMounted = createHook(LifecycleHooks.MOUNTED)
 export const onBeforeUpdate = createHook(LifecycleHooks.BEFORE_UPDATE)
 export const onUpdated = createHook(LifecycleHooks.UPDATED)
 export const onBeforeUnmount = createHook(LifecycleHooks.BEFORE_UNMOUNT)
-export const onUnmount = createHook(LifecycleHooks.UNMOUNTED)
+export const onUnmounted = createHook(LifecycleHooks.UNMOUNTED)
 
 export type DebuggerHook = (e: DebuggerEvent) => void
 export const onRenderTriggered = createHook<DebuggerHook>(

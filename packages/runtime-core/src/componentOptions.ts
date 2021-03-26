@@ -1,28 +1,65 @@
-import { ComputedGetter, WritableComputedOptions } from '@vue/reactivity'
-import { hasOwn } from '@vue/shared'
-import { WatchCallback, WatchOptions } from './apiWatch'
 import {
-  Component,
   ComponentInternalInstance,
-  ComponentInternalOptions,
-  ConcreteComponent,
   Data,
-  SetupContext
+  SetupContext,
+  ComponentInternalOptions,
+  Component,
+  ConcreteComponent,
+  InternalRenderFunction,
+  LifecycleHooks
 } from './component'
-import { EmitsOptions } from './componentEmits'
+import {
+  isFunction,
+  extend,
+  isString,
+  isObject,
+  isArray,
+  EMPTY_OBJ,
+  NOOP,
+  hasOwn,
+  isPromise
+} from '@vue/shared'
+import { computed } from './apiComputed'
+import { watch, WatchOptions, WatchCallback } from './apiWatch'
+import { provide, inject } from './apiInject'
+import {
+  onBeforeMount,
+  onMounted,
+  onBeforeUpdate,
+  onUpdated,
+  onErrorCaptured,
+  onRenderTracked,
+  onBeforeUnmount,
+  onUnmounted,
+  onActivated,
+  onDeactivated,
+  onRenderTriggered,
+  DebuggerHook,
+  ErrorCapturedHook
+} from './apiLifecycle'
+import {
+  reactive,
+  ComputedGetter,
+  WritableComputedOptions,
+  toRaw,
+  proxyRefs,
+  toRef
+} from '@vue/reactivity'
 import {
   ComponentObjectPropsOptions,
-  ExtractDefaultPropTypes,
-  ExtractPropTypes
+  ExtractPropTypes,
+  ExtractDefaultPropTypes
 } from './componentProps'
-import {
-  ComponentPublicInstance,
-  CreateComponentPublicInstance
-} from './componentPublicInstance'
+import { EmitsOptions } from './componentEmits'
 import { Directive } from './directives'
-import { UnionToIntersection } from './helpers/typeUtils'
+import {
+  CreateComponentPublicInstance,
+  ComponentPublicInstance
+} from './componentPublicInstance'
 import { warn } from './warning'
 import { VNodeChild } from './vnode'
+import { callWithAsyncErrorHandling } from './errorHandling'
+import { UnionToIntersection } from './helpers/typeUtils'
 
 /**
  * Interface for declaring custom options.

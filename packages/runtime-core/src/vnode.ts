@@ -540,6 +540,34 @@ export function createTextVNode(text: string = ' ', flag: number = 0): VNode {
   return createVNode(Text, null, text, flag)
 }
 
+/**
+ * @private
+ */
+export function createStaticVNode(
+  content: string,
+  numberOfNodes: number
+): VNode {
+  // A static vnode can contain multiple stringified elements, and the number
+  // of elements is necessary for hydration.
+  const vnode = createVNode(Static, null, content)
+  vnode.staticCount = numberOfNodes
+  return vnode
+}
+
+/**
+ * @private
+ */
+export function createCommentVNode(
+  text: string = '',
+  // when used as the v-else branch, the comment node must be created as a
+  // block to ensure correct updates.
+  asBlock: boolean = false
+): VNode {
+  return asBlock
+    ? (openBlock(), createBlock(Comment, null, text))
+    : createVNode(Comment, null, text)
+}
+
 export function normalizeVNode(child: VNodeChild): VNode {
   if (child == null || typeof child === 'boolean') {
     // empty placeholder
@@ -572,7 +600,7 @@ export function normalizeChildren(vnode: VNode, children: unknown) {
     children = null
   } else if (isArray(children)) {
     type = ShapeFlags.ARRAY_CHILDREN
-  } else if (isObject(children)) {
+  } else if (typeof children === 'object') {
     // & 操作，这里等于是检测是 ELEMENT 还是 TELEPORT
     // 因为 ShapeFlags 内的值是通过左移位得到的
     if (shapeFlag & ShapeFlags.ELEMENT || shapeFlag & ShapeFlags.TELEPORT) {

@@ -1,37 +1,38 @@
 import {
-  ComputedRef,
   effect,
-  isReactive,
+  stop,
   isRef,
-  ReactiveEffectOptions,
   Ref,
-  stop
+  ComputedRef,
+  ReactiveEffectOptions,
+  isReactive
 } from '@vue/reactivity'
+import { SchedulerJob, queuePreFlushCb } from './scheduler'
 import {
   EMPTY_OBJ,
-  hasChanged,
+  isObject,
   isArray,
   isFunction,
-  isObject,
-  isSet,
-  isMap,
+  isString,
+  hasChanged,
   NOOP,
   remove,
-  isString
+  isMap,
+  isSet
 } from '@vue/shared'
-import { warn } from './warning'
 import {
-  ComponentInternalInstance,
   currentInstance,
+  ComponentInternalInstance,
+  isInSSRComponentSetup,
   recordInstanceBoundEffect
 } from './component'
-import { queuePreFlushCb, SchedulerJob } from './scheduler'
 import {
-  callWithAsyncErrorHandling,
+  ErrorCodes,
   callWithErrorHandling,
-  ErrorCodes
+  callWithAsyncErrorHandling
 } from './errorHandling'
 import { queuePostRenderEffect } from './renderer'
+import { warn } from './warning'
 
 export type WatchEffect = (onInvalidate: InvalidateCbRegistrator) => void
 
@@ -269,6 +270,8 @@ function doWatch(
   }
   //
   // 6. scheduler 设置
+  // it is allowed to self-trigger (#1727)
+  job.allowRecurse = !!cb
   let scheduler: ReactiveEffectOptions['scheduler']
   // 6.1 flush is 'sync'，让依赖同步执行，即当值发生改变之后
   // 立即就会体现出来，因为依赖在赋值之后被立即执行了
