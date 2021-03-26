@@ -317,6 +317,8 @@ function baseCreateRenderer(
     cloneNode: hostCloneNode,
     createElement: hostCreateElement,
     createText: hostCreateText,
+    createComment: hostCreateComment,
+
     setText: hostSetText,
     setElementText: hostSetElementText,
     nextSibling: hostNextSibling,
@@ -350,6 +352,10 @@ function baseCreateRenderer(
       case Text:
         processText(n1, n2, container, anchor)
         break
+      case Comment:
+        processCommentNode(n1, n2, container, anchor)
+        break
+
       default:
         // ELEMENT/COMPONENT/TELEPORT/SUSPENSE
         // 默认只支持这四种组件
@@ -400,7 +406,24 @@ function baseCreateRenderer(
       }
     }
   }
-  // 4. TODO processCommentNode 处理注释节点
+  // 4. processCommentNode 处理注释节点
+  const processCommentNode: ProcessTextOrCommentFn = (
+    n1,
+    n2,
+    container,
+    anchor
+  ) => {
+    if (n1 == null) {
+      hostInsert(
+        (n2.el = hostCreateComment((n2.children as string) || '')),
+        container,
+        anchor
+      )
+    } else {
+      // there's no support for dynamic comments
+      n2.el = n1.el
+    }
+  }
   // 5. TODO mountStaticNode 加载静态节点
   // 6. TODO patchStaticNode, Dev/HMR only
   // 7. TODO moveStaticNode，移动静态节点
