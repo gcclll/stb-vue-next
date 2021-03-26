@@ -26,7 +26,7 @@ import {
   VNodeArrayChildren,
   VNodeHook,
   Text,
-  // Static,
+  Static,
   Fragment
 } from './vnode'
 import {
@@ -41,7 +41,8 @@ import {
   isReservedProp,
   PatchFlags,
   ShapeFlags,
-  EMPTY_ARR
+  EMPTY_ARR,
+  NOOP
 } from '@vue/shared'
 import { stop, effect, ReactiveEffectOptions } from '@vue/reactivity'
 import { callWithAsyncErrorHandling, ErrorCodes } from './errorHandling'
@@ -314,15 +315,17 @@ function baseCreateRenderer(
     insert: hostInsert,
     remove: hostRemove,
     patchProp: hostPatchProp,
-    cloneNode: hostCloneNode,
+    forcePatchProp: hostForcePatchProp,
     createElement: hostCreateElement,
     createText: hostCreateText,
     createComment: hostCreateComment,
-
     setText: hostSetText,
     setElementText: hostSetElementText,
+    parentNode: hostParentNode,
     nextSibling: hostNextSibling,
-    parentNode: hostParentNode
+    setScopeId: hostSetScopeId = NOOP,
+    cloneNode: hostCloneNode,
+    insertStaticContent: hostInsertStaticContent
   } = options
   // 2. patch 函数
   const patch: PatchFn = (
@@ -356,6 +359,13 @@ function baseCreateRenderer(
         processCommentNode(n1, n2, container, anchor)
         break
 
+      case Static:
+        if (n1 == null) {
+          mountStaticNode(n2, container, anchor, isSVG)
+        } else if (__DEV__) {
+          patchStaticNode(n1, n2, container, isSVG)
+        }
+        break
       default:
         // ELEMENT/COMPONENT/TELEPORT/SUSPENSE
         // 默认只支持这四种组件
@@ -424,10 +434,74 @@ function baseCreateRenderer(
       n2.el = n1.el
     }
   }
-  // 5. TODO mountStaticNode 加载静态节点
-  // 6. TODO patchStaticNode, Dev/HMR only
-  // 7. TODO moveStaticNode，移动静态节点
-  // 8. TODO removeStaticNode, 删除静态节点
+  // 5. mountStaticNode 加载静态节点
+  const mountStaticNode = (
+    n2: VNode,
+    container: RendererElement,
+    anchor: RendererNode | null,
+    isSVG: boolean
+  ) => {
+    // static nodes are only present when used with compiler-dom/runtime-dom
+    // which guarantees presence of hostInsertStaticContent.
+    ;[n2.el, n2.anchor] = hostInsertStaticContent!(
+      n2.children as string,
+      container,
+      anchor,
+      isSVG
+    )
+  }
+
+  // 6. patchStaticNode, Dev/HMR only
+  const patchStaticNode = (
+    n1: VNode,
+    n2: VNode,
+    container: RendererElement,
+    isSVG: boolean
+  ) => {
+    // static nodes are only patched during dev for HMR
+    if (n2.children !== n1.children) {
+      const anchor = hostNextSibling(n1.anchor!)
+      // remove existing
+      removeStaticNode(n1)
+      // insert new
+      ;[n2.el, n2.anchor] = hostInsertStaticContent!(
+        n2.children as string,
+        container,
+        anchor,
+        isSVG
+      )
+    } else {
+      n2.el = n1.el
+      n2.anchor = n1.anchor
+    }
+  }
+
+  // 7. moveStaticNode，移动静态节点
+  const moveStaticNode = (
+    { el, anchor }: VNode,
+    container: RendererElement,
+    nextSibling: RendererNode | null
+  ) => {
+    let next
+    while (el && el !== anchor) {
+      next = hostNextSibling(el)
+      hostInsert(el, container, nextSibling)
+      el = next
+    }
+    hostInsert(anchor!, container, nextSibling)
+  }
+
+  // 8. removeStaticNode, 删除静态节点
+  const removeStaticNode = ({ el, anchor }: VNode) => {
+    let next
+    while (el && el !== anchor) {
+      next = hostNextSibling(el)
+      hostRemove(el)
+      el = next
+    }
+    hostRemove(anchor!)
+  }
+
   // 9. processElement, 处理元素
   const processElement = (
     n1: VNode | null,
@@ -1330,7 +1404,10 @@ function baseCreateRenderer(
     // TODO SUSPENSE
     // TODO TELEPORT
     // TODO Fragment
-    // TODO Static
+    // Static
+    if (type === Static) {
+      moveStaticNode(vnode, container, anchor)
+    }
     if (false /*needTransition*/) {
       // TODO
     } else {
