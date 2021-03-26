@@ -43,7 +43,7 @@ import {
   ShapeFlags,
   EMPTY_ARR
 } from '@vue/shared'
-import { effect, ReactiveEffectOptions } from '@vue/reactivity'
+import { stop, effect, ReactiveEffectOptions } from '@vue/reactivity'
 import { callWithAsyncErrorHandling, ErrorCodes } from './errorHandling'
 
 export interface Renderer<HostElement = RendererElement> {
@@ -573,6 +573,7 @@ function baseCreateRenderer(
 
     // patch props 处理
     if (patchFlag > 0) {
+      console.log('patch element props')
     } else if (!optimized && dynamicChildren == null) {
       // 未优化的，需要 full diff
     }
@@ -831,7 +832,7 @@ function baseCreateRenderer(
           if ((vnodeHook = next.props && next.props.onVnodeUpdated)) {
             queuePostRenderEffect(() => {
               invokeVNodeHook(vnodeHook!, parent, next!, vnode)
-            })
+            }, parentSuspense)
           }
         }
       },
@@ -1292,8 +1293,12 @@ function baseCreateRenderer(
     moveType,
     parentSuspense = null
   ) => {
-    const { el } = vnode
-    // TODO COMPONENT
+    const { el, shapeFlag } = vnode
+    // COMPONENT
+    if (shapeFlag & ShapeFlags.COMPONENT) {
+      move(vnode.component!.subTree, container, anchor, moveType)
+      return
+    }
     // TODO SUSPENSE
     // TODO TELEPORT
     // TODO Fragment
@@ -1331,7 +1336,8 @@ function baseCreateRenderer(
     // TODO 执行 onVnodeBeforeUnmount hook
 
     if (shapeFlag & ShapeFlags.COMPONENT) {
-      // TODO unmount component
+      // unmount component
+      unmountComponent(vnode.component!, parentSuspense, doRemove)
     } else {
       // TODO SUSPENSE
 
@@ -1379,7 +1385,40 @@ function baseCreateRenderer(
     }
   }
   // 28. TODO removeFragment
-  // 29. TODO unmountComponent
+  // 29. unmountComponent
+  const unmountComponent = (
+    instance: ComponentInternalInstance,
+    parentSuspense: SuspenseBoundary | null,
+    doRemove?: boolean
+  ) => {
+    const { bum, effects, update, subTree, um } = instance
+    // beforeUnmount hook
+    if (bum) {
+      invokeArrayFns(bum)
+    }
+    if (effects) {
+      for (let i = 0; i < effects.length; i++) {
+        stop(effects[i])
+      }
+    }
+
+    // update may be null if a component is unmounted before its async
+    // setup has resolved.
+    if (update) {
+      stop(update)
+      unmount(subTree, instance, parentSuspense, doRemove)
+    }
+
+    // unmounted hook
+    if (um) {
+      queuePostRenderEffect(um, parentSuspense)
+    }
+    queuePostRenderEffect(() => {
+      instance.isUnmounted = true
+    }, parentSuspense)
+
+    // TODO suspense
+  }
   // 30. TODO unmountChildren
   const unmountChildren: UnmountChildrenFn = (
     children,
