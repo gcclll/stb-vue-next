@@ -32,7 +32,7 @@ export {
   onBeforeUpdate,
   onUpdated,
   onBeforeUnmount,
-  onUnmount,
+  onUnmounted,
   onRenderTracked,
   onRenderTriggered,
   onErrorCaptured

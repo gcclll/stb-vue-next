@@ -317,6 +317,7 @@ function baseCreateRenderer(
     cloneNode: hostCloneNode,
     createElement: hostCreateElement,
     createText: hostCreateText,
+    setText: hostSetText,
     setElementText: hostSetElementText,
     nextSibling: hostNextSibling,
     parentNode: hostParentNode
@@ -393,6 +394,10 @@ function baseCreateRenderer(
       )
     } else {
       // has old vnode, need to diff
+      const el = (n2.el = n1.el!)
+      if (n2.children !== n1.children) {
+        hostSetText(el, n2.children as string)
+      }
     }
   }
   // 4. TODO processCommentNode 处理注释节点
