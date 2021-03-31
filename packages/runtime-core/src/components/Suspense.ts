@@ -198,7 +198,135 @@ function createSuspenseBoundary(
   rendererInternals: RendererInternals,
   isHydrating = false
 ): SuspenseBoundary {
-  const suspense: SuspenseBoundary = {} as any
+  const {
+    p: patch,
+    m: move,
+    um: unmount,
+    n: next,
+    o: { parentNode, remove }
+  } = rendererInternals
+
+  const timeout = toNumber(vnode.props && vnode.props.timeout)
+  const suspense: SuspenseBoundary = {
+    vnode,
+    parent,
+    parentComponent,
+    isSVG,
+    container,
+    hiddenContainer,
+    anchor,
+    deps: 0,
+    pendingId: 0,
+    timeout: typeof timeout === 'number' ? timeout : -1,
+    activeBranch: null,
+    pendingBranch: null,
+    isInFallback: true,
+    isHydrating,
+    isUnmounted: false,
+    effects: [],
+
+    resolve(resume = false) {
+      const {
+        vnode,
+        activeBranch,
+        pendingBranch,
+        pendingId,
+        effects,
+        parentComponent,
+        container
+      } = suspense
+
+      if (suspense.isHydrating) {
+        suspense.isHydrating = false
+      } else if (!resume) {
+        // 1. transition 支持，将 move() 操作注册到 afterLeave 回调
+        // 2. 卸载当前的 subTree 可能是 fallback
+        // 3. 不是 transition dely enter 进行 move()
+        // 这里最后执行的操作就是 move() 如果是 transition delay enter
+        // 则将 move() 注册到 afterLeave，否则直接执行 move() 将 suspense
+        // 内容渲染到真实DOM上
+        const delayEnter =
+          activeBranch &&
+          pendingBranch!.transition &&
+          pendingBranch!.transition.mode === 'out-in'
+        if (delayEnter) {
+          activeBranch!.transition!.afterLeave = () => {
+            if (pendingId === suspense.pendingId) {
+              move(pendingBranch!, container, anchor, MoveType.ENTER)
+            }
+          }
+        }
+        // this is initial anchor on mount
+        let { anchor } = suspense
+        // unmount current active tree
+        if (activeBranch) {
+          // if the fallback tree was mounted, it may have been moved
+          // as part of a parent suspense. get the latest anchor for insertion
+          anchor = next(activeBranch)
+          unmount(activeBranch, parentComponent, suspense, true)
+        }
+        if (!delayEnter) {
+          // move content from off-dom container to actual container
+          move(pendingBranch!, container, anchor, MoveType.ENTER)
+        }
+      }
+
+      // 标记当前激活状态的分支，此时是 #default
+      setActiveBranch(suspense, pendingBranch!)
+      suspense.pendingBranch = null
+      suspense.isInFallback = false
+
+      // flush buffered effects
+      // check if there is a pending parent suspense
+      // 注册的 effect 处理，这里的处理说明了 suspense 的父子依赖执行
+      // 的顺序问题， effects 是按照数组加入顺序执行的(详情可以查看 reactivity 文章)
+      // 所以 effects 的优先级是自上而下的，即 parent-parent > parent > children
+      let parent = suspense.parent
+      let hasUnresolvedAncestor = false
+      while (parent) {
+        if (parent.pendingBranch) {
+          // found a pending parent suspense, merge buffered post jobs
+          // into that parent
+          parent.effects.push(...effects)
+          hasUnresolvedAncestor = true
+          break
+        }
+        parent = parent.parent
+      }
+      // no pending parent suspense, flush all jobs
+      // 如果没有挂起的 parent suspense 直接 flush 掉所有任务
+      // 结合上面的 while 举例：
+      // CompA -> CompB -> CompC
+      // 当解析到 CompC 时，一直往上检测 B 和 A 如果 B 有挂起的任务
+      // C 这里的任务不会被 flush，而是加入到 B 的队列等待执行
+      // 然后 C 解析完成，回溯到 B 的解析，此时又遵循同一套规则检测 A 的
+      // 挂起任务，直到最后要么立即执行 B 的任务要么 B 的任务也加入到 A
+      // 最后由 A 执行所有的任务(包含子 suspense 的)
+      if (!hasUnresolvedAncestor) {
+        queuePostFlushCb(effects)
+      }
+      suspense.effects = []
+
+      // invoke @resolve event
+      const onResolve = vnode.props && vnode.props.onResolve
+      if (isFunction(onResolve)) {
+        onResolve()
+      }
+    },
+
+    fallback() {},
+
+    move() {},
+
+    next() {
+      return {} as any
+    },
+
+    registerDep() {},
+
+    unmount() {}
+  }
+
   return suspense
 }
 
