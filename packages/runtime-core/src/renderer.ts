@@ -33,6 +33,7 @@ import {
   VNodeHook,
   Text,
   Static,
+  Comment,
   Fragment
 } from './vnode'
 import {
@@ -413,6 +414,18 @@ function baseCreateRenderer(
           ;(type as typeof TeleportImpl).process(
             n1 as TeleportVNode,
             n2 as TeleportVNode,
+            container,
+            anchor,
+            parentComponent,
+            parentSuspense,
+            isSVG,
+            optimized,
+            internals
+          )
+        } else if (__FEATURE_SUSPENSE__ && shapeFlag & ShapeFlags.SUSPENSE) {
+          ;(type as typeof SuspenseImpl).process(
+            n1,
+            n2,
             container,
             anchor,
             parentComponent,
