@@ -96,7 +96,53 @@ function mountSuspense(
   isSVG: boolean,
   optimized: boolean,
   rendererInternals: RendererInternals
-) {}
+) {
+  const {
+    p: patch,
+    o: { createElement }
+  } = rendererInternals
+  const hiddenContainer = createElement('div')
+  const suspense = (vnode.suspense = createSuspenseBoundary(
+    vnode,
+    parentSuspense,
+    parentComponent,
+    container,
+    hiddenContainer,
+    anchor,
+    isSVG,
+    optimized,
+    rendererInternals
+  ))
+
+  // start mounting the content subtree in an off-dom container
+  patch(
+    null,
+    (suspense.pendingBranch = vnode.ssContent!),
+    hiddenContainer,
+    null,
+    parentComponent,
+    suspense,
+    isSVG
+  )
+  // now check if we have encountered any async deps
+  if (suspense.deps > 0) {
+    // has async
+    // mount the fallback tree
+    patch(
+      null,
+      vnode.ssFallback!,
+      container,
+      anchor,
+      parentComponent,
+      null, // fallback tree will not have suspense context
+      isSVG
+    )
+    setActiveBranch(suspense, vnode.ssFallback!)
+  } else {
+    // Suspense has no async deps. Just resolve.
+    suspense.resolve()
+  }
+}
 
 function patchSuspense(
   n1: VNode,
@@ -256,5 +302,17 @@ export function queueEffectWithSuspense(
     }
   } else {
     queuePostFlushCb(fn)
+  }
+}
+
+function setActiveBranch(suspense: SuspenseBoundary, branch: VNode) {
+  suspense.activeBranch = branch
+  const { vnode, parentComponent } = suspense
+  const el = (vnode.el = branch.el)
+  // in case suspense is the root node of a component,
+  // recursively update the HOC el
+  if (parentComponent && parentComponent.subTree === vnode) {
+    parentComponent.vnode.el = el
+    updateHOCHostEl(parentComponent, el)
   }
 }
