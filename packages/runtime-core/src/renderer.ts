@@ -8,7 +8,8 @@ import { updateProps } from './componentProps'
 import { updateSlots } from './componentSlots'
 import {
   queueEffectWithSuspense,
-  SuspenseBoundary
+  SuspenseBoundary,
+  SuspenseImpl
 } from './components/Suspense'
 import {
   // isTeleportDisabled,
@@ -28,6 +29,7 @@ import {
   cloneIfMounted,
   isSameVNodeType,
   normalizeVNode,
+  createVNode,
   VNode,
   VNodeArrayChildren,
   VNodeHook,
@@ -595,8 +597,11 @@ function baseCreateRenderer(
       hostCloneNode !== undefined &&
       patchFlag === PatchFlags.HOISTED
     ) {
-      // TODO
-      el = null as any
+      // If a vnode has non-null el, it means it's being reused.
+      // Only static vnodes can be reused, so its mounted DOM nodes should be
+      // exactly the same, and we can simply do a clone here.
+      // only do this in production since cloned trees cannot be HMR updated.
+      el = vnode.el = hostCloneNode(vnode.el)
     } else {
       el = vnode.el = hostCreateElement(
         vnode.type as string,
@@ -719,6 +724,14 @@ function baseCreateRenderer(
     // patch props 处理
     if (patchFlag > 0) {
       console.log('patch element props')
+
+      // text
+      // This flag is matched when the element has only dynamic text children.
+      if (patchFlag & PatchFlags.TEXT) {
+        if (n1.children !== n2.children) {
+          hostSetElementText(el, n2.children as string)
+        }
+      }
     } else if (!optimized && dynamicChildren == null) {
       // 未优化的，需要 full diff
     }
@@ -727,6 +740,14 @@ function baseCreateRenderer(
 
     // patch children
     if (dynamicChildren) {
+      patchBlockChildren(
+        n1.dynamicChildren!,
+        dynamicChildren,
+        el,
+        parentComponent,
+        parentSuspense,
+        areChildrenSVG
+      )
     } else if (!optimized) {
       // full diff
       patchChildren(
@@ -922,6 +943,22 @@ function baseCreateRenderer(
 
     setupComponent(instance)
     console.log('mount component')
+
+    // setup() 是个异步函数，返回了 promise ，在 setupComponent
+    // 中会将 setup 执行结果赋值给 instance.asyncDep，即 SUSPENSE 处理
+    if (__FEATURE_SUSPENSE__ && instance.asyncDep) {
+      // 将 setupRenderEffect 注册到 parent deps 这里的 deps 执行由一定的规则
+      // 如果 parent suspense 没有结束，child deps 不会立即执行，而是将它们
+      // 合并到 parent suspense deps 中等待 parent 状态完成了才会执行，对于
+      // parent deps 也遵循这个规则，直到没有未完成的 parent suspense 为止
+      parentSuspense && parentSuspense.registerDep(instance, setupRenderEffect)
+      // 这里等于是说先用一个注释节点占位，等异步完成之后替换
+      if (!initialVNode.el) {
+        const placeholder = (instance.subTree = createVNode(Comment))
+        processCommentNode(null, placeholder, container!, anchor)
+      }
+      return
+    }
 
     setupRenderEffect(
       instance,
@@ -1566,22 +1603,31 @@ function baseCreateRenderer(
     moveType,
     parentSuspense = null
   ) => {
-    const { el, shapeFlag } = vnode
+    const { el, shapeFlag, type } = vnode
+    console.log('moving...')
     // COMPONENT
     if (shapeFlag & ShapeFlags.COMPONENT) {
+      console.log('move component')
       move(vnode.component!.subTree, container, anchor, moveType)
       return
     }
-    // TODO SUSPENSE
+    // SUSPENSE
+    if (__FEATURE_SUSPENSE__ && shapeFlag & ShapeFlags.SUSPENSE) {
+      console.log('move suspense')
+      vnode.suspense!.move(container, anchor, moveType)
+      return
+    }
     // TODO TELEPORT
     // TODO Fragment
     // Static
     if (type === Static) {
+      console.log('move static')
       moveStaticNode(vnode, container, anchor)
     }
     if (false /*needTransition*/) {
       // TODO
     } else {
+      console.log('move host insert')
       // 目前只实现普通元素的逻辑
       hostInsert(el!, container, anchor)
     }

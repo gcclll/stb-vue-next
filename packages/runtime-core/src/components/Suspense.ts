@@ -316,7 +316,11 @@ function createSuspenseBoundary(
 
     fallback() {},
 
-    move() {},
+    move(container, anchor, type) {
+      suspense.activeBranch &&
+        move(suspense.activeBranch, container, anchor, type)
+      suspense.container = container
+    },
 
     next() {
       return {} as any
