@@ -326,8 +326,60 @@ function createSuspenseBoundary(
       return {} as any
     },
 
-    registerDep() {},
+    registerDep(instance, setupRenderEffect) {
+      const isInPendingSuspense = !!suspense.pendingBranch
+      if (isInPendingSuspense) {
+        suspense.deps++
+      }
+      const hydratedEl = instance.vnode.el
+      // 捕获 setup 执行的异常，或接受执行的结果
+      instance
+        .asyncDep!.catch(err => {
+          handleError(err, instance, ErrorCodes.SETUP_FUNCTION)
+        })
+        .then(asyncSetupResult => {
+          // 当 setup() 的 promise 状态变更之后重试
+          // 因为在解析之前组件可能已经被卸载了
+          if (
+            instance.isUnmounted ||
+            suspense.isUnmounted ||
+            suspense.pendingId !== instance.suspenseId
+          ) {
+            return
+          }
 
+          // 从该组件开始重试，状态标记为已经完成
+          instance.asyncResolved = true
+          const { vnode } = instance
+          handleSetupResult(instance, asyncSetupResult, false)
+          if (hydratedEl) {
+            // 虚拟节点可能在 async dep 状态完成之前被某个更新替换掉了
+            vnode.el = hydratedEl
+          }
+          const placeHolder = !hydratedEl && instance.subTree.el
+          setupRenderEffect(
+            instance,
+            vnode,
+            // 组件可能在 resolve 之前被移除了
+            // 如果这个不是一个 hydration，instance.subTree 将会是个注释
+            // 占位节点
+            parentNode(hydratedEl || instance.subTree.el!),
+            hydratedEl ? null : next(instance.subTree),
+            suspense,
+            isSVG,
+            optimized
+          )
+          if (placeHolder) {
+            remove(placeHolder)
+          }
+          updateHOCHostEl(instance, vnode.el)
+          // only decrease deps count if suspense is not already resolved
+          // 没有任何依赖了就开始解析 Suspense
+          if (isInPendingSuspense && --suspense.deps === 0) {
+            suspense.resolve()
+          }
+        })
+    },
     unmount() {}
   }
 
