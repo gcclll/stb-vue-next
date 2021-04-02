@@ -559,7 +559,6 @@ function baseCreateRenderer(
     optimized: boolean
   ) => {
     isSVG = isSVG || (n2.type as string) === 'svg'
-    console.log('process element')
     if (n1 == null) {
       // no old
       mountElement(
@@ -589,7 +588,6 @@ function baseCreateRenderer(
     let el: RendererElement
     let vnodeHook: VNodeHook | undefined | null
     const { type, shapeFlag, patchFlag, props } = vnode
-    console.log('mount elment')
 
     if (
       !__DEV__ &&
@@ -609,7 +607,6 @@ function baseCreateRenderer(
         props && props.is
       )
 
-      console.log({ shapeFlag })
       // 在处理 props 之前先 mount children ，因为
       // 有些 props 可能会依赖于 child 是否已经渲染出来
       // 比如： `<select value>`
@@ -723,8 +720,6 @@ function baseCreateRenderer(
 
     // patch props 处理
     if (patchFlag > 0) {
-      console.log('patch element props')
-
       // text
       // This flag is matched when the element has only dynamic text children.
       if (patchFlag & PatchFlags.TEXT) {
@@ -942,7 +937,6 @@ function baseCreateRenderer(
     ))
 
     setupComponent(instance)
-    console.log('mount component')
 
     // setup() 是个异步函数，返回了 promise ，在 setupComponent
     // 中会将 setup 执行结果赋值给 instance.asyncDep，即 SUSPENSE 处理
@@ -972,10 +966,8 @@ function baseCreateRenderer(
   }
   // 19. updateComponent
   const updateComponent = (n1: VNode, n2: VNode, optimized: boolean) => {
-    console.log('update component')
     const instance = (n2.component = n1.component)!
     if (shouldUpdateComponent(n1, n2, optimized)) {
-      console.log('should update component....')
       if (
         __FEATURE_SUSPENSE__ &&
         instance.asyncDep && // async setup
@@ -986,7 +978,6 @@ function baseCreateRenderer(
         updateComponentPreRender(instance, n2, optimized)
         return
       } else {
-        console.log('normal update')
         // 正常更新
         instance.next = n2
         // 考虑到 child 组件可能正在队列中排队，移除它避免
@@ -1000,7 +991,6 @@ function baseCreateRenderer(
       }
       return
     } else {
-      console.log('should not update component....')
       // 没有更新，仅用 old child 的属性覆盖 new child
       n2.component = n1.component
       n2.el = n1.el
@@ -1019,7 +1009,6 @@ function baseCreateRenderer(
   ) => {
     instance.update = effect(
       function componentEffect() {
-        console.log('update effect')
         // 监听更新
         if (!instance.isMounted) {
           // 还没加载完成，可能是第一次 mount 操作
@@ -1044,7 +1033,6 @@ function baseCreateRenderer(
           if (el && hydrateNode) {
             // TODO hydrateNode
           } else {
-            console.log('patch component')
             patch(
               null,
               subTree,
@@ -1088,7 +1076,6 @@ function baseCreateRenderer(
         } else {
           // updateComponent
           // 当组件自身的状态或父组件调用 processComponent 时触发
-          console.log('component update')
           let { next, bu, u, parent, vnode } = instance
           let originNext = next
           let vnodeHook: VNodeHook | null | undefined
@@ -1158,7 +1145,6 @@ function baseCreateRenderer(
     nextVNode: VNode,
     optimized: boolean
   ) => {
-    console.log('update comp pre render')
     nextVNode.component = instance
     const prevProps = instance.vnode.props
     instance.vnode = nextVNode
@@ -1604,16 +1590,13 @@ function baseCreateRenderer(
     parentSuspense = null
   ) => {
     const { el, shapeFlag, type } = vnode
-    console.log('moving...')
     // COMPONENT
     if (shapeFlag & ShapeFlags.COMPONENT) {
-      console.log('move component')
       move(vnode.component!.subTree, container, anchor, moveType)
       return
     }
     // SUSPENSE
     if (__FEATURE_SUSPENSE__ && shapeFlag & ShapeFlags.SUSPENSE) {
-      console.log('move suspense')
       vnode.suspense!.move(container, anchor, moveType)
       return
     }
@@ -1621,13 +1604,11 @@ function baseCreateRenderer(
     // TODO Fragment
     // Static
     if (type === Static) {
-      console.log('move static')
       moveStaticNode(vnode, container, anchor)
     }
     if (false /*needTransition*/) {
       // TODO
     } else {
-      console.log('move host insert')
       // 目前只实现普通元素的逻辑
       hostInsert(el!, container, anchor)
     }
