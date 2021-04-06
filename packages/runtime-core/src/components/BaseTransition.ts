@@ -1,5 +1,23 @@
+import {
+  getCurrentInstance,
+  SetupContext,
+  ComponentInternalInstance
+} from '../component'
+import {
+  cloneVNode,
+  Comment,
+  isSameVNodeType,
+  VNode,
+  VNodeArrayChildren,
+  Fragment
+} from '../vnode'
+import { warn } from '../warning'
+import { isKeepAlive } from './KeepAlive'
+import { toRaw } from '@vue/reactivity'
+import { callWithAsyncErrorHandling, ErrorCodes } from '../errorHandling'
+import { ShapeFlags, PatchFlags } from '@vue/shared'
+import { onBeforeUnmount, onMounted } from '../apiLifecycle'
 import { RendererElement } from '../renderer'
-import { VNode } from '../vnode'
 
 export interface BaseTransitionProps<HostElement = RendererElement> {
   mode?: 'in-out' | 'out-in' | 'default'
@@ -72,4 +90,15 @@ export interface TransitionElement {
   // before it finishes.
   _enterCb?: PendingCallback
   _leaveCb?: PendingCallback
+}
+
+export function setTransitionHooks(vnode: VNode, hooks: TransitionHooks) {
+  if (vnode.shapeFlag & ShapeFlags.COMPONENT && vnode.component) {
+    setTransitionHooks(vnode.component.subTree, hooks)
+  } else if (__FEATURE_SUSPENSE__ && vnode.shapeFlag & ShapeFlags.SUSPENSE) {
+    vnode.ssContent!.transition = hooks.clone(vnode.ssContent!)
+    vnode.ssFallback!.transition = hooks.clone(vnode.ssFallback!)
+  } else {
+    vnode.transition = hooks
+  }
 }

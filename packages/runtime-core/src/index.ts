@@ -66,7 +66,7 @@ export { Fragment, Text, Comment, Static } from './vnode'
 // Built-in components
 export { Teleport, TeleportProps } from './components/Teleport'
 export { Suspense, SuspenseProps } from './components/Suspense'
-export { KeepAliveProps } from './components/KeepAlive'
+export { KeepAlive, KeepAliveProps } from './components/KeepAlive'
 export { BaseTransitionProps } from './components/BaseTransition'
 
 // Custom Renderer API ---------------------------------------------------------
