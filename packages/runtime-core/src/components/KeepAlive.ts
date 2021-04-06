@@ -94,7 +94,32 @@ const KeepAliveImpl = {
     } = sharedContext
     const storageContainer = createElement('div')
 
-    sharedContext.activate = (vnode, container, anchor, isSVG, optimized) => {}
+    sharedContext.activate = (vnode, container, anchor, isSVG, optimized) => {
+      const instance = vnode.component!
+      move(vnode, container, anchor, MoveType.ENTER, parentSuspense)
+      // props 可能发生变化，这里执行一次 patch 操作
+      patch(
+        instance.vnode,
+        vnode,
+        container,
+        anchor,
+        instance,
+        parentSuspense,
+        isSVG,
+        optimized
+      )
+      queuePostRenderEffect(() => {
+        instance.isDeactivated = false
+        if (instance.a) {
+          // activated 周期函数
+          invokeArrayFns(instance.a)
+        }
+        const vnodeHook = vnode.props && vnode.props.onVnodeMounted
+        if (vnodeHook) {
+          invokeVNodeHook(vnodeHook, instance.parent, vnode)
+        }
+      }, parentSuspense)
+    }
 
     sharedContext.deactivate = (vnode: VNode) => {}
 
