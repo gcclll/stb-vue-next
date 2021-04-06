@@ -143,11 +143,48 @@ const KeepAliveImpl = {
     }
 
     // 过滤掉缓存
-    function pruneCache(filter?: (name: string) => boolean) {}
+    function pruneCache(filter?: (name: string) => boolean) {
+      cache.forEach((vnode, key) => {
+        const name = getComponentName(vnode.type as ConcreteComponent)
+        if (name && (!filter || !filter(name))) {
+          pruneCacheEntry(key)
+        }
+      })
+    }
 
-    function pruneCacheEntry(key: CacheKey) {}
+    function pruneCacheEntry(key: CacheKey) {
+      const cached = cache.get(key) as VNode
+      if (!current || cached.type !== current.type) {
+        // 新增或节点类型发生变化，直接卸载掉老的
+        unmount(cached)
+      } else if (current) {
+        // 重置标记就可以了？
+        // 当前激活的实例不该再是 kept-alive
+        // 我们不能立即卸载但是稍后会进行卸载，所以这里先重置其标记
+        // 不能立即卸载？
+        // 是因为在 activate 和 deactivate 中的周期函数调用
+        // 是采用的 post 类型异步执行的缘故吗？
+        resetShapeFlag(current)
+      }
+      cache.delete(key)
+      keys.delete(key)
+    }
 
-    // TODO 监听 include/exclude 属性变化
+    // 监听 include/exclude 属性变化
+    watch(
+      () => [props.include, props.exclude],
+      ([include, exclude]) => {
+        // 支持四种类型
+        // 1. 字符串, 'a,b,c'
+        // 2. 正则表达式， /a|b|c/
+        // 3. 字符串数组， ['a', 'b', 'c']
+        // 4. 正则表达式数组， [/a/, /b/, /c/]
+        include && pruneCache(name => matches(include, name))
+        exclude && pruneCache(name => !matches(exclude, name))
+      },
+      { flush: 'post', deep: true }
+    )
+
     // TODO 在 render 之后缓存子树(subTree)
     // TODO 注册生命周期
 
@@ -162,6 +199,18 @@ export const KeepAlive = (KeepAliveImpl as any) as {
   new (): {
     $props: VNodeProps & KeepAliveProps
   }
+}
+
+function matches(pattern: MatchPattern, name: string): boolean {
+  if (isArray(pattern)) {
+    return pattern.some((p: string | RegExp) => matches(p, name))
+  } else if (isString(pattern)) {
+    return pattern.split(',').indexOf(name) > -1
+  } else if (pattern.test) {
+    return pattern.test(name)
+  }
+  /* istanbul ignore next */
+  return false
 }
 
 function resetShapeFlag(vnode: VNode) {
