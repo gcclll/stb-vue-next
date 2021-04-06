@@ -137,7 +137,10 @@ const KeepAliveImpl = {
     }
 
     // 对 renderer unmount 的一次封装
-    function unmount(vnode: VNode) {}
+    function unmount(vnode: VNode) {
+      resetShapeFlag(vnode)
+      _unmount(vnode, instance, parentSuspense)
+    }
 
     // 过滤掉缓存
     function pruneCache(filter?: (name: string) => boolean) {}
@@ -159,4 +162,15 @@ export const KeepAlive = (KeepAliveImpl as any) as {
   new (): {
     $props: VNodeProps & KeepAliveProps
   }
+}
+
+function resetShapeFlag(vnode: VNode) {
+  let shapeFlag = vnode.shapeFlag
+  if (shapeFlag & ShapeFlags.COMPONENT_SHOULD_KEEP_ALIVE) {
+    shapeFlag -= ShapeFlags.COMPONENT_SHOULD_KEEP_ALIVE
+  }
+  if (shapeFlag & ShapeFlags.COMPONENT_KEPT_ALIVE) {
+    shapeFlag -= ShapeFlags.COMPONENT_KEPT_ALIVE
+  }
+  vnode.shapeFlag = shapeFlag
 }
