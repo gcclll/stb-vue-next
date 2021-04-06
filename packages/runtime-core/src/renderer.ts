@@ -16,7 +16,7 @@ import {
   TeleportImpl,
   TeleportVNode
 } from './components/Teleport'
-import { KeepAliveContext } from './components/KeepAlive'
+import { KeepAliveContext, isKeepAlive } from './components/KeepAlive'
 
 import { createHydrationFunctions, RootHydrateFunction } from './hydration'
 import {
@@ -942,6 +942,10 @@ function baseCreateRenderer(
       parentComponent,
       parentSuspense
     ))
+
+    if (isKeepAlive(initialVNode)) {
+      ;(instance.ctx as KeepAliveContext).renderer = internals
+    }
 
     setupComponent(instance)
 
