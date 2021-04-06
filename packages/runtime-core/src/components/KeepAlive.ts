@@ -213,7 +213,103 @@ const KeepAliveImpl = {
       })
     })
     return () => {
-      // 该函数解析出原始 VNode 节点返回
+      // 根据组件的执行流程，这个函数将会在 setupComponent() 中
+      // 执行 setup() 得到 setupResult ，传递给 handleSetupResult()
+      // 函数，这里面检测 setupResult 也就是这个匿名函数，如果它是函数
+      // 会直接被当做 render 函数处理(instance.render 或 instance.ssrRender)
+      // 结论就是，这个匿名函数是 render() 函数
+
+      pendingCacheKey = null
+      if (!slots.default) {
+        // 组件支持默认插槽使用方式
+        return null
+      }
+
+      const children = slots.default()
+      const rawVNode = children[0]
+      if (children.length > 1) {
+        // KeepAlive 组件只能包含一个组件作为 child
+        // 也就是说 ~<keep-alive><CompA/><CompB/></keep-alive/>~
+        // 是不合法的使用
+        current = null
+        // warn...
+        return children
+      } else if (
+        !isVNode(rawVNode) ||
+        (!(rawVNode.shapeFlag & ShapeFlags.STATEFUL_COMPONENT) &&
+          !(rawVNode.shapeFlag & ShapeFlags.SUSPENSE))
+      ) {
+        // 1. 非 VNode 类型节点
+        // 2. 既不是有状态组件(对象类型组件)也不是 Suspense 的时候
+        // 相反意味着，节点必须满足下面几种情况
+        // 1. 是 VNode 类型且是有状态组件(非函数式组件)
+        // 2. 或者是 VNode 类型且是Suspense 组件
+        current = null
+        return rawVNode
+      }
+
+      // 也就是说 keep-alive 只接受有状态组件或者 Suspense 作为唯一的 child
+      let vnode = getInnerChild(rawVNode)
+      const comp = vnode.type as ConcreteComponent
+      const name = getComponentName(comp)
+      const { include, exclude, max } = props
+
+      if (
+        // 无缓存的节点
+        (include && (!name || !matches(include, name))) ||
+        // 在不缓存的节点们之列
+        (exclude && name && matches(exclude, name))
+      ) {
+        current = vnode
+        return rawVNode
+      }
+
+      const key = vnode.key == null ? comp : vnode.key
+      const cachedVNode = cache.get(key)
+
+      // 克隆一份如果它有被复用的话，因为我们即将修改它
+      if (vnode.el) {
+        vnode = cloneVNode(vnode)
+        if (rawVNode.shapeFlag & ShapeFlags.SUSPENSE) {
+          rawVNode.ssContent = vnode
+        }
+      }
+
+      pendingCacheKey = key
+
+      if (cachedVNode) {
+        vnode.el = cachedVNode.el
+        vnode.component = cachedVNode.component
+        if (vnode.transition) {
+          // 在 subTree 上递归更新 transition 钩子函数
+          setTransitionHooks(vnode, vnode.transition!)
+        }
+
+        // 避免 vnode 正在首次 mount
+        vnode.shapeFlag |= ShapeFlags.COMPONENT_KEPT_ALIVE
+        // 标记 key 为最新的
+        keys.delete(key)
+        keys.add(key)
+      } else {
+        // 没有缓存的情况
+        keys.add(key)
+        // 删除最老的 entry，缓冲池已经满了，删除掉最老的那个
+        if (max && keys.size > parseInt(max as string, 10)) {
+          // 因为 Set 没有直接取指定位置元素的值
+          // 这里的目的是变相的取 Set 中第一个元素，即最早 add 的那个 key
+          // 如： new Set([1,2,3,4]) => keys.values() => <1,2,3,4>
+          // next() 得到迭代器下一个值 { value: 1, done: false }
+          // .value 得到第一个集合元素的值
+          pruneCacheEntry(keys.values().next().value)
+        }
+      }
+
+      // 避免 vnode 正在被卸载，在renderer unmount 中会检测
+      vnode.shapeFlag |= ShapeFlags.COMPONENT_SHOULD_KEEP_ALIVE
+
+      current = vnode
+
+      return rawVNode
     }
   }
 }
