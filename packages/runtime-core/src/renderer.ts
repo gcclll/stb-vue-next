@@ -16,6 +16,7 @@ import {
   TeleportImpl,
   TeleportVNode
 } from './components/Teleport'
+import { KeepAliveContext } from './components/KeepAlive'
 
 import { createHydrationFunctions, RootHydrateFunction } from './hydration'
 import {
@@ -903,8 +904,14 @@ function baseCreateRenderer(
   ) => {
     if (n1 == null) {
       // mount
-      if (false /* keep alive */) {
-        // TODO
+      if (n2.shapeFlag & ShapeFlags.COMPONENT_KEPT_ALIVE) {
+        ;(parentComponent!.ctx as KeepAliveContext).activate(
+          n2,
+          container,
+          anchor,
+          isSVG,
+          optimized
+        )
       } else {
         mountComponent(
           n2,
