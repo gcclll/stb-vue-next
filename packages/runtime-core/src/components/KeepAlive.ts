@@ -121,7 +121,20 @@ const KeepAliveImpl = {
       }, parentSuspense)
     }
 
-    sharedContext.deactivate = (vnode: VNode) => {}
+    sharedContext.deactivate = (vnode: VNode) => {
+      const instance = vnode.component!
+      move(vnode, storageContainer, null, MoveType.LEAVE, parentSuspense)
+      queuePostRenderEffect(() => {
+        if (instance.da) {
+          invokeArrayFns(instance.da)
+        }
+        const vnodeHook = vnode.props && vnode.props.onVnodeUnmounted
+        if (vnodeHook) {
+          invokeVNodeHook(vnodeHook, instance.parent, vnode)
+        }
+        instance.isDeactivated = true
+      }, parentSuspense)
+    }
 
     // 对 renderer unmount 的一次封装
     function unmount(vnode: VNode) {}
