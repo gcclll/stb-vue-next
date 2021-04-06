@@ -174,20 +174,44 @@ const KeepAliveImpl = {
     watch(
       () => [props.include, props.exclude],
       ([include, exclude]) => {
-        // 支持四种类型
+        // 支持三种类型
         // 1. 字符串, 'a,b,c'
         // 2. 正则表达式， /a|b|c/
-        // 3. 字符串数组， ['a', 'b', 'c']
-        // 4. 正则表达式数组， [/a/, /b/, /c/]
+        // 3. 数组， ['a', 'b', 'c', /d/, /e|f/]
         include && pruneCache(name => matches(include, name))
         exclude && pruneCache(name => !matches(exclude, name))
       },
       { flush: 'post', deep: true }
     )
 
-    // TODO 在 render 之后缓存子树(subTree)
-    // TODO 注册生命周期
+    // 在 render 之后缓存子树(subTree)
+    let pendingCacheKey: CacheKey | null = null
+    const cacheSubtree = () => {
+      if (pendingCacheKey != null) {
+        cache.set(pendingCacheKey, getInnerChild(instance.subTree))
+      }
+    }
+    // 注册生命周期
+    onMounted(cacheSubtree)
+    onUpdated(cacheSubtree)
 
+    onBeforeUnmount(() => {
+      cache.forEach(cached => {
+        const { subTree, suspense } = instance
+        const vnode = getInnerChild(subTree)
+        if (cached.type === vnode.type) {
+          // 有缓存的节点
+          // 当前实例会成为 keep-alive 的 unmount 一部分
+          resetShapeFlag(vnode)
+          // 但是在这里执行它的 deactivated 钩子函数
+          const da = vnode.component!.da
+          da && queuePostRenderEffect(da, suspense)
+          return
+        }
+        // 没有缓存的直接 unmount
+        unmount(cached)
+      })
+    })
     return () => {
       // 该函数解析出原始 VNode 节点返回
     }
@@ -222,4 +246,8 @@ function resetShapeFlag(vnode: VNode) {
     shapeFlag -= ShapeFlags.COMPONENT_KEPT_ALIVE
   }
   vnode.shapeFlag = shapeFlag
+}
+
+function getInnerChild(vnode: VNode) {
+  return vnode.shapeFlag & ShapeFlags.SUSPENSE ? vnode.ssContent! : vnode
 }
