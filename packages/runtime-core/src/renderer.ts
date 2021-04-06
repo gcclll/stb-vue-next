@@ -1641,7 +1641,11 @@ function baseCreateRenderer(
 
     // TODO unset ref
 
-    // TODO keep-alive
+    // keep-alive
+    if (shapeFlag & ShapeFlags.COMPONENT_SHOULD_KEEP_ALIVE) {
+      ;(parentComponent!.ctx as KeepAliveContext).deactivate(vnode)
+      return
+    }
 
     // TODO 执行 onVnodeBeforeUnmount hook
 
