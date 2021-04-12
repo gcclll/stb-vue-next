@@ -1,9 +1,3 @@
-import { makeMap } from '@vue/shared'
-import { Data } from './component'
-import { ComponentPublicInstance } from './componentPublicInstance'
-import { VNode } from './vnode'
-import { warn } from './warning'
-
 /**
 Runtime helper for applying directives to a vnode. Example usage:
 
@@ -16,6 +10,14 @@ return withDirectives(h(comp), [
   [bar, this.y]
 ])
 */
+
+import { VNode } from './vnode'
+import { isFunction, EMPTY_OBJ, makeMap } from '@vue/shared'
+import { warn } from './warning'
+import { ComponentInternalInstance, Data } from './component'
+import { currentRenderingInstance } from './componentRenderUtils'
+import { callWithAsyncErrorHandling, ErrorCodes } from './errorHandling'
+import { ComponentPublicInstance } from './componentPublicInstance'
 
 export interface DirectiveBinding<V = any> {
   instance: ComponentPublicInstance | null
@@ -74,3 +76,28 @@ export type DirectiveArguments = Array<
   | [Directive, any, string]
   | [Directive, any, string, DirectiveModifiers]
 >
+
+export function invokeDirectiveHook(
+  vnode: VNode,
+  prevVNode: VNode | null,
+  instance: ComponentInternalInstance | null,
+  name: keyof ObjectDirective
+) {
+  const bindings = vnode.dirs!
+  const oldBindings = prevVNode && prevVNode.dirs!
+  for (let i = 0; i < bindings.length; i++) {
+    const binding = bindings[i]
+    if (oldBindings) {
+      binding.oldValue = oldBindings[i].value
+    }
+    const hook = binding.dir[name] as DirectiveHook | undefined
+    if (hook) {
+      callWithAsyncErrorHandling(hook, instance, ErrorCodes.DIRECTIVE_HOOK, [
+        vnode.el,
+        binding,
+        vnode,
+        prevVNode
+      ])
+    }
+  }
+}

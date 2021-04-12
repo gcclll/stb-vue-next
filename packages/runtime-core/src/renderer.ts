@@ -12,12 +12,12 @@ import {
   SuspenseImpl
 } from './components/Suspense'
 import {
-  // isTeleportDisabled,
+  isTeleportDisabled,
   TeleportImpl,
   TeleportVNode
 } from './components/Teleport'
 import { KeepAliveContext, isKeepAlive } from './components/KeepAlive'
-
+import { invokeDirectiveHook } from './directives'
 import { createHydrationFunctions, RootHydrateFunction } from './hydration'
 import {
   queuePostFlushCb,
@@ -45,7 +45,8 @@ import {
 import {
   renderComponentRoot,
   shouldUpdateComponent,
-  updateHOCHostEl
+  updateHOCHostEl,
+  filterSingleRoot
 } from './componentRenderUtils'
 import { ComponentPublicInstance } from './componentPublicInstance'
 import { initFeatureFlags } from './featureFlags'
@@ -688,7 +689,15 @@ function baseCreateRenderer(
     // TODO
     let el: RendererElement
     let vnodeHook: VNodeHook | undefined | null
-    const { type, shapeFlag, patchFlag, props } = vnode
+    const {
+      type,
+      shapeFlag,
+      patchFlag,
+      props,
+      scopeId,
+      dirs,
+      transition
+    } = vnode
 
     if (
       !__DEV__ &&
@@ -726,6 +735,10 @@ function baseCreateRenderer(
         )
       }
 
+      if (dirs) {
+        invokeDirectiveHook(vnode, null, parentComponent, 'created')
+      }
+
       if (props) {
         for (const key in props) {
           // vue 保留属性 ref/key/onVnodeXxx 生命周期
@@ -749,17 +762,75 @@ function baseCreateRenderer(
           invokeVNodeHook(vnodeHook, parentComponent, vnode)
         }
       }
+
+      // scopeId
+      setScopeId(el, scopeId, vnode, parentComponent)
     }
 
-    // ...
+    // #1583 For inside suspense + suspense not resolved case, enter hook should call when suspense resolved
+    // #1689 For inside suspense + suspense resolved case, just call it
+    const needCallTransitionHooks =
+      (!parentSuspense || (parentSuspense && !parentSuspense.pendingBranch)) &&
+      transition &&
+      !transition.persisted
 
+    if (needCallTransitionHooks) {
+      transition!.beforeEnter(el)
+    }
+
+    if (dirs) {
+      invokeDirectiveHook(vnode, null, parentComponent, 'beforeMount')
+    }
     // hostInsert
     hostInsert(el, container, anchor)
 
-    // ...
+    if (
+      (vnodeHook = props && props.onVnodeMounted) ||
+      needCallTransitionHooks ||
+      dirs
+    ) {
+      queuePostRenderEffect(() => {
+        vnodeHook && invokeVNodeHook(vnodeHook, parentComponent, vnode)
+        needCallTransitionHooks && transition!.enter(el)
+        dirs && invokeDirectiveHook(vnode, null, parentComponent, 'mounted')
+      }, parentSuspense)
+    }
   }
-  // 11. TODO setScopeId, 设置 scope id
-  // 12. TODO mountChildren, 加载孩子节点
+  // 11. setScopeId, 设置 scope id
+
+  const setScopeId = (
+    el: RendererElement,
+    scopeId: string | false | null,
+    vnode: VNode,
+    parentComponent: ComponentInternalInstance | null
+  ) => {
+    if (scopeId) {
+      hostSetScopeId(el, scopeId)
+    }
+    if (parentComponent) {
+      const treeOwnerId = parentComponent.type.__scopeId
+      // vnode's own scopeId and the current patched component's scopeId is
+      // different - this is a slot content node.
+      if (treeOwnerId && treeOwnerId !== scopeId) {
+        hostSetScopeId(el, treeOwnerId + '-s')
+      }
+      let subTree = parentComponent.subTree
+      if (__DEV__ && subTree.type === Fragment) {
+        subTree =
+          filterSingleRoot(subTree.children as VNodeArrayChildren) || subTree
+      }
+      if (vnode === subTree) {
+        setScopeId(
+          el,
+          parentComponent.vnode.scopeId,
+          parentComponent.vnode,
+          parentComponent.parent
+        )
+      }
+    }
+  }
+
+  // 12. mountChildren, 加载孩子节点
   const mountChildren: MountChildrenFn = (
     children,
     container,
@@ -806,16 +877,23 @@ function baseCreateRenderer(
   ) => {
     // 旧的 el 替换掉新的 el ?
     const el = (n2.el = n1.el!)
-    let { patchFlag, dynamicChildren } = n2
+    let { patchFlag, dynamicChildren, dirs } = n2
     // #1426 take the old vnode's patch flag into account since user may clone a
     // compiler-generated vnode, which de-opts to FULL_PROPS
     patchFlag |= n1.patchFlag & PatchFlags.FULL_PROPS
     // const oldProps = n1.props || EMPTY_OBJ
-    // const newProps = n2.props || EMPTY_OBJ
+    const newProps = n2.props || EMPTY_OBJ
+    let vnodeHook: VNodeHook | undefined | null
 
-    // TODO before update hooks
+    // before update hooks
+    if ((vnodeHook = newProps.onVnodeBeforeUpdate)) {
+      invokeVNodeHook(vnodeHook, parentComponent, n2, n1)
+    }
 
-    // TODO dirs, 指令处理
+    // dirs, 指令处理
+    if (dirs) {
+      invokeDirectiveHook(n2, n1, parentComponent, 'beforeUpdate')
+    }
 
     // TODO HRM updating
 
@@ -857,7 +935,13 @@ function baseCreateRenderer(
       )
     }
 
-    // TODO vnode hook or dirs 处理
+    // vnode hook or dirs 处理
+    if ((vnodeHook = newProps.onVnodeUpdated) || dirs) {
+      queuePostRenderEffect(() => {
+        vnodeHook && invokeVNodeHook(vnodeHook, parentComponent, n2, n1)
+        dirs && invokeDirectiveHook(n2, n1, parentComponent, 'updated')
+      }, parentSuspense)
+    }
   }
   // 14. patchBlockChildren
   // The fast path for blocks.
@@ -1751,18 +1835,44 @@ function baseCreateRenderer(
       return
     }
 
-    // TODO 执行 onVnodeBeforeUnmount hook
+    const shouldInvokeDirs = shapeFlag & ShapeFlags.ELEMENT && dirs
+
+    let vnodeHook: VNodeHook | undefined | null
+    // 执行 onVnodeBeforeUnmount hook
+    if ((vnodeHook = props && props.onVnodeBeforeUnmount)) {
+      invokeVNodeHook(vnodeHook, parentComponent, vnode)
+    }
 
     if (shapeFlag & ShapeFlags.COMPONENT) {
       // unmount component
       unmountComponent(vnode.component!, parentSuspense, doRemove)
     } else {
-      // TODO SUSPENSE
+      //  SUSPENSE
+      if (__FEATURE_SUSPENSE__ && shapeFlag & ShapeFlags.SUSPENSE) {
+        vnode.suspense!.unmount(parentSuspense, doRemove)
+        return
+      }
 
-      // TODO should invoke dirs
+      // should invoke dirs
+      if (shouldInvokeDirs) {
+        invokeDirectiveHook(vnode, null, parentComponent, 'beforeUnmount')
+      }
 
-      if (false /* dyanmic children */) {
-        // TODO
+      if (
+        dynamicChildren &&
+        // #1153: fast path should not be taken for non-stable (v-for) fragments
+        (type !== Fragment ||
+          (patchFlag > 0 &&
+            patchFlag & PatchFlags.STABLE_FRAGMENT)) /* dyanmic children */
+      ) {
+        // fast path for block nodes: only need to unmount dynamic children.
+        unmountChildren(
+          dynamicChildren,
+          parentComponent,
+          parentSuspense,
+          false,
+          true
+        )
       } else if (
         (type === Fragment &&
           (patchFlag & PatchFlags.KEYED_FRAGMENT ||
@@ -1772,14 +1882,28 @@ function baseCreateRenderer(
         unmountChildren(children as VNode[], parentComponent, parentSuspense)
       }
 
-      // TODO TELEPORT
+      // TELEPORT
+      // an unmounted teleport should always remove its children if not disabled
+      if (
+        shapeFlag & ShapeFlags.TELEPORT &&
+        (doRemove || !isTeleportDisabled(vnode.props))
+      ) {
+        ;(vnode.type as typeof TeleportImpl).remove(vnode, internals)
+      }
 
       if (doRemove) {
         remove(vnode)
       }
     }
 
-    // TODO 执行 onVnodeUnmounted hook
+    // 执行 onVnodeUnmounted hook
+    if ((vnodeHook = props && props.onVnodeUnmounted) || shouldInvokeDirs) {
+      queuePostRenderEffect(() => {
+        vnodeHook && invokeVNodeHook(vnodeHook, parentComponent, vnode)
+        shouldInvokeDirs &&
+          invokeDirectiveHook(vnode, null, parentComponent, 'unmounted')
+      }, parentSuspense)
+    }
   }
   // 27. remove
   const remove: RemoveFn = vnode => {
