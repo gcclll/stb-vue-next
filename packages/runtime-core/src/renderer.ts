@@ -24,7 +24,8 @@ import {
   flushPostFlushCbs,
   queueJob,
   flushPreFlushCbs,
-  invalidateJob
+  invalidateJob,
+  SchedulerCb
 } from './scheduler'
 import {
   cloneIfMounted,
@@ -33,6 +34,8 @@ import {
   createVNode,
   VNode,
   VNodeArrayChildren,
+  VNodeNormalizedRef,
+  VNodeNormalizedRefAtom,
   VNodeHook,
   Text,
   Static,
@@ -44,19 +47,29 @@ import {
   shouldUpdateComponent,
   updateHOCHostEl
 } from './componentRenderUtils'
+import { ComponentPublicInstance } from './componentPublicInstance'
 import { initFeatureFlags } from './featureFlags'
 import { createAppAPI } from './apiCreateApp'
 import {
   invokeArrayFns,
   isReservedProp,
   PatchFlags,
+  isFunction,
   ShapeFlags,
   EMPTY_ARR,
+  EMPTY_OBJ,
   NOOP,
-  isArray
+  isArray,
+  isString,
+  hasOwn
 } from '@vue/shared'
-import { stop, effect, ReactiveEffectOptions } from '@vue/reactivity'
-import { callWithAsyncErrorHandling, ErrorCodes } from './errorHandling'
+import { stop, effect, ReactiveEffectOptions, isRef } from '@vue/reactivity'
+import {
+  callWithErrorHandling,
+  callWithAsyncErrorHandling,
+  ErrorCodes
+} from './errorHandling'
+import { isAsyncWrapper } from './apiAsyncComponent'
 
 export interface Renderer<HostElement = RendererElement> {
   render: RootRenderFunction<HostElement>
@@ -269,6 +282,92 @@ export const queuePostRenderEffect = __FEATURE_SUSPENSE__
   ? queueEffectWithSuspense
   : queuePostFlushCb
 
+export const setRef = (
+  rawRef: VNodeNormalizedRef,
+  oldRawRef: VNodeNormalizedRef | null,
+  parentSuspense: SuspenseBoundary | null,
+  vnode: VNode | null
+) => {
+  if (isArray(rawRef)) {
+    rawRef.forEach((r, i) =>
+      setRef(
+        r,
+        oldRawRef && (isArray(oldRawRef) ? oldRawRef[i] : oldRawRef),
+        parentSuspense,
+        vnode
+      )
+    )
+    return
+  }
+
+  let value: ComponentPublicInstance | RendererNode | Record<string, any> | null
+  if (!vnode || isAsyncWrapper(vnode)) {
+    value = null
+  } else {
+    if (vnode.shapeFlag & ShapeFlags.STATEFUL_COMPONENT) {
+      value = vnode.component!.exposed || vnode.component!.proxy
+    } else {
+      value = vnode.el
+    }
+  }
+
+  const { i: owner, r: ref } = rawRef
+
+  if (__DEV__ && !owner) {
+    // warn 丢失 ref owner 上下文
+    return
+  }
+
+  const oldRef = oldRawRef && (oldRawRef as VNodeNormalizedRefAtom).r
+  const refs = owner.refs === EMPTY_OBJ ? (owner.refs = {}) : owner.refs
+  const setupState = owner.setupState
+
+  // unset old ref
+  if (oldRef != null && oldRef !== ref) {
+    if (isString(oldRef)) {
+      refs[oldRef] = null
+      if (hasOwn(setupState, oldRef)) {
+        setupState[oldRef] = null
+      }
+    } else if (isRef(oldRef)) {
+      oldRef.value = null
+    }
+  }
+
+  if (isString(ref)) {
+    const doSet = () => {
+      refs[ref] = value
+      if (hasOwn(setupState, ref)) {
+        setupState[ref] = value
+      }
+    }
+
+    // #1789: 非空值，在 render 结束后设置
+    // 控制意味着是 unmount，它不应该重写同key 的其他 ref
+    if (value) {
+      ;(doSet as SchedulerCb).id = -1
+      queuePostRenderEffect(doSet, parentSuspense)
+    } else {
+      doSet()
+    }
+  } else if (isRef(ref)) {
+    const doSet = () => {
+      ref.value = value
+    }
+
+    if (value) {
+      ;(doSet as SchedulerCb).id = -1
+      queuePostRenderEffect(doSet, parentSuspense)
+    } else {
+      doSet()
+    }
+  } else if (isFunction(ref)) {
+    callWithErrorHandling(ref, owner, ErrorCodes.FUNCTION_REF, [value, refs])
+  } else if (__DEV__) {
+    // warn ...
+  }
+}
+
 /**
  * The createRenderer function accepts two generic arguments:
  * HostNode and HostElement, corresponding to Node and Element types in the
@@ -441,8 +540,9 @@ function baseCreateRenderer(
         break
     }
 
+    // set ref
     if (ref != null && parentComponent) {
-      // TODO set ref
+      setRef(ref, n1 && n1.ref, parentSuspense, n2)
     }
   }
   // 3. processText 处理文本
