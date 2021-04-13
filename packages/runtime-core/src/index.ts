@@ -68,6 +68,8 @@ export { Teleport, TeleportProps } from './components/Teleport'
 export { Suspense, SuspenseProps } from './components/Suspense'
 export { KeepAlive, KeepAliveProps } from './components/KeepAlive'
 export { BaseTransitionProps } from './components/BaseTransition'
+// For using custom directives
+export { withDirectives } from './directives'
 
 // Custom Renderer API ---------------------------------------------------------
 
@@ -79,6 +81,11 @@ export {
   callWithAsyncErrorHandling,
   ErrorCodes
 } from './errorHandling'
+export {
+  resolveComponent,
+  resolveDirective,
+  resolveDynamicComponent
+} from './helpers/resolveAssets'
 
 // Types -------------------------------------------------------------------------
 import { VNode } from './vnode'
