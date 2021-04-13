@@ -2,7 +2,8 @@ import { CreateAppFunction } from './apiCreateApp'
 import {
   ComponentInternalInstance,
   setupComponent,
-  createComponentInstance
+  createComponentInstance,
+  Data
 } from './component'
 import { updateProps } from './componentProps'
 import { updateSlots } from './componentSlots'
@@ -686,17 +687,16 @@ function baseCreateRenderer(
     isSVG: boolean,
     optimized: boolean
   ) => {
-    // TODO
     let el: RendererElement
     let vnodeHook: VNodeHook | undefined | null
     const {
       type,
-      shapeFlag,
-      patchFlag,
       props,
+      shapeFlag,
+      transition,
       scopeId,
-      dirs,
-      transition
+      patchFlag,
+      dirs
     } = vnode
 
     if (
@@ -766,7 +766,19 @@ function baseCreateRenderer(
       // scopeId
       setScopeId(el, scopeId, vnode, parentComponent)
     }
-
+    if (__DEV__ || __FEATURE_PROD_DEVTOOLS__) {
+      Object.defineProperty(el, '__vnode', {
+        value: vnode,
+        enumerable: false
+      })
+      Object.defineProperty(el, '__vueParentComponent', {
+        value: parentComponent,
+        enumerable: false
+      })
+    }
+    if (dirs) {
+      invokeDirectiveHook(vnode, null, parentComponent, 'beforeMount')
+    }
     // #1583 For inside suspense + suspense not resolved case, enter hook should call when suspense resolved
     // #1689 For inside suspense + suspense resolved case, just call it
     const needCallTransitionHooks =
@@ -777,11 +789,6 @@ function baseCreateRenderer(
     if (needCallTransitionHooks) {
       transition!.beforeEnter(el)
     }
-
-    if (dirs) {
-      invokeDirectiveHook(vnode, null, parentComponent, 'beforeMount')
-    }
-    // hostInsert
     hostInsert(el, container, anchor)
 
     if (
@@ -881,7 +888,7 @@ function baseCreateRenderer(
     // #1426 take the old vnode's patch flag into account since user may clone a
     // compiler-generated vnode, which de-opts to FULL_PROPS
     patchFlag |= n1.patchFlag & PatchFlags.FULL_PROPS
-    // const oldProps = n1.props || EMPTY_OBJ
+    const oldProps = n1.props || EMPTY_OBJ
     const newProps = n2.props || EMPTY_OBJ
     let vnodeHook: VNodeHook | undefined | null
 
@@ -899,6 +906,67 @@ function baseCreateRenderer(
 
     // patch props 处理
     if (patchFlag > 0) {
+      // 这个标记的意义是表示该元素的 render 函数代码是由 compiler 生成
+      // 的并且可以进行快速寻址(fast path)的
+      // 在这个路径中，old node 和 new node 可以确认是同一Shape的节点
+      // 例如：在源模板中确定同一位置
+      if (patchFlag & PatchFlags.FULL_PROPS) {
+        // 元素属性包含动态 keys ，进行 full-diff
+        patchProps(
+          el,
+          n2,
+          oldProps,
+          newProps,
+          parentComponent,
+          parentSuspense,
+          isSVG
+        )
+      } else {
+        // class 属性
+        // 当元素有绑定动态 class 时
+        if (patchFlag & PatchFlags.CLASS) {
+          if (oldProps.class !== newProps.class) {
+            hostPatchProp(el, 'class', null, newProps.class, isSVG)
+          }
+        }
+
+        // style, 标记含义：元素包含动态 style 属性
+        if (patchFlag & PatchFlags.STYLE) {
+          hostPatchProp(el, 'style', oldProps.style, newProps.style, isSVG)
+        }
+
+        // props
+        // 该标记含义：元素有绑定动态的 prop/attr 绑定了非 class&style 的属性
+        // 动态属性的 keys 属性会保存起来，方便将来能快速的进行迭代。
+        // 例如： `:[foo]="bar"` 这里 foo 是 v-bind 绑定的动态属性，这会
+        // 导致放弃优化，而选择 full-diff ，因为我们需要重新设置 old key
+        if (patchFlag & PatchFlags.PROPS) {
+          // 到这里的话 dynamicProps 必须不能为空，即必须要有动态属性
+          const propsToUpdate = n2.dynamicProps!
+          for (let i = 0; i < propsToUpdate.length; i++) {
+            const key = propsToUpdate[i]
+            const prev = oldProps[key]
+            const next = newProps[key]
+            if (
+              next !== prev ||
+              (hostForcePatchProp && hostForcePatchProp(el, key))
+            ) {
+              hostPatchProp(
+                el,
+                key,
+                prev,
+                next,
+                isSVG,
+                n1.children as VNode[],
+                parentComponent,
+                parentSuspense,
+                unmountChildren
+              )
+            }
+          }
+        }
+      }
+
       // text
       // This flag is matched when the element has only dynamic text children.
       if (patchFlag & PatchFlags.TEXT) {
@@ -908,6 +976,15 @@ function baseCreateRenderer(
       }
     } else if (!optimized && dynamicChildren == null) {
       // 未优化的，需要 full diff
+      patchProps(
+        el,
+        n2,
+        oldProps,
+        newProps,
+        parentComponent,
+        parentSuspense,
+        isSVG
+      )
     }
 
     const areChildrenSVG = isSVG && n2.type !== 'foreignObject'
@@ -984,7 +1061,63 @@ function baseCreateRenderer(
     }
   }
 
-  // 15. TODO patchProps
+  // 15. patchProps
+  const patchProps = (
+    el: RendererElement,
+    vnode: VNode,
+    oldProps: Data,
+    newProps: Data,
+    parentComponent: ComponentInternalInstance | null,
+    parentSuspense: SuspenseBoundary | null,
+    isSVG: boolean
+  ) => {
+    // 属性变化了才执行 patch 操作
+    if (oldProps !== newProps) {
+      for (const key in newProps) {
+        // 空字符串不是有效的属性
+        if (isReservedProp(key)) continue
+
+        const next = newProps[key]
+        const prev = oldProps[key]
+
+        if (
+          next !== prev ||
+          (hostForcePatchProp && hostForcePatchProp(el, key))
+        ) {
+          hostPatchProp(
+            el,
+            key,
+            prev,
+            next,
+            isSVG,
+            vnode.children as VNode[],
+            parentComponent,
+            parentSuspense,
+            unmountChildren
+          )
+        }
+      }
+
+      if (oldProps !== EMPTY_OBJ) {
+        for (const key in oldProps) {
+          if (!isReservedProp(key) && !(key in newProps)) {
+            // 删除 old prop
+            hostPatchProp(
+              el,
+              key,
+              oldProps[key],
+              null,
+              isSVG,
+              vnode.children as VNode[],
+              parentComponent,
+              parentSuspense,
+              unmountChildren
+            )
+          }
+        }
+      }
+    }
+  }
   // 16. processFragment
   const processFragment = (
     n1: VNode | null,
