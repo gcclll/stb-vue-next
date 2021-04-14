@@ -45,18 +45,26 @@ export function defineAsyncComponent<
     source = { loader: source }
   }
 
-  const { loader, loadingComponent, delay = 200, timeout } = source
+  const {
+    loader,
+    loadingComponent: loadingComponent,
+    errorComponent: errorComponent,
+    delay = 200,
+    timeout, // undefined = never times out
+    suspensible = true,
+    onError: userOnError
+  } = source
 
   // 1. TODO retry 封装
   let pendingRequest: Promise<ConcreteComponent> | null = null
   let resolvedComp: ConcreteComponent | undefined
 
-  // let retries = 0 // 重试次数
-  // const retry = () => {
-  //   retries++
-  //   pendingRequest = null
-  //   return load()
-  // }
+  let retries = 0
+  const retry = () => {
+    retries++
+    pendingRequest = null
+    return load()
+  }
 
   // 2. TODO 函数封装
   const load = (): Promise<ConcreteComponent> => {
@@ -65,16 +73,37 @@ export function defineAsyncComponent<
       pendingRequest ||
       (thisRequest = pendingRequest = loader()
         .catch(err => {
-          // TODO, 组件加载异常
-          console.log('\nasync comp load error', thisRequest)
+          err = err instanceof Error ? err : new Error(String(err))
+          if (userOnError) {
+            return new Promise((resolve, reject) => {
+              const userRetry = () => resolve(retry())
+              const userFail = () => reject(err)
+              userOnError(err, userRetry, userFail, retries + 1)
+            })
+          } else {
+            throw err
+          }
         })
         .then((comp: any) => {
-          // TODO, 组件正常加载
-          console.log('\nasync comp load ok, ', comp())
-          // 1. TODO thisRequest 非当前 pendingRequest
-          // 2. TODO 没有 comp 情况，非法组件
-          // 3. TODO es6 export default 模块语法
-          // 4. TODO 非法组件，只能是函数或对象
+          if (thisRequest !== pendingRequest && pendingRequest) {
+            return pendingRequest
+          }
+          if (__DEV__ && !comp) {
+            warn(
+              `Async component loader resolved to undefined. ` +
+                `If you are using retry(), make sure to return its return value.`
+            )
+          }
+          // interop module default
+          if (
+            comp &&
+            (comp.__esModule || comp[Symbol.toStringTag] === 'Module')
+          ) {
+            comp = comp.default
+          }
+          if (__DEV__ && comp && !isObject(comp) && !isFunction(comp)) {
+            throw new Error(`Invalid async component load result: ${comp}`)
+          }
           resolvedComp = comp
           return comp
         }))
@@ -95,15 +124,38 @@ export function defineAsyncComponent<
         return createInnerComp(resolvedComp!, instance)
       }
 
-      // const onError = (err: Error) => {
-      //   // TODO
-      //   console.log('\nasync comp load err', err.message)
-      // }
+      const onError = (err: Error) => {
+        pendingRequest = null
+        handleError(
+          err,
+          instance,
+          ErrorCodes.ASYNC_COMPONENT_LOADER,
+          !errorComponent /* do not throw in dev if user provided error component */
+        )
+      }
 
-      // TODO suspense-controlled or SSR
+      // suspense-controlled or SSR.
+      if (
+        (__FEATURE_SUSPENSE__ && suspensible && instance.suspense) ||
+        (__NODE_JS__ && isInSSRComponentSetup)
+      ) {
+        return load()
+          .then(comp => {
+            return () => createInnerComp(comp, instance)
+          })
+          .catch(err => {
+            onError(err)
+            return () =>
+              errorComponent
+                ? createVNode(errorComponent as ConcreteComponent, {
+                    error: err
+                  })
+                : null
+          })
+      }
 
       const loaded = ref(false)
-      // const error = ref()
+      const error = ref()
       const delayed = ref(!!delay)
 
       if (delay) {
@@ -113,7 +165,15 @@ export function defineAsyncComponent<
       }
 
       if (timeout != null) {
-        // TODO 超时机制
+        setTimeout(() => {
+          if (!loaded.value && !error.value) {
+            const err = new Error(
+              `Async component timed out after ${timeout}ms.`
+            )
+            onError(err)
+            error.value = err
+          }
+        }, timeout)
       }
 
       // 开始执行异步任务加载异步组件
@@ -122,8 +182,8 @@ export function defineAsyncComponent<
           loaded.value = true
         })
         .catch(err => {
-          // TODO
-          console.log('loading error')
+          onError(err)
+          error.value = err
         })
 
       return () => {
@@ -131,10 +191,12 @@ export function defineAsyncComponent<
         if (loaded.value && resolvedComp) {
           // 组件正常加载完成
           return createInnerComp(resolvedComp, instance)
-        } else if (false) {
-          // TODO error
+        } else if (error.value && errorComponent) {
+          return createVNode(errorComponent as ConcreteComponent, {
+            error: error.value
+          })
         } else if (loadingComponent && !delayed.value) {
-          // TODO
+          return createVNode(loadingComponent as ConcreteComponent)
         }
       }
     }

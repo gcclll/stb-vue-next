@@ -490,3 +490,47 @@ export function createRenderContext(instance: ComponentInternalInstance) {
 
   return target as ComponentRenderContext
 }
+
+// dev only
+export function exposePropsOnRenderContext(
+  instance: ComponentInternalInstance
+) {
+  const {
+    ctx,
+    propsOptions: [propsOptions]
+  } = instance
+  if (propsOptions) {
+    Object.keys(propsOptions).forEach(key => {
+      Object.defineProperty(ctx, key, {
+        enumerable: true,
+        configurable: true,
+        get: () => instance.props[key],
+        set: NOOP
+      })
+    })
+  }
+}
+
+// dev only
+export function exposeSetupStateOnRenderContext(
+  instance: ComponentInternalInstance
+) {
+  const { ctx, setupState } = instance
+  Object.keys(toRaw(setupState)).forEach(key => {
+    if (key[0] === '$' || key[0] === '_') {
+      warn(
+        `setup() return property ${JSON.stringify(
+          key
+        )} should not start with "$" or "_" ` +
+          `which are reserved prefixes for Vue internals.`
+      )
+      return
+    }
+    Object.defineProperty(ctx, key, {
+      enumerable: true,
+      configurable: true,
+      get: () => setupState[key],
+      set: NOOP
+    })
+  })
+}

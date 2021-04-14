@@ -1,6 +1,6 @@
+import { ErrorCodes, callWithErrorHandling } from './errorHandling'
 import { isArray } from '@vue/shared'
 import { ComponentPublicInstance } from './componentPublicInstance'
-import { callWithErrorHandling, ErrorCodes } from './errorHandling'
 
 export interface SchedulerJob {
   (): void

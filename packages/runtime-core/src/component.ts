@@ -435,9 +435,9 @@ export function createComponentInstance(
     components: null,
     directives: null,
 
-    // TODO resolved props and emits options
-    propsOptions: normalizePropsOptions(type, appContext, false),
-    emitsOptions: {} as any, //normalizeEmitsOptions(type, appContext),
+    // resolved props and emits options
+    propsOptions: normalizePropsOptions(type, appContext),
+    emitsOptions: normalizeEmitsOptions(type, appContext),
 
     // emit
     emit: null as any, // to be set immediately
@@ -519,7 +519,7 @@ export function setupComponent(
 ) {
   isInSSRComponentSetup = isSSR
 
-  const { shapeFlag, props, children } = instance.vnode
+  const { props, children, shapeFlag } = instance.vnode
   const isStateful = shapeFlag & ShapeFlags.STATEFUL_COMPONENT
   // init props & slots
   initProps(instance, props, isStateful, isSSR)
@@ -620,6 +620,14 @@ type CompileFunction = (
 
 let compile: CompileFunction | undefined
 
+/**
+ * For runtime-dom to register the compiler.
+ * Note the exported method uses any to avoid d.ts relying on the compiler types.
+ */
+export function registerRuntimeCompiler(_compile: any) {
+  compile = _compile
+}
+
 function finishComponentSetup(
   instance: ComponentInternalInstance,
   isSSR: boolean
@@ -627,8 +635,10 @@ function finishComponentSetup(
   const Component = instance.type as ComponentOptions
 
   // template / render function normalization
-  if (false /* node + ssr */) {
-    // TODO
+  if (__NODE_JS__ && isSSR) {
+    if (Component.render) {
+      instance.render = Component.render as InternalRenderFunction
+    }
   } else if (!instance.render) {
     // 没有 render 函数？
     if (compile && Component.template && !Component.render) {
@@ -649,8 +659,14 @@ function finishComponentSetup(
     }
   }
 
-  console.log(instance.render, 'render')
-  // TODO 兼容 2.x options api
+  // support for 2.x options
+  if (__FEATURE_OPTIONS_API__) {
+    currentInstance = instance
+    pauseTracking()
+    applyOptions(instance, Component)
+    resetTracking()
+    currentInstance = null
+  }
 
   if (__DEV__ && !Component.render && instance.render === NOOP) {
     if (!compile && Component.template) {
@@ -749,7 +765,29 @@ export function formatComponentName(
   isRoot = false
 ): string {
   let name = getComponentName(Component)
-  // TODO
+  if (!name && Component.__file) {
+    const match = Component.__file.match(/([^/\\]+)\.\w+$/)
+    if (match) {
+      name = match[1]
+    }
+  }
+
+  if (!name && instance && instance.parent) {
+    // try to infer the name based on reverse resolution
+    const inferFromRegistry = (registry: Record<string, any> | undefined) => {
+      for (const key in registry) {
+        if (registry[key] === Component) {
+          return key
+        }
+      }
+    }
+    name =
+      inferFromRegistry(
+        instance.components ||
+          (instance.parent.type as ComponentOptions).components
+      ) || inferFromRegistry(instance.appContext.components)
+  }
+
   return name ? classify(name) : isRoot ? `App` : `Anonymous`
 }
 

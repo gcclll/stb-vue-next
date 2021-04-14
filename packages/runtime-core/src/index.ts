@@ -22,9 +22,9 @@ export {
   shallowReactive,
   shallowReadonly,
   markRaw,
-  toRaw,
-  effect
+  toRaw
 } from '@vue/reactivity'
+export { computed } from './apiComputed'
 export { watch, watchEffect } from './apiWatch'
 export {
   onBeforeMount,
@@ -33,20 +33,14 @@ export {
   onUpdated,
   onBeforeUnmount,
   onUnmounted,
+  onActivated,
+  onDeactivated,
   onRenderTracked,
   onRenderTriggered,
   onErrorCaptured
 } from './apiLifecycle'
 export { provide, inject } from './apiInject'
-export {
-  nextTick,
-  queueJob,
-  queuePreFlushCb,
-  queuePostFlushCb,
-  flushPreFlushCbs,
-  flushPostFlushCbs,
-  invalidateJob
-} from './scheduler'
+export { nextTick } from './scheduler'
 export { defineComponent } from './apiDefineComponent'
 export { defineAsyncComponent } from './apiAsyncComponent'
 export { defineProps, defineEmit, useContext } from './apiSetupHelpers'
@@ -60,20 +54,26 @@ export { getCurrentInstance } from './component'
 // For raw render function users
 export { h } from './h'
 // Advanced render function utilities
-export { createVNode, isVNode, cloneVNode, mergeProps } from './vnode'
-// VNodet types
+export { createVNode, cloneVNode, mergeProps, isVNode } from './vnode'
+// VNode types
 export { Fragment, Text, Comment, Static } from './vnode'
 // Built-in components
 export { Teleport, TeleportProps } from './components/Teleport'
 export { Suspense, SuspenseProps } from './components/Suspense'
 export { KeepAlive, KeepAliveProps } from './components/KeepAlive'
-export { BaseTransitionProps } from './components/BaseTransition'
+export {
+  BaseTransition,
+  BaseTransitionProps
+} from './components/BaseTransition'
 // For using custom directives
 export { withDirectives } from './directives'
+// SSR context
+export { useSSRContext, ssrContextKey } from './helpers/useSsrContext'
 
 // Custom Renderer API ---------------------------------------------------------
 
-export { createRenderer } from './renderer'
+export { createRenderer, createHydrationRenderer } from './renderer'
+export { queuePostFlushCb } from './scheduler'
 export { warn } from './warning'
 export {
   handleError,
@@ -86,6 +86,18 @@ export {
   resolveDirective,
   resolveDynamicComponent
 } from './helpers/resolveAssets'
+// For integration with runtime compiler
+export { registerRuntimeCompiler } from './component'
+export {
+  useTransitionState,
+  resolveTransitionHooks,
+  setTransitionHooks,
+  getTransitionRawChildren
+} from './components/BaseTransition'
+export { initCustomFormatter } from './customFormatter'
+
+// For devtools
+export { devtools, setDevtoolsHook } from './devtools'
 
 // Types -------------------------------------------------------------------------
 import { VNode } from './vnode'
@@ -150,6 +162,7 @@ export {
   Component,
   ConcreteComponent,
   FunctionalComponent,
+  ComponentInternalInstance,
   SetupContext,
   ComponentCustomProps,
   AllowedComponentProps
@@ -162,6 +175,7 @@ export {
   ComponentOptionsWithObjectProps,
   ComponentOptionsWithArrayProps,
   ComponentCustomOptions,
+  ComponentOptionsBase,
   RenderFunction,
   MethodOptions,
   ComputedOptions
@@ -203,6 +217,7 @@ export {
   AsyncComponentOptions,
   AsyncComponentLoader
 } from './apiAsyncComponent'
+export { HMRRuntime } from './hmr'
 
 // Internal API ----------------------------------------------------------------
 
@@ -212,9 +227,19 @@ export {
 // For compiler generated code
 // should sync with '@vue/compiler-core/src/runtimeConstants.ts'
 export { withCtx } from './helpers/withRenderContext'
+export { renderList } from './helpers/renderList'
+export { toHandlers } from './helpers/toHandlers'
+export { renderSlot } from './helpers/renderSlot'
 export { createSlots } from './helpers/createSlots'
-export { createTextVNode } from './vnode'
-
+export { pushScopeId, popScopeId, withScopeId } from './helpers/scopeId'
+export {
+  openBlock,
+  createBlock,
+  setBlockTracking,
+  createTextVNode,
+  createCommentVNode,
+  createStaticVNode
+} from './vnode'
 export {
   toDisplayString,
   camelize,
@@ -229,12 +254,20 @@ export { transformVNodeArgs } from './vnode'
 // **IMPORTANT** These APIs are exposed solely for @vue/server-renderer and may
 // change without notice between versions. User code should never rely on them.
 
-import { setCurrentRenderingInstance } from './componentRenderUtils'
-import { isVNode } from './vnode'
+import { createComponentInstance, setupComponent } from './component'
+import {
+  renderComponentRoot,
+  setCurrentRenderingInstance
+} from './componentRenderUtils'
+import { isVNode, normalizeVNode } from './vnode'
 
 const _ssrUtils = {
+  createComponentInstance,
+  setupComponent,
+  renderComponentRoot,
+  setCurrentRenderingInstance,
   isVNode,
-  setCurrentRenderingInstance
+  normalizeVNode
 }
 
 /**

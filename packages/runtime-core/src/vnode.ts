@@ -1,44 +1,44 @@
 import {
-  ClassComponent,
-  Component,
-  ComponentInternalInstance,
-  ConcreteComponent,
-  Data,
-  isClassComponent
-} from './component'
-import { TeleportImpl, isTeleport } from './components/Teleport'
-import {
-  SuspenseBoundary,
-  SuspenseImpl,
-  isSuspense,
-  normalizeSuspenseChildren
-} from './components/Suspense'
-import { isProxy, isRef, ReactiveFlags, Ref, toRaw } from '@vue/reactivity'
-import { currentScopeId } from './helpers/scopeId'
-import { RawSlots } from './componentSlots'
-import { RendererNode, RendererElement } from './renderer'
-import { DirectiveBinding } from './directives'
-import { TransitionHooks } from './components/BaseTransition'
-import { AppContext } from './apiCreateApp'
-import { currentRenderingInstance } from './componentRenderUtils'
-import { NULL_DYNAMIC_COMPONENT } from './helpers/resolveAssets'
-import { warn } from './warning'
-import {
-  EMPTY_ARR,
-  extend,
   isArray,
   isFunction,
-  isObject,
-  isOn,
   isString,
+  isObject,
+  EMPTY_ARR,
+  extend,
   normalizeClass,
   normalizeStyle,
   PatchFlags,
   ShapeFlags,
-  SlotFlags
+  SlotFlags,
+  isOn
 } from '@vue/shared'
-import { setCompiledSlotRendering } from './helpers/renderSlot'
+import {
+  ComponentInternalInstance,
+  Data,
+  ConcreteComponent,
+  ClassComponent,
+  Component,
+  isClassComponent
+} from './component'
+import { RawSlots } from './componentSlots'
+import { isProxy, Ref, toRaw, ReactiveFlags, isRef } from '@vue/reactivity'
+import { AppContext } from './apiCreateApp'
+import {
+  SuspenseImpl,
+  isSuspense,
+  SuspenseBoundary,
+  normalizeSuspenseChildren
+} from './components/Suspense'
+import { DirectiveBinding } from './directives'
+import { TransitionHooks } from './components/BaseTransition'
+import { warn } from './warning'
+import { currentScopeId } from './helpers/scopeId'
+import { TeleportImpl, isTeleport } from './components/Teleport'
+import { currentRenderingInstance } from './componentRenderUtils'
+import { RendererNode, RendererElement } from './renderer'
+import { NULL_DYNAMIC_COMPONENT } from './helpers/resolveAssets'
 import { hmrDirtyComponents } from './hmr'
+import { setCompiledSlotRendering } from './helpers/renderSlot'
 
 export const Fragment = (Symbol(__DEV__ ? 'Fragment' : undefined) as any) as {
   __isFragment: true

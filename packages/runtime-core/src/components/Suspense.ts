@@ -633,7 +633,37 @@ function hydrateSuspense(
     optimized: boolean
   ) => Node | null
 ): Node | null {
-  return {} as Node
+  /* eslint-disable no-restricted-globals */
+  const suspense = (vnode.suspense = createSuspenseBoundary(
+    vnode,
+    parentSuspense,
+    parentComponent,
+    node.parentNode!,
+    document.createElement('div'),
+    null,
+    isSVG,
+    optimized,
+    rendererInternals,
+    true /* hydrating */
+  ))
+  // there are two possible scenarios for server-rendered suspense:
+  // - success: ssr content should be fully resolved
+  // - failure: ssr content should be the fallback branch.
+  // however, on the client we don't really know if it has failed or not
+  // attempt to hydrate the DOM assuming it has succeeded, but we still
+  // need to construct a suspense boundary first
+  const result = hydrateNode(
+    node,
+    (suspense.pendingBranch = vnode.ssContent!),
+    parentComponent,
+    suspense,
+    optimized
+  )
+  if (suspense.deps === 0) {
+    suspense.resolve()
+  }
+  return result
+  /* eslint-enable no-restricted-globals */
 }
 
 export function normalizeSuspenseChildren(

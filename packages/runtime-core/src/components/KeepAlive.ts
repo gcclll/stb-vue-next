@@ -333,6 +333,72 @@ function matches(pattern: MatchPattern, name: string): boolean {
   return false
 }
 
+export function onActivated(
+  hook: Function,
+  target?: ComponentInternalInstance | null
+) {
+  registerKeepAliveHook(hook, LifecycleHooks.ACTIVATED, target)
+}
+
+export function onDeactivated(
+  hook: Function,
+  target?: ComponentInternalInstance | null
+) {
+  registerKeepAliveHook(hook, LifecycleHooks.DEACTIVATED, target)
+}
+
+function registerKeepAliveHook(
+  hook: Function & { __wdc?: Function },
+  type: LifecycleHooks,
+  target: ComponentInternalInstance | null = currentInstance
+) {
+  // cache the deactivate branch check wrapper for injected hooks so the same
+  // hook can be properly deduped by the scheduler. "__wdc" stands for "with
+  // deactivation check".
+  const wrappedHook =
+    hook.__wdc ||
+    (hook.__wdc = () => {
+      // only fire the hook if the target instance is NOT in a deactivated branch.
+      let current: ComponentInternalInstance | null = target
+      while (current) {
+        if (current.isDeactivated) {
+          return
+        }
+        current = current.parent
+      }
+      hook()
+    })
+  injectHook(type, wrappedHook, target)
+  // In addition to registering it on the target instance, we walk up the parent
+  // chain and register it on all ancestor instances that are keep-alive roots.
+  // This avoids the need to walk the entire component tree when invoking these
+  // hooks, and more importantly, avoids the need to track child components in
+  // arrays.
+  if (target) {
+    let current = target.parent
+    while (current && current.parent) {
+      if (isKeepAlive(current.parent.vnode)) {
+        injectToKeepAliveRoot(wrappedHook, type, target, current)
+      }
+      current = current.parent
+    }
+  }
+}
+
+function injectToKeepAliveRoot(
+  hook: Function & { __weh?: Function },
+  type: LifecycleHooks,
+  target: ComponentInternalInstance,
+  keepAliveRoot: ComponentInternalInstance
+) {
+  // injectHook wraps the original for error handling, so make sure to remove
+  // the wrapped version.
+  const injected = injectHook(type, hook, keepAliveRoot, true /* prepend */)
+  onUnmounted(() => {
+    remove(keepAliveRoot[type]!, injected)
+  }, target)
+}
+
 function resetShapeFlag(vnode: VNode) {
   let shapeFlag = vnode.shapeFlag
   if (shapeFlag & ShapeFlags.COMPONENT_SHOULD_KEEP_ALIVE) {

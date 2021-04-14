@@ -240,9 +240,22 @@ function doWatch(
       callWithErrorHandling(fn, instance, ErrorCodes.WATCH_CLEANUP)
     }
   }
-  // 4. TODO SSR + node env
-  //
-  // 5. job 任务封装 -> queueJob
+
+  // in SSR there is no need to setup an actual effect, and it should be noop
+  // unless it's eager
+  if (__NODE_JS__ && isInSSRComponentSetup) {
+    if (!cb) {
+      getter()
+    } else if (immediate) {
+      callWithAsyncErrorHandling(cb, instance, ErrorCodes.WATCH_CALLBACK, [
+        getter(),
+        undefined,
+        onInvalidate
+      ])
+    }
+    return NOOP
+  }
+
   let oldValue = isArray(source) ? [] : INITIAL_WATCHER_VALUE
   const job: SchedulerJob = () => {
     if (!runner.active) {

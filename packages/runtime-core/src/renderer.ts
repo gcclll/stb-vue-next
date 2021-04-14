@@ -1,15 +1,59 @@
-import { CreateAppFunction } from './apiCreateApp'
+import {
+  Text,
+  Fragment,
+  Comment,
+  cloneIfMounted,
+  normalizeVNode,
+  VNode,
+  VNodeArrayChildren,
+  createVNode,
+  isSameVNodeType,
+  Static,
+  VNodeNormalizedRef,
+  VNodeHook,
+  VNodeNormalizedRefAtom
+} from './vnode'
 import {
   ComponentInternalInstance,
-  setupComponent,
   createComponentInstance,
-  Data
+  Data,
+  setupComponent
 } from './component'
+import {
+  filterSingleRoot,
+  renderComponentRoot,
+  shouldUpdateComponent,
+  updateHOCHostEl
+} from './componentRenderUtils'
+import {
+  isString,
+  EMPTY_OBJ,
+  EMPTY_ARR,
+  isReservedProp,
+  isFunction,
+  PatchFlags,
+  ShapeFlags,
+  NOOP,
+  hasOwn,
+  invokeArrayFns,
+  isArray
+} from '@vue/shared'
+import {
+  queueJob,
+  queuePostFlushCb,
+  flushPostFlushCbs,
+  invalidateJob,
+  flushPreFlushCbs,
+  SchedulerCb
+} from './scheduler'
+import { effect, stop, ReactiveEffectOptions, isRef } from '@vue/reactivity'
 import { updateProps } from './componentProps'
 import { updateSlots } from './componentSlots'
+import { pushWarningContext, popWarningContext, warn } from './warning'
+import { createAppAPI, CreateAppFunction } from './apiCreateApp'
 import {
-  queueEffectWithSuspense,
   SuspenseBoundary,
+  queueEffectWithSuspense,
   SuspenseImpl
 } from './components/Suspense'
 import {
@@ -17,60 +61,19 @@ import {
   TeleportImpl,
   TeleportVNode
 } from './components/Teleport'
-import { KeepAliveContext, isKeepAlive } from './components/KeepAlive'
-import { invokeDirectiveHook } from './directives'
-import { createHydrationFunctions, RootHydrateFunction } from './hydration'
+import { isKeepAlive, KeepAliveContext } from './components/KeepAlive'
+import { registerHMR, unregisterHMR, isHmrUpdating } from './hmr'
 import {
-  queuePostFlushCb,
-  flushPostFlushCbs,
-  queueJob,
-  flushPreFlushCbs,
-  invalidateJob,
-  SchedulerCb
-} from './scheduler'
-import {
-  cloneIfMounted,
-  isSameVNodeType,
-  normalizeVNode,
-  createVNode,
-  VNode,
-  VNodeArrayChildren,
-  VNodeNormalizedRef,
-  VNodeNormalizedRefAtom,
-  VNodeHook,
-  Text,
-  Static,
-  Comment,
-  Fragment
-} from './vnode'
-import {
-  renderComponentRoot,
-  shouldUpdateComponent,
-  updateHOCHostEl,
-  filterSingleRoot
-} from './componentRenderUtils'
-import { ComponentPublicInstance } from './componentPublicInstance'
-import { initFeatureFlags } from './featureFlags'
-import { createAppAPI } from './apiCreateApp'
-import {
-  invokeArrayFns,
-  isReservedProp,
-  PatchFlags,
-  isFunction,
-  ShapeFlags,
-  EMPTY_ARR,
-  EMPTY_OBJ,
-  NOOP,
-  isArray,
-  isString,
-  hasOwn
-} from '@vue/shared'
-import { stop, effect, ReactiveEffectOptions, isRef } from '@vue/reactivity'
-import {
+  ErrorCodes,
   callWithErrorHandling,
-  callWithAsyncErrorHandling,
-  ErrorCodes
+  callWithAsyncErrorHandling
 } from './errorHandling'
+import { createHydrationFunctions, RootHydrateFunction } from './hydration'
+import { invokeDirectiveHook } from './directives'
+import { startMeasure, endMeasure } from './profiling'
+import { ComponentPublicInstance } from './componentPublicInstance'
+import { devtoolsComponentRemoved, devtoolsComponentUpdated } from './devtools'
+import { initFeatureFlags } from './featureFlags'
 import { isAsyncWrapper } from './apiAsyncComponent'
 
 export interface Renderer<HostElement = RendererElement> {
@@ -395,11 +398,11 @@ export function createRenderer<
 // Separate API for creating hydration-enabled renderer.
 // Hydration logic is only used when calling this function, making it
 // tree-shakable.
-// export function createHydrationRenderer(
-//   options: RendererOptions<Node, Element>
-// ) {
-//   return baseCreateRenderer(options, createHydrationFunctions)
-// }
+export function createHydrationRenderer(
+  options: RendererOptions<Node, Element>
+) {
+  return baseCreateRenderer(options, createHydrationFunctions)
+}
 
 // overload 1: no hydration
 function baseCreateRenderer<
@@ -417,7 +420,8 @@ function baseCreateRenderer<
 function baseCreateRenderer(
   options: RendererOptions,
   createHydrationFns?: typeof createHydrationFunctions
-) {
+): any {
+  // compile-time feature flags check
   if (__ESM_BUNDLER__ && !__TEST__) {
     initFeatureFlags()
   }
@@ -458,7 +462,10 @@ function baseCreateRenderer(
       n1 = null
     }
 
-    // TODO patch bail, 进行全比较(full diff)
+    if (n2.patchFlag === PatchFlags.BAIL) {
+      optimized = false
+      n2.dynamicChildren = null
+    }
 
     // 新节点处理
     const { type, ref, shapeFlag } = n2
@@ -999,6 +1006,9 @@ function baseCreateRenderer(
         parentSuspense,
         areChildrenSVG
       )
+      if (__DEV__ && parentComponent && parentComponent.type.__hmrId) {
+        traverseStaticChildren(n1, n2)
+      }
     } else if (!optimized) {
       // full diff
       patchChildren(
@@ -1917,8 +1927,7 @@ function baseCreateRenderer(
     moveType,
     parentSuspense = null
   ) => {
-    const { el, shapeFlag, type } = vnode
-    // COMPONENT
+    const { el, type, transition, children, shapeFlag } = vnode
     if (shapeFlag & ShapeFlags.COMPONENT) {
       move(vnode.component!.subTree, container, anchor, moveType)
       return
@@ -1928,14 +1937,50 @@ function baseCreateRenderer(
       vnode.suspense!.move(container, anchor, moveType)
       return
     }
-    // TODO TELEPORT
-    // TODO Fragment
-    // Static
+
+    if (shapeFlag & ShapeFlags.TELEPORT) {
+      ;(type as typeof TeleportImpl).move(vnode, container, anchor, internals)
+      return
+    }
+
+    if (type === Fragment) {
+      hostInsert(el!, container, anchor)
+      for (let i = 0; i < (children as VNode[]).length; i++) {
+        move((children as VNode[])[i], container, anchor, moveType)
+      }
+      hostInsert(vnode.anchor!, container, anchor)
+      return
+    }
+
     if (type === Static) {
       moveStaticNode(vnode, container, anchor)
     }
-    if (false /*needTransition*/) {
-      // TODO
+
+    // single nodes
+    const needTransition =
+      moveType !== MoveType.REORDER &&
+      shapeFlag & ShapeFlags.ELEMENT &&
+      transition
+    if (needTransition) {
+      if (moveType === MoveType.ENTER) {
+        transition!.beforeEnter(el!)
+        hostInsert(el!, container, anchor)
+        queuePostRenderEffect(() => transition!.enter(el!), parentSuspense)
+      } else {
+        const { leave, delayLeave, afterLeave } = transition!
+        const remove = () => hostInsert(el!, container, anchor)
+        const performLeave = () => {
+          leave(el!, () => {
+            remove()
+            afterLeave && afterLeave()
+          })
+        }
+        if (delayLeave) {
+          delayLeave(el!, remove, performLeave)
+        } else {
+          performLeave()
+        }
+      }
     } else {
       // 目前只实现普通元素的逻辑
       hostInsert(el!, container, anchor)
@@ -1959,8 +2004,10 @@ function baseCreateRenderer(
       patchFlag,
       dirs
     } = vnode
-
-    // TODO unset ref
+    // unset ref
+    if (ref != null) {
+      setRef(ref, null, parentSuspense, null)
+    }
 
     // keep-alive
     if (shapeFlag & ShapeFlags.COMPONENT_SHOULD_KEEP_ALIVE) {
@@ -2041,9 +2088,15 @@ function baseCreateRenderer(
   // 27. remove
   const remove: RemoveFn = vnode => {
     const { type, el, anchor, transition } = vnode
-    // TODO Fragment
+    if (type === Fragment) {
+      removeFragment(el!, anchor!)
+      return
+    }
 
-    // TODO Static
+    if (type === Static) {
+      removeStaticNode(vnode)
+      return
+    }
 
     const performRemove = () => {
       // 将 el 从它的 parenNode.children 中删除
@@ -2053,14 +2106,35 @@ function baseCreateRenderer(
       }
     }
 
-    if (false /* ELEMENT */) {
-      // TODO
+    if (
+      vnode.shapeFlag & ShapeFlags.ELEMENT &&
+      transition &&
+      !transition.persisted
+    ) {
+      const { leave, delayLeave } = transition
+      const performLeave = () => leave(el!, performRemove)
+      if (delayLeave) {
+        delayLeave(vnode.el!, performRemove, performLeave)
+      } else {
+        performLeave()
+      }
     } else {
       performRemove()
     }
   }
-  // 28. TODO removeFragment
-  // 29. unmountComponent
+
+  const removeFragment = (cur: RendererNode, end: RendererNode) => {
+    // For fragments, directly remove all contained DOM nodes.
+    // (fragment child nodes cannot have transition)
+    let next
+    while (cur !== end) {
+      next = hostNextSibling(cur)!
+      hostRemove(cur)
+      cur = next
+    }
+    hostRemove(end)
+  }
+
   const unmountComponent = (
     instance: ComponentInternalInstance,
     parentSuspense: SuspenseBoundary | null,
@@ -2092,7 +2166,27 @@ function baseCreateRenderer(
       instance.isUnmounted = true
     }, parentSuspense)
 
-    // TODO suspense
+    // A component with async dep inside a pending suspense is unmounted before
+    // its async dep resolves. This should remove the dep from the suspense, and
+    // cause the suspense to resolve immediately if that was the last dep.
+    if (
+      __FEATURE_SUSPENSE__ &&
+      parentSuspense &&
+      parentSuspense.pendingBranch &&
+      !parentSuspense.isUnmounted &&
+      instance.asyncDep &&
+      !instance.asyncResolved &&
+      instance.suspenseId === parentSuspense.pendingId
+    ) {
+      parentSuspense.deps--
+      if (parentSuspense.deps === 0) {
+        parentSuspense.resolve()
+      }
+    }
+
+    if (__DEV__ || __FEATURE_PROD_DEVTOOLS__) {
+      devtoolsComponentRemoved(instance)
+    }
   }
   // 30. unmountChildren
   const unmountChildren: UnmountChildrenFn = (
@@ -2113,8 +2207,9 @@ function baseCreateRenderer(
     if (vnode.shapeFlag & ShapeFlags.COMPONENT) {
       return getNextHostNode(vnode.component!.subTree)
     }
-    // TODO SUSPENSE
-
+    if (__FEATURE_SUSPENSE__ && vnode.shapeFlag & ShapeFlags.SUSPENSE) {
+      return vnode.suspense!.next()
+    }
     return hostNextSibling((vnode.anchor || vnode.el)!)
   }
   // 32. render
@@ -2140,7 +2235,7 @@ function baseCreateRenderer(
     mt: mountComponent,
     mc: mountChildren,
     pc: patchChildren,
-    pbc: [] as any /*patchBlockChildren*/,
+    pbc: patchBlockChildren,
     n: getNextHostNode,
     o: options
   }
