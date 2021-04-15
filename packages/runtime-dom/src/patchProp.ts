@@ -1,4 +1,5 @@
 import { patchClass } from './modules/class'
+import { patchStyle } from './modules/style'
 import { RendererOptions } from '@vue/runtime-core'
 
 const nativeOnRE = /^on[a-z]/
@@ -25,6 +26,7 @@ export const patchProp: DOMRendererOptions['patchProp'] = (
       patchClass(el, nextValue, isSVG)
       break
     case 'style':
+      patchStyle(el, prevValue, nextValue)
       break
     default:
       break
