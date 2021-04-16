@@ -1,6 +1,7 @@
 import { patchClass } from './modules/class'
 import { patchStyle } from './modules/style'
 import { patchEvent } from './modules/events'
+import { patchDOMProp } from './modules/props'
 import { isOn, isString, isFunction, isModelListener } from '@vue/shared'
 import { RendererOptions } from '@vue/runtime-core'
 
@@ -36,7 +37,67 @@ export const patchProp: DOMRendererOptions['patchProp'] = (
         if (!isModelListener(key)) {
           patchEvent(el, key, prevValue, nextValue, parentComponent)
         }
+      } else if (shouldSetAsProp(el, key, nextValue, isSVG)) {
+        patchDOMProp(
+          el,
+          key,
+          nextValue,
+          prevChildren,
+          parentComponent,
+          parentSuspense,
+          unmountChildren
+        )
       }
       break
   }
+}
+
+function shouldSetAsProp(
+  el: Element,
+  key: string,
+  value: unknown,
+  isSVG: boolean
+) {
+  if (isSVG) {
+    // most keys must be set as attribute on svg elements to work
+    // ...except innerHTML
+    if (key === 'innerHTML') {
+      return true
+    }
+
+    // or native onclick with function values
+    if (key in el && nativeOnRE.test(key) && isFunction(value)) {
+      return true
+    }
+
+    return false
+  }
+
+  // spellcheck and draggable are numerated attrs, however their
+  // corresponding DOM properties are actually booleans - this leads to
+  // setting it with a string "false" value leading it to be coerced to
+  // `true`, so we need to always treat them as attributes.
+  // Note that `contentEditable` doesn't have this problem: its DOM
+  // property is also enumerated string values.
+  if (key === 'spellcheck' || key === 'draggable') {
+    return false
+  }
+
+  // #1787 form as an attribute must be a string, while it accepts an Element as
+  // a prop
+  if (key === 'form' && typeof value === 'string') {
+    return false
+  }
+
+  // #1526 <input list> must be set as attribute
+  if (key === 'list' && el.tagName === 'INPUT') {
+    return false
+  }
+
+  // native onclick with string value, must be set as attribute
+  if (nativeOnRE.test(key) && isString(value)) {
+    return false
+  }
+
+  return key in el
 }
