@@ -1,6 +1,7 @@
 import { patchClass } from './modules/class'
 import { patchStyle } from './modules/style'
 import { patchEvent } from './modules/events'
+import { patchAttr } from './modules/attrs'
 import { patchDOMProp } from './modules/props'
 import { isOn, isString, isFunction, isModelListener } from '@vue/shared'
 import { RendererOptions } from '@vue/runtime-core'
@@ -47,6 +48,17 @@ export const patchProp: DOMRendererOptions['patchProp'] = (
           parentSuspense,
           unmountChildren
         )
+      } else {
+        // special case for <input v-model type="checkbox"> with
+        // :true-value & :false-value
+        // store value as dom properties since non-string values will be
+        // stringified.
+        if (key === 'true-value') {
+          ;(el as any)._trueValue = nextValue
+        } else if (key === 'false-value') {
+          ;(el as any)._falseValue = nextValue
+        }
+        patchAttr(el, key, nextValue, isSVG)
       }
       break
   }
